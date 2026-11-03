@@ -23,6 +23,7 @@ import {
   type Column,
 } from "../components/ui";
 import { useFeedback } from "../components/feedback";
+import { PERMS, usePermissions } from "../lib/permissions";
 import { Donut, Legend } from "../components/charts";
 
 interface PaymentsRes {
@@ -31,6 +32,7 @@ interface PaymentsRes {
 }
 
 export function Payments() {
+  const { can } = usePermissions();
   const { toast, confirm } = useFeedback();
   const q = useQuery(() => api.get<PaymentsRes>("/payments"), [], { poll: 30000 });
   const [filter, setFilter] = useState("all");
@@ -84,10 +86,10 @@ export function Payments() {
       align: "right",
       render: (p) => (
         <div className="flex justify-end gap-1.5">
-          {p.status !== "Paid" && <Button size="sm" variant="tinted" icon={<Check size={14} />} onClick={() => setStatus(p, "Paid")}>Settle</Button>}
-          {p.status !== "Pending" && <Button size="sm" variant="secondary" aria-label="Put on hold" icon={<Pause size={14} />} onClick={() => setStatus(p, "Pending")} />}
-          {p.status !== "Rejected" && <Button size="sm" variant="secondary" aria-label="Reject" icon={<X size={14} />} onClick={() => setStatus(p, "Rejected")} />}
-          <Button size="sm" variant="dangerSoft" aria-label="Delete" icon={<Trash2 size={14} />} onClick={() => remove(p)} />
+          {can(PERMS.PAYMENTS_APPROVE) && p.status !== "Paid" && <Button size="sm" variant="tinted" icon={<Check size={14} />} onClick={() => setStatus(p, "Paid")}>Settle</Button>}
+          {can(PERMS.PAYMENTS_APPROVE) && p.status !== "Pending" && <Button size="sm" variant="secondary" aria-label="Put on hold" icon={<Pause size={14} />} onClick={() => setStatus(p, "Pending")} />}
+          {can(PERMS.PAYMENTS_APPROVE) && p.status !== "Rejected" && <Button size="sm" variant="secondary" aria-label="Reject" icon={<X size={14} />} onClick={() => setStatus(p, "Rejected")} />}
+          {can(PERMS.PAYMENTS_DELETE) && <Button size="sm" variant="dangerSoft" aria-label="Delete" icon={<Trash2 size={14} />} onClick={() => remove(p)} />}
         </div>
       ),
     },
@@ -104,22 +106,26 @@ export function Payments() {
         subtitle="Vendor payouts, vouchers and settlement status."
         actions={
           <>
-            <Button
-              variant="secondary"
-              icon={<Download size={15} />}
-              onClick={() =>
-                exportCSV(
-                  "vendor-payments",
-                  ["Voucher", "Vendor", "Study", "Amount", "Status", "Method", "Remarks", "Created"],
-                  rows.map((p) => [p.invoice_code || `PAY-${p.id}`, p.vendor_name || p.vendor_id, p.project_name || p.project_id, amount(p), p.status, p.payment_method, p.remarks, p.created_at]),
-                )
-              }
-            >
-              Export
-            </Button>
-            <Button icon={<Plus size={16} />} onClick={() => setCreating(true)}>
-              New voucher
-            </Button>
+            {can(PERMS.PAYMENTS_EXPORT) && (
+              <Button
+                variant="secondary"
+                icon={<Download size={15} />}
+                onClick={() =>
+                  exportCSV(
+                    "vendor-payments",
+                    ["Voucher", "Vendor", "Study", "Amount", "Status", "Method", "Remarks", "Created"],
+                    rows.map((p) => [p.invoice_code || `PAY-${p.id}`, p.vendor_name || p.vendor_id, p.project_name || p.project_id, amount(p), p.status, p.payment_method, p.remarks, p.created_at]),
+                  )
+                }
+              >
+                Export
+              </Button>
+            )}
+            {can(PERMS.PAYMENTS_RECORD) && (
+              <Button icon={<Plus size={16} />} onClick={() => setCreating(true)}>
+                New voucher
+              </Button>
+            )}
           </>
         }
       />

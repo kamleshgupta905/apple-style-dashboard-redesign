@@ -24,8 +24,10 @@ import {
 } from "../components/ui";
 import { useFeedback } from "../components/feedback";
 import { AssignModal } from "../components/AssignModal";
+import { PERMS, usePermissions } from "../lib/permissions";
 
 export function Surveys() {
+  const { can } = usePermissions();
   const [tab, setTab] = useState<"market" | "mine">("market");
   const { toast } = useFeedback();
   const [syncing, setSyncing] = useState(false);
@@ -61,9 +63,11 @@ export function Surveys() {
             <Button variant="secondary" loading={syncing} icon={<RefreshCw size={15} />} onClick={sync}>
               Sync
             </Button>
-            <Button icon={<Plus size={16} />} onClick={() => setCreating(true)}>
-              New study
-            </Button>
+            {can(PERMS.SURVEYS_CREATE) && (
+              <Button icon={<Plus size={16} />} onClick={() => setCreating(true)}>
+                New study
+              </Button>
+            )}
           </>
         }
       />
@@ -229,7 +233,7 @@ function Marketplace({ q }: { q: ReturnType<typeof useQuery<NSurvey[]>> }) {
       />
 
       {/* Floating bulk bar */}
-      {selected.size > 0 && (
+      {can(PERMS.SURVEYS_ASSIGN) && selected.size > 0 && (
         <div className="anim-sheet-up fixed inset-x-0 bottom-20 z-40 flex justify-center px-4 lg:bottom-6 lg:pl-[264px]">
           <div className="glass flex items-center gap-3 rounded-full border border-line py-2 pl-5 pr-2 shadow-[var(--shadow-lg)]">
             <span className="text-[14px] font-semibold tabular">{selected.size} selected</span>
@@ -259,6 +263,7 @@ function Marketplace({ q }: { q: ReturnType<typeof useQuery<NSurvey[]>> }) {
 }
 
 function SurveyDrawer({ survey, onClose, onAssign }: { survey: NSurvey | null; onClose: () => void; onAssign: (s: NSurvey) => void }) {
+  const { can } = usePermissions();
   const id = survey?.id;
   const d = useQuery(
     async () => {
@@ -287,7 +292,7 @@ function SurveyDrawer({ survey, onClose, onAssign }: { survey: NSurvey | null; o
     : [];
   return (
     <Modal open={!!s} onClose={onClose} drawer title={s ? `Survey #${s.id}` : ""} subtitle={s?.name}
-      footer={s && <Button icon={<Share2 size={16} />} onClick={() => { onAssign(s); onClose(); }}>Assign to vendor</Button>}>
+      footer={s && can(PERMS.SURVEYS_ASSIGN) ? <Button icon={<Share2 size={16} />} onClick={() => { onAssign(s); onClose(); }}>Assign to vendor</Button> : undefined}>
       {s && (
         <div className="space-y-6">
           <div className="flex items-center gap-2">
@@ -303,37 +308,41 @@ function SurveyDrawer({ survey, onClose, onAssign }: { survey: NSurvey | null; o
             ))}
           </dl>
 
-          <section>
-            <h3 className="mb-2 text-[15px] font-semibold">Qualifications</h3>
-            {d.loading ? (
-              <Skeleton className="h-20" />
-            ) : (d.data?.quals.length || 0) === 0 ? (
-              <p className="rounded-2xl bg-fill px-4 py-3 text-[14px] text-ink-3">No pre-screen qualifications.</p>
-            ) : (
-              <ul className="space-y-2">
-                {d.data!.quals.map((qq: any) => (
-                  <li key={qq.QuestionID} className="flex items-center justify-between rounded-2xl bg-fill px-4 py-3">
-                    <span className="text-[14px] font-medium">Question {qq.QuestionID}</span>
-                    <span className="flex items-center gap-2 text-[12px] text-ink-3">
-                      <Badge tone="gray">{qq.QuestionType}</Badge>
-                      {qq.AnswerCodes?.length} answer{qq.AnswerCodes?.length === 1 ? "" : "s"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          {can(PERMS.SURVEYS_TARGETING) && (
+            <section>
+              <h3 className="mb-2 text-[15px] font-semibold">Qualifications</h3>
+              {d.loading ? (
+                <Skeleton className="h-20" />
+              ) : (d.data?.quals.length || 0) === 0 ? (
+                <p className="rounded-2xl bg-fill px-4 py-3 text-[14px] text-ink-3">No pre-screen qualifications.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {d.data!.quals.map((qq: any) => (
+                    <li key={qq.QuestionID} className="flex items-center justify-between rounded-2xl bg-fill px-4 py-3">
+                      <span className="text-[14px] font-medium">Question {qq.QuestionID}</span>
+                      <span className="flex items-center gap-2 text-[12px] text-ink-3">
+                        <Badge tone="gray">{qq.QuestionType}</Badge>
+                        {qq.AnswerCodes?.length} answer{qq.AnswerCodes?.length === 1 ? "" : "s"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
 
-          <section>
-            <h3 className="mb-2 text-[15px] font-semibold">Quotas</h3>
-            {d.loading ? (
-              <Skeleton className="h-12" />
-            ) : (d.data?.quotas.length || 0) === 0 ? (
-              <p className="rounded-2xl bg-fill px-4 py-3 text-[14px] text-ink-3">Open sample — no quota groups defined.</p>
-            ) : (
-              <pre className="max-h-48 overflow-auto rounded-2xl bg-fill p-4 text-[12px]">{JSON.stringify(d.data!.quotas, null, 2)}</pre>
-            )}
-          </section>
+          {can(PERMS.SURVEYS_QUOTAS) && (
+            <section>
+              <h3 className="mb-2 text-[15px] font-semibold">Quotas</h3>
+              {d.loading ? (
+                <Skeleton className="h-12" />
+              ) : (d.data?.quotas.length || 0) === 0 ? (
+                <p className="rounded-2xl bg-fill px-4 py-3 text-[14px] text-ink-3">Open sample — no quota groups defined.</p>
+              ) : (
+                <pre className="max-h-48 overflow-auto rounded-2xl bg-fill p-4 text-[12px]">{JSON.stringify(d.data!.quotas, null, 2)}</pre>
+              )}
+            </section>
+          )}
 
           {s.liveUrl && (
             <section>
@@ -350,6 +359,7 @@ function SurveyDrawer({ survey, onClose, onAssign }: { survey: NSurvey | null; o
 
 /* ───────────── My studies ───────────── */
 function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; onNew: () => void }) {
+  const { can } = usePermissions();
   const { toast, confirm } = useFeedback();
   const [search, setSearch] = useState("");
   const [assign, setAssign] = useState<NSurvey[]>([]);
@@ -408,11 +418,17 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
       align: "right",
       render: (p) => (
         <div className="flex justify-end gap-1.5">
-          <Button size="sm" variant="tinted" icon={<Link2 size={14} />} onClick={(e) => { e.stopPropagation(); setAssign([asSurvey(p)]); }}>
-            Link
-          </Button>
-          <Button size="sm" variant="secondary" icon={<Copy size={14} />} onClick={(e) => { e.stopPropagation(); setCloneOf(p); }} aria-label="Duplicate" />
-          <Button size="sm" variant="dangerSoft" icon={<Trash2 size={14} />} onClick={(e) => { e.stopPropagation(); remove(p); }} aria-label="Delete" />
+          {can(PERMS.SURVEYS_ASSIGN) && (
+            <Button size="sm" variant="tinted" icon={<Link2 size={14} />} onClick={(e) => { e.stopPropagation(); setAssign([asSurvey(p)]); }}>
+              Link
+            </Button>
+          )}
+          {can(PERMS.SURVEYS_CLONE) && (
+            <Button size="sm" variant="secondary" icon={<Copy size={14} />} onClick={(e) => { e.stopPropagation(); setCloneOf(p); }} aria-label="Duplicate" />
+          )}
+          {can(PERMS.SURVEYS_CREATE) && (
+            <Button size="sm" variant="dangerSoft" icon={<Trash2 size={14} />} onClick={(e) => { e.stopPropagation(); remove(p); }} aria-label="Delete" />
+          )}
         </div>
       ),
     },
@@ -426,7 +442,7 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
         rowKey={(p) => p.id}
         loading={q.loading}
         toolbar={<SearchInput value={search} onChange={setSearch} placeholder="Search your studies" className="sm:max-w-sm" />}
-        empty={<EmptyState title="No studies yet" message="Create a study or duplicate one from the marketplace." action={<Button onClick={onNew}>New study</Button>} />}
+        empty={<EmptyState title="No studies yet" message="Create a study or duplicate one from the marketplace." action={can(PERMS.SURVEYS_CREATE) ? <Button onClick={onNew}>New study</Button> : undefined} />}
       />
       <AssignModal surveys={assign} onClose={() => setAssign([])} />
       <StudyForm open={!!cloneOf} base={cloneOf || undefined} duplicate onClose={() => setCloneOf(null)} onSaved={q.reload} />

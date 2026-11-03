@@ -5,6 +5,7 @@ import { useQuery } from "../lib/useQuery";
 import { compact, money, num, timeAgo } from "../lib/utils";
 import { BarList, Donut, Legend } from "../components/charts";
 import { Button, Card, CountUp, ErrorState, PageHeader, SectionTitle, Skeleton, StatusBadge, Badge } from "../components/ui";
+import { PERMS, usePermissions } from "../lib/permissions";
 import { cn } from "../utils/cn";
 
 interface Analytics {
@@ -22,6 +23,7 @@ interface Unified {
 }
 
 export function Dashboard({ userName }: { userName: string }) {
+  const { can } = usePermissions();
   const q = useQuery(
     async () => {
       const [a, u, l] = await Promise.all([
@@ -86,148 +88,154 @@ export function Dashboard({ userName }: { userName: string }) {
       />
 
       {/* KPI row */}
-      <div className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
-        {!kpis
-          ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[132px] rounded-3xl" />)
-          : kpis.map((k) => (
-              <Card key={k.label} hover className="p-4 sm:p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl", k.tone)}>
-                    <k.icon size={18} />
-                  </span>
-                </div>
-                <p className="text-[13px] font-medium text-ink-3">{k.label}</p>
-                <p className="mt-0.5 text-[26px] font-bold leading-tight tracking-tight text-ink sm:text-[30px]">
-                  <CountUp value={k.value} prefix={k.prefix} suffix={k.suffix} decimals={k.decimals} />
-                </p>
-                <p className="mt-1 truncate text-[12px] text-ink-3">{k.sub}</p>
-              </Card>
-            ))}
-      </div>
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-3 lg:mt-5">
-        {/* Study performance */}
-        <Card className="anim-fade-up p-5 sm:p-6 lg:col-span-2" style={{ animationDelay: "120ms" }}>
-          <SectionTitle title="Traffic by study" hint="Routed respondents per study" action={<Badge tone="blue">{num(d?.a.activeProjects)} live</Badge>} />
-          {!d ? (
-            <Skeleton className="h-48" />
-          ) : Object.keys(d.a.chartData || {}).length === 0 ? (
-            <p className="py-10 text-center text-[14px] text-ink-3">No traffic routed yet.</p>
-          ) : (
-            <BarList items={Object.entries(d.a.chartData).map(([label, value]) => ({ label, value }))} format={(n) => n.toLocaleString()} />
-          )}
-        </Card>
-
-        {/* Devices */}
-        <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "180ms" }}>
-          <SectionTitle title="Devices" hint="Respondent hardware" />
-          {!d ? (
-            <Skeleton className="h-48" />
-          ) : (
-            <div className="flex flex-col items-center gap-6">
-              <Donut
-                segments={devices.map(([label, value], i) => ({ label, value, color: devColors[i % 3] }))}
-                centerValue={compact(devices.reduce((s, [, v]) => s + v, 0))}
-                centerLabel="sessions"
-              />
-              <div className="w-full">
-                <Legend items={devices.map(([label, value], i) => ({ label, value, color: devColors[i % 3] }))} />
-              </div>
-            </div>
-          )}
-        </Card>
-      </div>
-
-      <div className="mt-4 grid gap-4 lg:mt-5 lg:grid-cols-5">
-        {/* Live stream */}
-        <Card className="anim-fade-up overflow-hidden lg:col-span-3" style={{ animationDelay: "220ms" }}>
-          <div className="flex items-center justify-between px-5 pt-5 sm:px-6 sm:pt-6">
-            <SectionTitle title="Live traffic" hint="Auto-refreshes every 20s" />
-            <a href="#/leads" className="-mt-4 flex items-center gap-1 text-[13px] font-medium text-accent hover:underline">
-              View all <ArrowUpRight size={14} />
-            </a>
-          </div>
-          <div className="px-2 pb-3 sm:px-3">
-            {!d ? (
-              <div className="space-y-3 p-3">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} className="h-10" />
-                ))}
-              </div>
-            ) : d.leads.length === 0 ? (
-              <p className="py-10 text-center text-[14px] text-ink-3">Waiting for the first respondent…</p>
-            ) : (
-              <ul>
-                {d.leads.slice(0, 7).map((l, i) => (
-                  <li
-                    key={l.id}
-                    style={{ animationDelay: `${i * 40}ms` }}
-                    className="anim-fade-up flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-colors hover:bg-fill/70"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fill text-ink-2">
-                      <Radio size={16} />
+      {can(PERMS.OVERVIEW_KPIS) && (
+        <div className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+          {!kpis
+            ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[132px] rounded-3xl" />)
+            : kpis.map((k) => (
+                <Card key={k.label} hover className="p-4 sm:p-5">
+                  <div className="mb-4 flex items-center justify-between">
+                    <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl", k.tone)}>
+                      <k.icon size={18} />
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[14px] font-medium text-ink">{l.project_name}</p>
-                      <p className="truncate text-[12px] text-ink-3">
-                        {l.vendor_name || l.vendor_code} · {l.country} · {timeAgo(l.created_at)}
-                      </p>
-                    </div>
-                    <StatusBadge status={l.status} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </Card>
+                  </div>
+                  <p className="text-[13px] font-medium text-ink-3">{k.label}</p>
+                  <p className="mt-0.5 text-[26px] font-bold leading-tight tracking-tight text-ink sm:text-[30px]">
+                    <CountUp value={k.value} prefix={k.prefix} suffix={k.suffix} decimals={k.decimals} />
+                  </p>
+                  <p className="mt-1 truncate text-[12px] text-ink-3">{k.sub}</p>
+                </Card>
+              ))}
+        </div>
+      )}
 
-        {/* Top vendors + outcomes */}
-        <div className="space-y-4 lg:col-span-2 lg:space-y-5">
-          <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "260ms" }}>
-            <SectionTitle title="Top vendors" hint="By completes delivered" />
+      {can(PERMS.OVERVIEW_CHARTS) && (
+        <div className="mt-4 grid gap-4 lg:grid-cols-3 lg:mt-5">
+          {/* Study performance */}
+          <Card className="anim-fade-up p-5 sm:p-6 lg:col-span-2" style={{ animationDelay: "120ms" }}>
+            <SectionTitle title="Traffic by study" hint="Routed respondents per study" action={<Badge tone="blue">{num(d?.a.activeProjects)} live</Badge>} />
             {!d ? (
-              <Skeleton className="h-28" />
-            ) : d.u.vendors.length === 0 ? (
-              <p className="py-6 text-center text-[14px] text-ink-3">No vendor activity yet.</p>
+              <Skeleton className="h-48" />
+            ) : Object.keys(d.a.chartData || {}).length === 0 ? (
+              <p className="py-10 text-center text-[14px] text-ink-3">No traffic routed yet.</p>
             ) : (
-              <ul className="space-y-4">
-                {[...d.u.vendors]
-                  .sort((a, b) => num(b.total_completes) - num(a.total_completes))
-                  .slice(0, 4)
-                  .map((v) => (
-                    <li key={v.vendor_id} className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-[14px] font-medium text-ink">{v.vendor_name}</p>
-                        <p className="text-[12px] text-ink-3">
-                          {num(v.assigned_projects)} studies · {num(v.conversion_rate)}% conv.
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[15px] font-semibold text-ink tabular">{num(v.total_completes)}</p>
-                        <p className="text-[12px] text-ink-3 tabular">{money(v.total_payout)}</p>
-                      </div>
-                    </li>
-                  ))}
-              </ul>
+              <BarList items={Object.entries(d.a.chartData).map(([label, value]) => ({ label, value }))} format={(n) => n.toLocaleString()} />
             )}
           </Card>
 
-          <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "300ms" }}>
-            <SectionTitle title="Recent outcomes" hint="Last 12 sessions" />
+          {/* Devices */}
+          <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "180ms" }}>
+            <SectionTitle title="Devices" hint="Respondent hardware" />
             {!d ? (
-              <Skeleton className="h-16" />
+              <Skeleton className="h-48" />
             ) : (
-              <Legend
-                items={Object.entries(leadStatus).map(([label, value]) => ({
-                  label,
-                  value,
-                  color: label === "Complete" ? "var(--green)" : label === "Pending" ? "var(--orange)" : "var(--red)",
-                }))}
-              />
+              <div className="flex flex-col items-center gap-6">
+                <Donut
+                  segments={devices.map(([label, value], i) => ({ label, value, color: devColors[i % 3] }))}
+                  centerValue={compact(devices.reduce((s, [, v]) => s + v, 0))}
+                  centerLabel="sessions"
+                />
+                <div className="w-full">
+                  <Legend items={devices.map(([label, value], i) => ({ label, value, color: devColors[i % 3] }))} />
+                </div>
+              </div>
             )}
           </Card>
         </div>
-      </div>
+      )}
+
+      {can(PERMS.OVERVIEW_ACTIVITY) && (
+        <div className="mt-4 grid gap-4 lg:mt-5 lg:grid-cols-5">
+          {/* Live stream */}
+          <Card className="anim-fade-up overflow-hidden lg:col-span-3" style={{ animationDelay: "220ms" }}>
+            <div className="flex items-center justify-between px-5 pt-5 sm:px-6 sm:pt-6">
+              <SectionTitle title="Live traffic" hint="Auto-refreshes every 20s" />
+              <a href="#/leads" className="-mt-4 flex items-center gap-1 text-[13px] font-medium text-accent hover:underline">
+                View all <ArrowUpRight size={14} />
+              </a>
+            </div>
+            <div className="px-2 pb-3 sm:px-3">
+              {!d ? (
+                <div className="space-y-3 p-3">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Skeleton key={i} className="h-10" />
+                  ))}
+                </div>
+              ) : d.leads.length === 0 ? (
+                <p className="py-10 text-center text-[14px] text-ink-3">Waiting for the first respondent…</p>
+              ) : (
+                <ul>
+                  {d.leads.slice(0, 7).map((l, i) => (
+                    <li
+                      key={l.id}
+                      style={{ animationDelay: `${i * 40}ms` }}
+                      className="anim-fade-up flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-colors hover:bg-fill/70"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fill text-ink-2">
+                        <Radio size={16} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[14px] font-medium text-ink">{l.project_name}</p>
+                        <p className="truncate text-[12px] text-ink-3">
+                          {l.vendor_name || l.vendor_code} · {l.country} · {timeAgo(l.created_at)}
+                        </p>
+                      </div>
+                      <StatusBadge status={l.status} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </Card>
+
+          {/* Top vendors + outcomes */}
+          <div className="space-y-4 lg:col-span-2 lg:space-y-5">
+            <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "260ms" }}>
+              <SectionTitle title="Top vendors" hint="By completes delivered" />
+              {!d ? (
+                <Skeleton className="h-28" />
+              ) : d.u.vendors.length === 0 ? (
+                <p className="py-6 text-center text-[14px] text-ink-3">No vendor activity yet.</p>
+              ) : (
+                <ul className="space-y-4">
+                  {[...d.u.vendors]
+                    .sort((a, b) => num(b.total_completes) - num(a.total_completes))
+                    .slice(0, 4)
+                    .map((v) => (
+                      <li key={v.vendor_id} className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-[14px] font-medium text-ink">{v.vendor_name}</p>
+                          <p className="text-[12px] text-ink-3">
+                            {num(v.assigned_projects)} studies · {num(v.conversion_rate)}% conv.
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[15px] font-semibold text-ink tabular">{num(v.total_completes)}</p>
+                          <p className="text-[12px] text-ink-3 tabular">{money(v.total_payout)}</p>
+                        </div>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </Card>
+
+            <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "300ms" }}>
+              <SectionTitle title="Recent outcomes" hint="Last 12 sessions" />
+              {!d ? (
+                <Skeleton className="h-16" />
+              ) : (
+                <Legend
+                  items={Object.entries(leadStatus).map(([label, value]) => ({
+                    label,
+                    value,
+                    color: label === "Complete" ? "var(--green)" : label === "Pending" ? "var(--orange)" : "var(--red)",
+                  }))}
+                />
+              )}
+            </Card>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -26,6 +26,22 @@ import { cn } from "../utils/cn";
 import { initials } from "../lib/utils";
 import type { AuthUser } from "../lib/api";
 import { IconButton, Modal } from "./ui";
+import { PERMS, usePermissions } from "../lib/permissions";
+
+export const NAV_PERMISSION_MAP: Record<string, number> = {
+  dashboard: PERMS.OVERVIEW,
+  surveys: PERMS.SURVEYS,
+  clients: PERMS.CLIENTS,
+  vendors: PERMS.VENDORS,
+  bids: PERMS.SURVEYS,
+  leads: PERMS.LEADS,
+  security: PERMS.SECURITY,
+  payments: PERMS.PAYMENTS,
+  reports: PERMS.PAYMENTS,
+  users: PERMS.USERS,
+  team: PERMS.TEAM,
+  reference: PERMS.REFERENCE,
+};
 
 export interface NavItem {
   id: string;
@@ -67,11 +83,22 @@ function Logo() {
 }
 
 function NavList({ route, onNavigate }: { route: string; onNavigate: (id: string) => void }) {
+  const { canModule } = usePermissions();
+
+  const visibleNav = useMemo(() => {
+    return NAV.filter((n) => {
+      if (n.id === "settings") return true;
+      const permId = NAV_PERMISSION_MAP[n.id];
+      return permId ? canModule(permId) : true;
+    });
+  }, [canModule]);
+
   const groups = useMemo(() => {
     const m = new Map<string, NavItem[]>();
-    NAV.forEach((n) => m.set(n.group, [...(m.get(n.group) || []), n]));
+    visibleNav.forEach((n) => m.set(n.group, [...(m.get(n.group) || []), n]));
     return [...m.entries()];
-  }, []);
+  }, [visibleNav]);
+
   return (
     <nav className="space-y-5">
       {groups.map(([g, items]) => (
@@ -105,9 +132,18 @@ function NavList({ route, onNavigate }: { route: string; onNavigate: (id: string
 }
 
 function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { canModule } = usePermissions();
+  const visibleNav = useMemo(() => {
+    return NAV.filter((n) => {
+      if (n.id === "settings") return true;
+      const permId = NAV_PERMISSION_MAP[n.id];
+      return permId ? canModule(permId) : true;
+    });
+  }, [canModule]);
+
   const [q, setQ] = useState("");
   const [cursor, setCursor] = useState(0);
-  const list = NAV.filter((n) => (n.label + n.hint + n.group).toLowerCase().includes(q.toLowerCase()));
+  const list = visibleNav.filter((n) => (n.label + n.hint + n.group).toLowerCase().includes(q.toLowerCase()));
   useEffect(() => {
     if (open) {
       setQ("");
@@ -211,7 +247,13 @@ export function Shell({
     window.scrollTo({ top: 0 });
   }, [route]);
 
-  const tabs = ["dashboard", "surveys", "leads", "payments"];
+  const { canModule } = usePermissions();
+  const tabs = useMemo(() => {
+    return ["dashboard", "surveys", "leads", "payments"].filter((id) => {
+      const p = NAV_PERMISSION_MAP[id];
+      return p ? canModule(p) : true;
+    });
+  }, [canModule]);
 
   return (
     <div className="min-h-dvh">

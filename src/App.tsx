@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { auth, type AuthUser } from "./lib/api";
+import { Lock } from "lucide-react";
+import { auth, refreshCurrentUser, type AuthUser } from "./lib/api";
 import { FeedbackProvider } from "./components/feedback";
 import { NAV, Shell } from "./components/Shell";
+import { Button } from "./components/ui";
+import { PERMS, PermissionsProvider, hasModuleAccess } from "./lib/permissions";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { Surveys } from "./pages/Surveys";
@@ -18,6 +21,21 @@ import { Reference } from "./pages/Reference";
 import { Settings } from "./pages/Settings";
 
 const THEME_KEY = "smr_theme";
+
+const ROUTE_PERM: Record<string, number> = {
+  dashboard: PERMS.OVERVIEW,
+  surveys: PERMS.SURVEYS,
+  clients: PERMS.CLIENTS,
+  vendors: PERMS.VENDORS,
+  bids: PERMS.SURVEYS,
+  leads: PERMS.LEADS,
+  security: PERMS.SECURITY,
+  payments: PERMS.PAYMENTS,
+  reports: PERMS.PAYMENTS,
+  users: PERMS.USERS,
+  team: PERMS.TEAM,
+  reference: PERMS.REFERENCE,
+};
 
 function useRoute() {
   const read = () => {
@@ -51,6 +69,15 @@ export default function App() {
   const route = useRoute();
   const [dark, setDark] = useTheme();
 
+  // Refresh latest permissions from MySQL / server on mount
+  useEffect(() => {
+    if (user) {
+      refreshCurrentUser().then((fresh) => {
+        if (fresh) setUser(fresh);
+      });
+    }
+  }, []);
+
   const logout = useCallback(() => {
     auth.clear();
     setUser(null);
@@ -59,6 +86,27 @@ export default function App() {
 
   const page = () => {
     if (!user) return null;
+
+    // Check module permission for the route
+    const reqPerm = ROUTE_PERM[route];
+    if (reqPerm && !hasModuleAccess(user, reqPerm)) {
+      return (
+        <div className="flex min-h-[55vh] flex-col items-center justify-center text-center px-4">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-soft text-orange">
+            <Lock size={24} />
+          </div>
+          <h2 className="text-[20px] font-bold text-ink">Access Restricted</h2>
+          <p className="mt-1 max-w-md text-[14px] text-ink-3">
+            You do not have permission to view the <span className="font-semibold text-ink">{route}</span> module.
+            Please contact your administrator if you need access.
+          </p>
+          <Button className="mt-5" onClick={() => (window.location.hash = "/dashboard")}>
+            Back to dashboard
+          </Button>
+        </div>
+      );
+    }
+
     switch (route) {
       case "surveys":
         return <Surveys />;
@@ -91,13 +139,15 @@ export default function App() {
 
   return (
     <FeedbackProvider>
-      {!user ? (
-        <Login onSuccess={setUser} />
-      ) : (
-        <Shell route={route} user={user} dark={dark} onToggleTheme={() => setDark((d) => !d)} onLogout={logout}>
-          {page()}
-        </Shell>
-      )}
+      <PermissionsProvider user={user}>
+        {!user ? (
+          <Login onSuccess={setUser} />
+        ) : (
+          <Shell route={route} user={user} dark={dark} onToggleTheme={() => setDark((d) => !d)} onLogout={logout}>
+            {page()}
+          </Shell>
+        )}
+      </PermissionsProvider>
     </FeedbackProvider>
   );
 }

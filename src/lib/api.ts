@@ -15,6 +15,8 @@ export interface AuthUser {
   role_name?: string;
   role_id?: number;
   permissions?: number[];
+  menu_permissions?: number[];
+  granular_permissions?: Record<string, any>;
 }
 
 export const auth = {
@@ -96,6 +98,30 @@ export async function login(username: string, password: string) {
   const res = await request<{ token: string; user: AuthUser }>("POST", "/auth/login", { body: { username, password } });
   auth.save(res.token, res.user);
   return res.user;
+}
+
+export async function refreshCurrentUser(): Promise<AuthUser | null> {
+  const cur = auth.user();
+  if (!cur) return null;
+  try {
+    const res = await api.get<{ data: any[] }>("/manage/users");
+    if (res?.data && Array.isArray(res.data)) {
+      const matched = res.data.find((u) => u.id === cur.id || u.username === cur.username);
+      if (matched) {
+        const updated: AuthUser = {
+          ...cur,
+          ...matched,
+          permissions: matched.menu_permissions || matched.permissions || cur.permissions,
+          menu_permissions: matched.menu_permissions || matched.permissions || cur.menu_permissions,
+        };
+        auth.save(auth.token(), updated);
+        return updated;
+      }
+    }
+  } catch {
+    // Keep cached user if offline or network failure
+  }
+  return cur;
 }
 
 /* ───────────── Domain types ───────────── */

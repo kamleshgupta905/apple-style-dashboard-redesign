@@ -19,6 +19,7 @@ import {
   type Column,
 } from "../components/ui";
 import { Stacked } from "../components/charts";
+import { PERMS, usePermissions } from "../lib/permissions";
 import { cn } from "../utils/cn";
 
 interface Summary {
@@ -30,6 +31,7 @@ interface Summary {
 }
 
 export function Leads() {
+  const { can } = usePermissions();
   const [live, setLive] = useState(true);
   const q = useQuery(
     async () => {
@@ -95,19 +97,21 @@ export function Leads() {
             <Button variant="secondary" icon={live ? <Pause size={15} /> : <Play size={15} />} onClick={() => setLive((v) => !v)}>
               {live ? "Pause live" : "Go live"}
             </Button>
-            <Button
-              variant="secondary"
-              icon={<Download size={15} />}
-              onClick={() =>
-                exportCSV(
-                  "traffic-leads",
-                  ["Time", "UID", "Study ID", "Study", "Vendor", "Country", "IP", "Status", "Reason"],
-                  rows.map((l) => [l.created_at, l.uid, l.project_id, l.project_name, l.vendor_code, l.country, l.ip_address, l.status, l.reason]),
-                )
-              }
-            >
-              Export
-            </Button>
+            {can(PERMS.LEADS_EXPORT) && (
+              <Button
+                variant="secondary"
+                icon={<Download size={15} />}
+                onClick={() =>
+                  exportCSV(
+                    "traffic-leads",
+                    ["Time", "UID", "Study ID", "Study", "Vendor", "Country", "IP", "Status", "Reason"],
+                    rows.map((l) => [l.created_at, l.uid, l.project_id, l.project_name, l.vendor_code, l.country, l.ip_address, l.status, l.reason]),
+                  )
+                }
+              >
+                Export
+              </Button>
+            )}
           </>
         }
       />

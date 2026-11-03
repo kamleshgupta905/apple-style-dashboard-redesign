@@ -20,6 +20,7 @@ import {
   type Column,
 } from "../components/ui";
 import { useFeedback } from "../components/feedback";
+import { PERMS, usePermissions } from "../lib/permissions";
 
 interface VRow {
   code: string;
@@ -39,6 +40,7 @@ interface VRow {
 }
 
 export function Vendors() {
+  const { can } = usePermissions();
   const { toast, confirm } = useFeedback();
   const [tab, setTab] = useState<"partners" | "allot">("partners");
   const [search, setSearch] = useState("");
@@ -174,7 +176,9 @@ export function Vendors() {
       render: (a) => (
         <div className="flex justify-end gap-1.5">
           <CopyButton text={a.entry_link} label="Link" />
-          <Button size="sm" variant="dangerSoft" aria-label="Remove allotment" icon={<Trash2 size={14} />} onClick={() => removeAllot(a)} />
+          {can(PERMS.VENDORS_DELETE) && (
+            <Button size="sm" variant="dangerSoft" aria-label="Remove allotment" icon={<Trash2 size={14} />} onClick={() => removeAllot(a)} />
+          )}
         </div>
       ),
     },
@@ -200,9 +204,11 @@ export function Vendors() {
             >
               Export
             </Button>
-            <Button icon={<Plus size={16} />} onClick={() => setForm({})}>
-              Add vendor
-            </Button>
+            {can(PERMS.VENDORS_CREATE) && (
+              <Button icon={<Plus size={16} />} onClick={() => setForm({})}>
+                Add vendor
+              </Button>
+            )}
           </>
         }
       />

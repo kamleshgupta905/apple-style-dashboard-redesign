@@ -20,6 +20,7 @@ import {
   Toggle,
 } from "../components/ui";
 import { useFeedback } from "../components/feedback";
+import { PERMS, usePermissions } from "../lib/permissions";
 
 const blank = {
   client_name: "",
@@ -38,6 +39,7 @@ const blank = {
 };
 
 export function Clients() {
+  const { can } = usePermissions();
   const { toast, confirm } = useFeedback();
   const q = useQuery(async () => (await api.get<{ data: Client[] }>("/clients")).data || [], []);
   const [search, setSearch] = useState("");
@@ -102,9 +104,11 @@ export function Clients() {
         title="Clients"
         subtitle="Demand partners, their APIs and outbound redirect endpoints."
         actions={
-          <Button icon={<Plus size={16} />} onClick={() => setForm({ values: blank })}>
-            Add client
-          </Button>
+          can(PERMS.CLIENTS_CREATE) ? (
+            <Button icon={<Plus size={16} />} onClick={() => setForm({ values: blank })}>
+              Add client
+            </Button>
+          ) : undefined
         }
       />
       <SearchInput value={search} onChange={setSearch} placeholder="Search clients" className="mb-5 sm:max-w-sm" />
@@ -195,6 +199,7 @@ function ClientDrawer({
   onEdit: (c: Client) => void;
   onDelete: (c: Client) => void;
 }) {
+  const { can } = usePermissions();
   const { toast } = useFeedback();
   const [reveal, setReveal] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -251,15 +256,21 @@ function ClientDrawer({
       footer={
         c && (
           <>
-            <Button variant="dangerSoft" icon={<Trash2 size={15} />} onClick={() => onDelete(c)}>
-              Remove
-            </Button>
-            <Button variant="secondary" icon={<Pencil size={15} />} onClick={() => onEdit(c)}>
-              Edit
-            </Button>
-            <Button loading={testing} icon={<Plug size={15} />} onClick={test}>
-              Test handshake
-            </Button>
+            {can(PERMS.CLIENTS_DELETE) && (
+              <Button variant="dangerSoft" icon={<Trash2 size={15} />} onClick={() => onDelete(c)}>
+                Remove
+              </Button>
+            )}
+            {can(PERMS.CLIENTS_EDIT) && (
+              <Button variant="secondary" icon={<Pencil size={15} />} onClick={() => onEdit(c)}>
+                Edit
+              </Button>
+            )}
+            {can(PERMS.CLIENTS_API) && (
+              <Button loading={testing} icon={<Plug size={15} />} onClick={test}>
+                Test handshake
+              </Button>
+            )}
           </>
         )
       }
@@ -289,39 +300,43 @@ function ClientDrawer({
             </div>
           )}
 
-          <section>
-            <h3 className="mb-2 text-[15px] font-semibold">Credentials</h3>
-            <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line text-[14px]">
-              {[
-                ["Secret key", c.secret_key],
-                ["API token", c.api_token],
-              ].map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <span className="text-ink-3">{k}</span>
-                  <span className="min-w-0 truncate font-mono text-[13px]">{reveal ? v || "—" : mask(v as string)}</span>
+          {can(PERMS.CLIENTS_SECURITY_KEYS) && (
+            <section>
+              <h3 className="mb-2 text-[15px] font-semibold">Credentials</h3>
+              <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line text-[14px]">
+                {[
+                  ["Secret key", c.secret_key],
+                  ["API token", c.api_token],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <span className="text-ink-3">{k}</span>
+                    <span className="min-w-0 truncate font-mono text-[13px]">{reveal ? v || "—" : mask(v as string)}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-ink-3">Hash algorithm</span>
+                  <span className="font-medium uppercase">{c.hash_algorithm}</span>
                 </div>
-              ))}
-              <div className="flex items-center justify-between px-4 py-3">
-                <span className="text-ink-3">Hash algorithm</span>
-                <span className="font-medium uppercase">{c.hash_algorithm}</span>
               </div>
-            </div>
-            <Button className="mt-2" size="sm" variant="ghost" icon={reveal ? <EyeOff size={14} /> : <Eye size={14} />} onClick={() => setReveal((r) => !r)}>
-              {reveal ? "Hide secrets" : "Reveal secrets"}
-            </Button>
-          </section>
+              <Button className="mt-2" size="sm" variant="ghost" icon={reveal ? <EyeOff size={14} /> : <Eye size={14} />} onClick={() => setReveal((r) => !r)}>
+                {reveal ? "Hide secrets" : "Reveal secrets"}
+              </Button>
+            </section>
+          )}
 
-          <section>
-            <h3 className="mb-2 text-[15px] font-semibold">Client endpoints</h3>
-            <ul className="space-y-2">
-              {endpoints.map(([k, v]) => (
-                <li key={k} className="rounded-2xl bg-fill px-4 py-3">
-                  <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">{k}</p>
-                  <p className="mt-0.5 break-all font-mono text-[12px] text-ink-2">{v || "—"}</p>
-                </li>
-              ))}
-            </ul>
-          </section>
+          {can(PERMS.CLIENTS_API) && (
+            <section>
+              <h3 className="mb-2 text-[15px] font-semibold">Client endpoints</h3>
+              <ul className="space-y-2">
+                {endpoints.map(([k, v]) => (
+                  <li key={k} className="rounded-2xl bg-fill px-4 py-3">
+                    <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">{k}</p>
+                    <p className="mt-0.5 break-all font-mono text-[12px] text-ink-2">{v || "—"}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <section>
             <h3 className="mb-2 text-[15px] font-semibold">Redirect URLs</h3>
