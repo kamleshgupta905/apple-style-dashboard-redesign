@@ -100,6 +100,7 @@ export function Surveys() {
 
 /* ───────────── Marketplace ───────────── */
 function Marketplace({ q }: { q: ReturnType<typeof useQuery<NSurvey[]>> }) {
+  const { can } = usePermissions();
   const [search, setSearch] = useState("");
   const [client, setClient] = useState("all");
   const [status, setStatus] = useState("all");
@@ -149,7 +150,7 @@ function Marketplace({ q }: { q: ReturnType<typeof useQuery<NSurvey[]>> }) {
       sortValue: (s) => s.ir,
       render: (s) => <Badge tone={s.ir >= 60 ? "green" : s.ir >= 30 ? "orange" : "red"}>{s.ir}%</Badge>,
     },
-    { key: "target", header: "Target", align: "right", sortValue: (s) => s.target, render: (s) => s.target.toLocaleString() },
+    { key: "target", header: "Target", align: "right", sortValue: (s) => s.target, render: (s) => num(s.target).toLocaleString() },
     { key: "end", header: "Ends", hideMobile: true, render: (s) => <span className="text-ink-3">{formatDate(s.endDate, false)}</span> },
     { key: "status", header: "Status", render: (s) => <StatusBadge status={s.status} /> },
     {
@@ -283,7 +284,7 @@ function SurveyDrawer({ survey, onClose, onAssign }: { survey: NSurvey | null; o
         ["Client CPI", money(s.cpi)],
         ["Length of interview", `${s.loi} min`],
         ["Incidence rate", `${s.ir}%`],
-        ["Completes needed", s.target.toLocaleString()],
+        ["Completes needed", num(s.target).toLocaleString()],
         ["Language", s.language],
         ["Device", s.device],
         ["Study type", s.type],

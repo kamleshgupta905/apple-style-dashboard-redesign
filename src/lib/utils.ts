@@ -9,10 +9,11 @@ export const money = (v: unknown, decimals = 2) =>
 export const compact = (v: unknown) =>
   new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(num(v));
 
-export function formatDate(s?: string | null, withTime = true) {
+export function formatDate(s?: string | number | null, withTime = true) {
   if (!s) return "—";
-  const d = new Date(s.replace(" ", "T"));
-  if (isNaN(d.getTime())) return s;
+  const str = String(s);
+  const d = new Date(str.includes(" ") ? str.replace(" ", "T") : str);
+  if (isNaN(d.getTime())) return str;
   return d.toLocaleString("en-US", {
     month: "short",
     day: "numeric",
@@ -21,10 +22,11 @@ export function formatDate(s?: string | null, withTime = true) {
   });
 }
 
-export function timeAgo(s?: string | null) {
+export function timeAgo(s?: string | number | null) {
   if (!s) return "—";
-  const d = new Date(s.replace(" ", "T")).getTime();
-  if (isNaN(d)) return s;
+  const str = String(s);
+  const d = new Date(str.includes(" ") ? str.replace(" ", "T") : str).getTime();
+  if (isNaN(d)) return str;
   const diff = Math.max(0, Date.now() - d) / 1000;
   if (diff < 60) return "just now";
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
