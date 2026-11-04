@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, CheckSquare, MinusSquare, Pencil, Plus, Search, Square, Trash2 } from "lucide-react";
+import { Check, CheckSquare, Copy, Eye, EyeOff, MinusSquare, Pencil, Plus, Search, Square, Trash2 } from "lucide-react";
 import { api, auth } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { formatDate, initials } from "../lib/utils";
@@ -27,6 +27,7 @@ interface User {
   id: number;
   name: string;
   username: string;
+  password?: string;
   email: string | null;
   mobile_no: string | null;
   role_id: number;
@@ -38,9 +39,59 @@ interface User {
   granular_permissions: Record<string, { view: number; add: number; edit: number; delete: number; print: number }>;
 }
 
+/* ───────────── Password Cell for Admin / Super Admin ───────────── */
+function UserPasswordCell({ password, username }: { password?: string; username: string }) {
+  const { toast } = useFeedback();
+  const [show, setShow] = useState(false);
+  const pwd = password || "admin@123";
+
+  const copy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard?.writeText?.(pwd);
+    toast(`Password for @${username} copied to clipboard!`, "success");
+  };
+
+  const toggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShow((prev) => !prev);
+  };
+
+  return (
+    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+      <span className="font-mono text-[13px] text-ink-2 select-all min-w-[70px]">
+        {show ? pwd : "••••••••"}
+      </span>
+      <button
+        type="button"
+        onClick={toggle}
+        className="rounded-lg p-1 text-ink-3 transition hover:bg-fill hover:text-ink cursor-pointer"
+        title={show ? "Hide password" : "Show password"}
+        aria-label={show ? "Hide password" : "Show password"}
+      >
+        {show ? <EyeOff size={13} /> : <Eye size={13} />}
+      </button>
+      <button
+        type="button"
+        onClick={copy}
+        className="rounded-lg p-1 text-ink-3 transition hover:bg-fill hover:text-accent cursor-pointer"
+        title="Copy full password"
+        aria-label="Copy full password"
+      >
+        <Copy size={13} />
+      </button>
+    </div>
+  );
+}
+
 export function Users() {
   const { toast, confirm } = useFeedback();
   const { can, user: currentAuthUser } = usePermissions();
+  const isAdmin =
+    currentAuthUser?.role_id === 1 ||
+    currentAuthUser?.role_name?.toLowerCase().includes("admin") ||
+    currentAuthUser?.username === "admin" ||
+    currentAuthUser?.role_name === "Developer";
+
   const q = useQuery(async () => {
     const [u, r] = await Promise.all([
       api.get<{ data: User[] }>("/manage/users"),
@@ -111,6 +162,15 @@ export function Users() {
         <Badge tone={u.role_id === 1 ? "purple" : u.role_id === 2 ? "blue" : "gray"}>{u.role_name}</Badge>
       ),
     },
+    ...(isAdmin
+      ? [
+          {
+            key: "password",
+            header: "Password",
+            render: (u: User) => <UserPasswordCell password={u.password} username={u.username} />,
+          },
+        ]
+      : []),
     {
       key: "menus",
       header: "Permissions",
@@ -145,6 +205,20 @@ export function Users() {
       render: (u) =>
         can(PERMS.USERS) && (
           <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-label="Copy password"
+                title="Copy full password"
+                icon={<Copy size={14} />}
+                onClick={() => {
+                  const p = u.password || "admin@123";
+                  navigator.clipboard?.writeText?.(p);
+                  toast(`Password for @${u.username} copied!`, "success");
+                }}
+              />
+            )}
             <Button
               size="sm"
               variant="secondary"
@@ -191,6 +265,7 @@ export function Users() {
       <UserForm
         state={edit}
         roles={q.data?.roles || []}
+        isAdmin={isAdmin}
         onClose={() => setEdit(null)}
         onSaved={() => {
           setEdit(null);
@@ -204,16 +279,19 @@ export function Users() {
 function UserForm({
   state,
   roles,
+  isAdmin,
   onClose,
   onSaved,
 }: {
   state: null | { user?: User };
   roles: { id: number; name: string }[];
+  isAdmin: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { toast } = useFeedback();
   const { can } = usePermissions();
+  const [revealCurrent, setRevealCurrent] = useState(false);
   const [f, setF] = useState({
     name: "",
     username: "",
@@ -234,6 +312,7 @@ function UserForm({
     setKey(state);
     setTab("profile");
     setPermFilter("");
+    setRevealCurrent(false);
     setF({
       name: u?.name || "",
       username: u?.username || "",
@@ -456,6 +535,44 @@ function UserForm({
               />
             </Field>
           ) : null}
+
+          {isAdmin && u && (
+            <div className="flex flex-col gap-2 rounded-2xl border border-accent/25 bg-accent-soft/30 p-3.5 sm:col-span-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-semibold uppercase tracking-wider text-accent flex items-center gap-1.5">
+                  <Eye size={13} /> Admin View • Current Password
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<Copy size={13} />}
+                  onClick={() => {
+                    const pwd = u.password || "admin@123";
+                    navigator.clipboard?.writeText?.(pwd);
+                    toast(`Password for @${u.username} copied!`, "success");
+                  }}
+                >
+                  Copy password
+                </Button>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-surface px-3 py-2 border border-border">
+                <span className="font-mono text-[14px] text-ink select-all">
+                  {revealCurrent ? (u.password || "admin@123") : "••••••••••••"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setRevealCurrent(!revealCurrent)}
+                  className="rounded-lg p-1 text-ink-3 transition hover:bg-fill hover:text-ink cursor-pointer"
+                  title={revealCurrent ? "Hide password" : "Show password"}
+                >
+                  {revealCurrent ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              <p className="text-[11px] text-ink-3">
+                Only visible to Administrators and Super Admins.
+              </p>
+            </div>
+          )}
           <div className="flex items-center justify-between rounded-2xl bg-fill px-4 py-3 sm:col-span-2">
             <div>
               <p className="text-[14px] font-medium">Account active</p>
