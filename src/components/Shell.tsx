@@ -53,30 +53,28 @@ export interface NavItem {
 
 const s = 18;
 export const NAV: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={s} />, group: "Overview", hint: "KPIs, live traffic & performance" },
-  { id: "surveys", label: "Surveys", icon: <ListChecks size={s} />, group: "Marketplace", hint: "Live inventory, allocation & links" },
-  { id: "clients", label: "Clients", icon: <Building2 size={s} />, group: "Marketplace", hint: "Demand partners & S2S redirects" },
-  { id: "vendors", label: "Vendors", icon: <Truck size={s} />, group: "Marketplace", hint: "Supply partners & allotments" },
-  { id: "bids", label: "Bids", icon: <Gavel size={s} />, group: "Marketplace", hint: "Pipeline of proposals" },
-  { id: "leads", label: "Traffic Stream", icon: <Radio size={s} />, group: "Traffic", hint: "Live respondent routing log" },
-  { id: "security", label: "Security & Fraud", icon: <ShieldCheck size={s} />, group: "Traffic", hint: "Policies, blocks & simulator" },
-  { id: "payments", label: "Payments", icon: <BadgeDollarSign size={s} />, group: "Finance", hint: "Vendor payouts & vouchers" },
-  { id: "reports", label: "Reports", icon: <FileBarChart2 size={s} />, group: "Finance", hint: "Clients, vendors & projects" },
-  { id: "users", label: "Users & Access", icon: <UserCog size={s} />, group: "Admin", hint: "Accounts, roles, permissions" },
-  { id: "team", label: "Team", icon: <Users size={s} />, group: "Admin", hint: "Directory & login activity" },
-  { id: "reference", label: "Reference Data", icon: <Database size={s} />, group: "Admin", hint: "Countries & master data" },
-  { id: "settings", label: "Settings", icon: <Settings size={s} />, group: "Admin", hint: "Password & appearance" },
+  { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={s} />, group: "Main", hint: "KPIs, live traffic & performance" },
+  { id: "surveys", label: "Surveys", icon: <ListChecks size={s} />, group: "Main", hint: "Live inventory, allocation & links" },
+  { id: "clients", label: "Clients", icon: <Building2 size={s} />, group: "Partners", hint: "Demand partners & S2S redirects" },
+  { id: "vendors", label: "Vendors", icon: <Truck size={s} />, group: "Partners", hint: "Supply partners & allotments" },
+  { id: "payments", label: "Vendor Payments", icon: <BadgeDollarSign size={s} />, group: "Operations", hint: "Vendor payouts & vouchers" },
+  { id: "leads", label: "Traffic Leads Stream", icon: <Radio size={s} />, group: "Operations", hint: "Live respondent routing log" },
+  { id: "security", label: "Security & Fraud Gate", icon: <ShieldCheck size={s} />, group: "Operations", hint: "Policies, blocks & simulator" },
+  { id: "users", label: "User Management", icon: <UserCog size={s} />, group: "Management", hint: "Accounts, roles, permissions" },
+  { id: "team", label: "Team Directory", icon: <Users size={s} />, group: "Management", hint: "Directory & login activity" },
+  { id: "reference", label: "Reference Data", icon: <Database size={s} />, group: "Management", hint: "Countries & master data" },
+  { id: "settings", label: "Settings", icon: <Settings size={s} />, group: "Management", hint: "Password & appearance" },
 ];
 
 function Logo() {
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1 shadow-sm ring-1 ring-line">
+    <div className="flex items-center gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1.5 shadow-sm ring-1 ring-line">
         <img src="/vmh-logo.png" alt="VMH Group" className="h-full w-full object-contain" />
       </div>
       <div className="leading-tight">
         <p className="text-[14px] font-bold tracking-tight text-ink">VMH GROUP'S</p>
-        <p className="text-[10px] font-semibold tracking-wider text-ink-3">SMR PLATFORM</p>
+        <p className="text-[9.5px] font-semibold tracking-wider text-ink-3">SMR PLATFORM</p>
       </div>
     </div>
   );
@@ -88,8 +86,6 @@ function NavList({ route, onNavigate }: { route: string; onNavigate: (id: string
   const visibleNav = useMemo(() => {
     return NAV.filter((n) => {
       if (n.id === "settings") return true;
-      if (n.id === "reports") return canModule(PERMS.OVERVIEW) || canModule(PERMS.SURVEYS) || canModule(PERMS.PAYMENTS) || canModule(PERMS.CLIENTS) || canModule(PERMS.VENDORS);
-      if (n.id === "bids") return canModule(PERMS.SURVEYS) || canModule(PERMS.CLIENTS);
       const permId = NAV_PERMISSION_MAP[n.id];
       return permId ? canModule(permId) : true;
     });
@@ -280,8 +276,8 @@ export function Shell({
           <NavList route={route} onNavigate={() => {}} />
         </div>
         <div className="mt-3 flex items-center gap-3 rounded-2xl bg-fill p-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-[13px] font-semibold text-white">
-            {initials(user.name)}
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-white p-1 shadow-sm">
+            <img src="/vmh-logo.png" alt="VMH Group" className="h-full w-full object-contain" />
           </div>
           <div className="min-w-0 flex-1 leading-tight">
             <p className="truncate text-[13px] font-semibold text-ink">{user.name}</p>
@@ -330,6 +326,16 @@ export function Shell({
           <IconButton label={dark ? "Switch to light mode" : "Switch to dark mode"} onClick={onToggleTheme}>
             {dark ? <Sun size={18} /> : <Moon size={18} />}
           </IconButton>
+          {/* User pill in top bar matching api.vmhgroupsmr.com */}
+          <div className="ml-1 flex items-center gap-2 border-l border-line pl-2">
+            <div className="hidden text-right leading-tight sm:block">
+              <p className="text-[13px] font-semibold text-ink">{user.name}</p>
+              <p className="text-[11px] font-medium text-ink-3">{user.role_name || "Admin"}</p>
+            </div>
+            <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-line bg-white p-0.5 shadow-sm">
+              <img src="/vmh-logo.png" alt="VMH User" className="h-full w-full object-contain" />
+            </div>
+          </div>
         </div>
       </header>
 

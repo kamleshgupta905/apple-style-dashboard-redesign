@@ -153,25 +153,29 @@ function Marketplace({ q }: { q: ReturnType<typeof useQuery<NSurvey[]>> }) {
     { key: "target", header: "Target", align: "right", sortValue: (s) => s.target, render: (s) => num(s.target).toLocaleString() },
     { key: "end", header: "Ends", hideMobile: true, render: (s) => <span className="text-ink-3">{formatDate(s.endDate, false)}</span> },
     { key: "status", header: "Status", render: (s) => <StatusBadge status={s.status} /> },
-    {
-      key: "act",
-      header: "",
-      align: "right",
-      hideMobile: true,
-      render: (s) => (
-        <Button
-          size="sm"
-          variant="tinted"
-          icon={<Share2 size={14} />}
-          onClick={(e) => {
-            e.stopPropagation();
-            setAssign([s]);
-          }}
-        >
-          Assign
-        </Button>
-      ),
-    },
+    ...(can(PERMS.SURVEYS_ASSIGN)
+      ? [
+          {
+            key: "act",
+            header: "",
+            align: "right" as const,
+            hideMobile: true,
+            render: (s: NSurvey) => (
+              <Button
+                size="sm"
+                variant="tinted"
+                icon={<Share2 size={14} />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setAssign([s]);
+                }}
+              >
+                Assign
+              </Button>
+            ),
+          },
+        ]
+      : []),
   ];
 
   const selectedSurveys = list.filter((s) => selected.has(s.id));
@@ -184,7 +188,7 @@ function Marketplace({ q }: { q: ReturnType<typeof useQuery<NSurvey[]>> }) {
         rowKey={(s) => s.id}
         loading={q.loading}
         pageSize={12}
-        selectable
+        selectable={can(PERMS.SURVEYS_ASSIGN)}
         selected={selected}
         onSelectedChange={setSelected}
         onRowClick={setDetail}
@@ -298,7 +302,6 @@ function SurveyDrawer({ survey, onClose, onAssign }: { survey: NSurvey | null; o
         <div className="space-y-6">
           <div className="flex items-center gap-2">
             <StatusBadge status={s.status} />
-            {s.cloned && <Badge tone="purple">Clone</Badge>}
           </div>
           <dl className="divide-y divide-line overflow-hidden rounded-2xl border border-line">
             {rows.map(([k, v]) => (

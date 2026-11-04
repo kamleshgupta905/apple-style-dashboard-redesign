@@ -67,7 +67,8 @@ export async function fetchVendorOptions(): Promise<VendorOption[]> {
   ]);
   (mv?.data || []).forEach((v) => {
     const code = v.vendor_code || v.vendor_id;
-    if (code) map.set(code, { code, name: v.name || v.vendor_name || code, sharePct: num(v.cpi_percentage ?? v.rev_share, 70) });
+    const rawShare = num(v.cpi_percentage ?? v.rev_share, 70);
+    if (code) map.set(code, { code, name: v.name || v.vendor_name || code, sharePct: rawShare > 0 ? rawShare : 70 });
   });
   (uni?.data?.vendors || []).forEach((v) => {
     if (v.vendor_id && !map.has(v.vendor_id)) map.set(v.vendor_id, { code: v.vendor_id, name: v.vendor_name || v.vendor_id, sharePct: 70 });

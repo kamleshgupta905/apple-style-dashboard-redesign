@@ -141,29 +141,33 @@ export async function refreshCurrentUser(): Promise<AuthUser | null> {
   const cur = auth.user();
   if (!cur) return null;
   try {
-    const { data: user } = await supabase
-      .from("smr_users")
-      .select("*")
-      .eq("id", cur.id)
-      .maybeSingle();
+    let query = supabase.from("smr_users").select("*");
+    if (cur.username) {
+      query = query.ilike("username", cur.username.trim());
+    } else if (cur.id) {
+      query = query.eq("id", cur.id);
+    }
+    const { data: user } = await query.maybeSingle();
 
     if (user) {
+      const perms = Array.isArray(user.menu_permissions) ? user.menu_permissions : [];
       const updated: AuthUser = {
         ...cur,
+        id: user.id,
         name: user.name,
         username: user.username,
         email: user.email,
         role_name: user.role_name,
         role_id: user.role_id,
-        permissions: Array.isArray(user.menu_permissions) ? user.menu_permissions : [],
-        menu_permissions: Array.isArray(user.menu_permissions) ? user.menu_permissions : [],
+        permissions: perms,
+        menu_permissions: perms,
         granular_permissions: user.granular_permissions || {},
       };
       auth.save(auth.token(), updated);
       return updated;
     }
-  } catch {
-    // Keep cached user if offline or network failure
+  } catch (e) {
+    console.warn("refreshCurrentUser error:", e);
   }
   return cur;
 }

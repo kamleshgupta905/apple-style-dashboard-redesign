@@ -23,21 +23,21 @@ export function AssignModal({
   const [vendors, setVendors] = useState<VendorOption[] | null>(null);
   const [vendor, setVendor] = useState(presetVendor || "");
   const [custom, setCustom] = useState("");
-  const [pct, setPct] = useState<string | number>(70);
-  const [quota, setQuota] = useState<string | number>(100);
+  const [pct, setPct] = useState<string>("70");
+  const [quota, setQuota] = useState<string>("100");
   const [busy, setBusy] = useState(false);
   const [links, setLinks] = useState<{ id: string; name: string; link: string }[] | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setLinks(null);
-    setQuota(Math.min(100, ...surveys.map((s) => s.target || 100)));
+    setQuota(String(Math.min(100, ...surveys.map((s) => s.target || 100))));
     fetchVendorOptions().then((v) => {
       setVendors(v);
       const pick = v.find((x) => x.code === presetVendor) || v[0];
       if (pick) {
         setVendor(pick.code);
-        setPct(pick.sharePct && pick.sharePct > 0 ? pick.sharePct : 70);
+        setPct(String(pick.sharePct && pick.sharePct > 0 ? pick.sharePct : 70));
       } else setVendor("__custom");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,11 +158,16 @@ export function AssignModal({
                 min={1}
                 max={100}
                 value={pct}
-                onChange={(e) => setPct(e.target.value === "" ? "" : e.target.value)}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPct(val);
+                }}
                 onBlur={() => {
                   const n = Number(pct);
-                  if (pct === "" || isNaN(n) || n <= 0) setPct(70);
-                  else if (n > 100) setPct(100);
+                  if (pct === "" || isNaN(n) || n <= 0) setPct("70");
+                  else if (n > 100) setPct("100");
+                  else setPct(String(n));
                 }}
               />
             </Field>
@@ -171,10 +176,15 @@ export function AssignModal({
                 type="number"
                 min={1}
                 value={quota}
-                onChange={(e) => setQuota(e.target.value === "" ? "" : e.target.value)}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setQuota(val);
+                }}
                 onBlur={() => {
                   const n = Number(quota);
-                  if (quota === "" || isNaN(n) || n <= 0) setQuota(100);
+                  if (quota === "" || isNaN(n) || n <= 0) setQuota("100");
+                  else setQuota(String(n));
                 }}
               />
             </Field>

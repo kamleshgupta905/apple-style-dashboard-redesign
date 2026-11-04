@@ -248,12 +248,16 @@ export function Vendors() {
         footer={
           open && (
             <>
-              <Button variant="dangerSoft" icon={<Trash2 size={15} />} onClick={() => removeVendor(open)}>
-                Delete
-              </Button>
-              <Button variant="secondary" icon={<Pencil size={15} />} onClick={() => { setForm({ vendor: open }); setOpen(null); }}>
-                Edit
-              </Button>
+              {can(PERMS.VENDORS_DELETE) && (
+                <Button variant="dangerSoft" icon={<Trash2 size={15} />} onClick={() => removeVendor(open)}>
+                  Delete
+                </Button>
+              )}
+              {can(PERMS.VENDORS_CREATE) && (
+                <Button variant="secondary" icon={<Pencil size={15} />} onClick={() => { setForm({ vendor: open }); setOpen(null); }}>
+                  Edit
+                </Button>
+              )}
             </>
           )
         }
