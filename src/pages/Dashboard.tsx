@@ -40,10 +40,12 @@ export function Dashboard({ userName }: { userName: string }) {
   const d = q.data;
   const stats = useMemo(() => {
     if (!d) return null;
-    const revenue = d.u.projects.reduce((s, p) => s + num(p.total_revenue), 0);
-    const payout = d.u.vendors.reduce((s, v) => s + num(v.total_payout), 0);
-    const clicks = num(d.a.totalClick);
-    const completes = num(d.a.completeLeads);
+    const projectsList = d.u?.projects || [];
+    const vendorsList = d.u?.vendors || [];
+    const revenue = projectsList.reduce((s, p) => s + num(p.total_revenue), 0);
+    const payout = vendorsList.reduce((s, v) => s + num(v.total_payout), 0);
+    const clicks = num(d.a?.totalClick);
+    const completes = num(d.a?.completeLeads);
     return {
       revenue,
       payout,
@@ -62,11 +64,11 @@ export function Dashboard({ userName }: { userName: string }) {
   const kpis = stats && [
     { label: "Gross revenue", value: stats.revenue, prefix: "$", decimals: 2, icon: CircleDollarSign, tone: "text-green bg-green-soft", sub: "From delivered completes" },
     { label: "Net margin", value: stats.margin, prefix: "$", decimals: 2, icon: TrendingUp, tone: "text-accent bg-accent-soft", sub: `Vendor payout ${money(stats.payout)}` },
-    { label: "Routed clicks", value: stats.clicks, icon: MousePointerClick, tone: "text-purple bg-purple-soft", sub: `${num(d!.a.pendingLeads)} pending` },
+    { label: "Routed clicks", value: stats.clicks, icon: MousePointerClick, tone: "text-purple bg-purple-soft", sub: `${num(d?.a?.pendingLeads)} pending` },
     { label: "Conversion", value: stats.rate, suffix: "%", decimals: 1, icon: Target, tone: "text-orange bg-orange-soft", sub: `${stats.completes} completes` },
   ];
 
-  const devices = d ? Object.entries(d.a.deviceStats || {}) : [];
+  const devices = d ? Object.entries(d.a?.deviceStats || {}) : [];
   const devColors = ["var(--accent)", "var(--green)", "var(--orange)"];
 
   const leadStatus = useMemo(() => {
@@ -113,13 +115,13 @@ export function Dashboard({ userName }: { userName: string }) {
         <div className="mt-4 grid gap-4 lg:grid-cols-3 lg:mt-5">
           {/* Study performance */}
           <Card className="anim-fade-up p-5 sm:p-6 lg:col-span-2" style={{ animationDelay: "120ms" }}>
-            <SectionTitle title="Traffic by study" hint="Routed respondents per study" action={<Badge tone="blue">{num(d?.a.activeProjects)} live</Badge>} />
+            <SectionTitle title="Traffic by study" hint="Routed respondents per study" action={<Badge tone="blue">{num(d?.a?.activeProjects)} live</Badge>} />
             {!d ? (
               <Skeleton className="h-48" />
-            ) : Object.keys(d.a.chartData || {}).length === 0 ? (
+            ) : Object.keys(d?.a?.chartData || {}).length === 0 ? (
               <p className="py-10 text-center text-[14px] text-ink-3">No traffic routed yet.</p>
             ) : (
-              <BarList items={Object.entries(d.a.chartData).map(([label, value]) => ({ label, value }))} format={(n) => n.toLocaleString()} />
+              <BarList items={Object.entries(d?.a?.chartData || {}).map(([label, value]) => ({ label, value }))} format={(n) => n.toLocaleString()} />
             )}
           </Card>
 
@@ -194,11 +196,11 @@ export function Dashboard({ userName }: { userName: string }) {
               <SectionTitle title="Top vendors" hint="By completes delivered" />
               {!d ? (
                 <Skeleton className="h-28" />
-              ) : d.u.vendors.length === 0 ? (
+              ) : (d?.u?.vendors || []).length === 0 ? (
                 <p className="py-6 text-center text-[14px] text-ink-3">No vendor activity yet.</p>
               ) : (
                 <ul className="space-y-4">
-                  {[...d.u.vendors]
+                  {[...(d?.u?.vendors || [])]
                     .sort((a, b) => num(b.total_completes) - num(a.total_completes))
                     .slice(0, 4)
                     .map((v) => (

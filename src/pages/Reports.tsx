@@ -36,14 +36,16 @@ export function Reports() {
   const d = q.data;
   const totals = useMemo(() => {
     if (!d) return null;
-    const revenue = d.projects.reduce((s, p) => s + num(p.total_revenue), 0);
-    const payout = d.vendors.reduce((s, v) => s + num(v.total_payout), 0);
+    const projectsList = d.projects || [];
+    const vendorsList = d.vendors || [];
+    const revenue = projectsList.reduce((s, p) => s + num(p.total_revenue), 0);
+    const payout = vendorsList.reduce((s, v) => s + num(v.total_payout), 0);
     return {
       revenue,
       payout,
       margin: revenue - payout,
       marginPct: revenue ? ((revenue - payout) / revenue) * 100 : 0,
-      completes: d.projects.reduce((s, p) => s + num(p.total_completes), 0),
+      completes: projectsList.reduce((s, p) => s + num(p.total_completes), 0),
     };
   }, [d]);
 

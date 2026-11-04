@@ -22,16 +22,16 @@ import { Settings } from "./pages/Settings";
 
 const THEME_KEY = "smr_theme";
 
-const ROUTE_PERM: Record<string, number> = {
+const ROUTE_PERM: Record<string, number | number[]> = {
   dashboard: PERMS.OVERVIEW,
   surveys: PERMS.SURVEYS,
   clients: PERMS.CLIENTS,
   vendors: PERMS.VENDORS,
-  bids: PERMS.SURVEYS,
+  bids: [PERMS.SURVEYS, PERMS.CLIENTS],
   leads: PERMS.LEADS,
   security: PERMS.SECURITY,
   payments: PERMS.PAYMENTS,
-  reports: PERMS.PAYMENTS,
+  reports: [PERMS.OVERVIEW, PERMS.SURVEYS, PERMS.PAYMENTS, PERMS.CLIENTS, PERMS.VENDORS],
   users: PERMS.USERS,
   team: PERMS.TEAM,
   reference: PERMS.REFERENCE,
@@ -89,7 +89,12 @@ export default function App() {
 
     // Check module permission for the route
     const reqPerm = ROUTE_PERM[route];
-    if (reqPerm && !hasModuleAccess(user, reqPerm)) {
+    const allowed =
+      !reqPerm ||
+      (Array.isArray(reqPerm)
+        ? reqPerm.some((p) => hasModuleAccess(user, p))
+        : hasModuleAccess(user, reqPerm));
+    if (!allowed) {
       return (
         <div className="flex min-h-[55vh] flex-col items-center justify-center text-center px-4">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-soft text-orange">

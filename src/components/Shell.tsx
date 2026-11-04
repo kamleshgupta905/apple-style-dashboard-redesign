@@ -88,6 +88,8 @@ function NavList({ route, onNavigate }: { route: string; onNavigate: (id: string
   const visibleNav = useMemo(() => {
     return NAV.filter((n) => {
       if (n.id === "settings") return true;
+      if (n.id === "reports") return canModule(PERMS.OVERVIEW) || canModule(PERMS.SURVEYS) || canModule(PERMS.PAYMENTS) || canModule(PERMS.CLIENTS) || canModule(PERMS.VENDORS);
+      if (n.id === "bids") return canModule(PERMS.SURVEYS) || canModule(PERMS.CLIENTS);
       const permId = NAV_PERMISSION_MAP[n.id];
       return permId ? canModule(permId) : true;
     });
@@ -136,6 +138,8 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
   const visibleNav = useMemo(() => {
     return NAV.filter((n) => {
       if (n.id === "settings") return true;
+      if (n.id === "reports") return canModule(PERMS.OVERVIEW) || canModule(PERMS.SURVEYS) || canModule(PERMS.PAYMENTS) || canModule(PERMS.CLIENTS) || canModule(PERMS.VENDORS);
+      if (n.id === "bids") return canModule(PERMS.SURVEYS) || canModule(PERMS.CLIENTS);
       const permId = NAV_PERMISSION_MAP[n.id];
       return permId ? canModule(permId) : true;
     });
@@ -249,10 +253,20 @@ export function Shell({
 
   const { canModule } = usePermissions();
   const tabs = useMemo(() => {
-    return ["dashboard", "surveys", "leads", "payments"].filter((id) => {
+    const list = ["dashboard", "surveys", "leads", "payments"].filter((id) => {
       const p = NAV_PERMISSION_MAP[id];
       return p ? canModule(p) : true;
     });
+    if (list.length === 0) {
+      return NAV.filter((n) => {
+        if (n.id === "settings") return true;
+        const p = NAV_PERMISSION_MAP[n.id];
+        return p ? canModule(p) : true;
+      })
+        .slice(0, 4)
+        .map((n) => n.id);
+    }
+    return list;
   }, [canModule]);
 
   return (
