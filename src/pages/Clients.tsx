@@ -32,6 +32,10 @@ const blank = {
   feed_api_url: "",
   s2s_callback_url: "",
   master_data_url: "",
+  complete_redirect: "",
+  terminate_redirect: "",
+  overquota_redirect: "",
+  security_redirect: "",
   secret_key: "",
   api_token: "",
   hash_algorithm: "sha3-256",
@@ -40,8 +44,18 @@ const blank = {
 };
 
 export function Clients() {
-  const { can } = usePermissions();
+  const { can, user: currentAuthUser } = usePermissions();
   const { toast, confirm } = useFeedback();
+  const isAdmin =
+    currentAuthUser?.role_id === 1 ||
+    currentAuthUser?.role_name?.toLowerCase().includes("admin") ||
+    currentAuthUser?.username === "admin" ||
+    currentAuthUser?.role_name === "Developer";
+
+  const canEdit = isAdmin || can(PERMS.CLIENTS_EDIT) || can(PERMS.CLIENTS);
+  const canDelete = isAdmin || can(PERMS.CLIENTS_DELETE) || can(PERMS.CLIENTS);
+  const canCreate = isAdmin || can(PERMS.CLIENTS_CREATE) || can(PERMS.CLIENTS);
+
   const q = useQuery(async () => (await api.get<{ data: Client[] }>("/clients")).data || [], []);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<Client | null>(null);
@@ -80,10 +94,18 @@ export function Clients() {
   };
 
   const remove = async (c: Client) => {
-    if (!(await confirm({ title: `Remove ${c.client_name}?`, message: "Studies linked to this client may stop routing.", confirmLabel: "Remove", danger: true }))) return;
+    if (
+      !(await confirm({
+        title: `Delete ${c.client_name}?`,
+        message: "This client will be permanently removed. Studies linked to this client may stop routing.",
+        confirmLabel: "Delete client",
+        danger: true,
+      }))
+    )
+      return;
     try {
       await api.del(`/clients/${c.id}`);
-      toast("Client removed");
+      toast(`${c.client_name} deleted successfully`, "success");
       setOpen(null);
       q.reload();
     } catch (e: any) {
@@ -96,14 +118,18 @@ export function Clients() {
       id: c.id,
       values: {
         ...blank,
-        client_name: c.client_name,
-        client_code: c.client_code,
+        client_name: c.client_name || "",
+        client_code: c.client_code || "",
         email: c.email || "",
         phone: c.phone || "",
         api_type: c.api_type || "marketxcel",
         feed_api_url: c.feed_api_url || "",
         s2s_callback_url: c.s2s_callback_url || "",
         master_data_url: c.master_data_url || "",
+        complete_redirect: c.complete_redirect || "",
+        terminate_redirect: c.terminate_redirect || "",
+        overquota_redirect: c.overquota_redirect || "",
+        security_redirect: c.security_redirect || "",
         secret_key: c.secret_key || "",
         api_token: c.api_token || "",
         hash_algorithm: c.hash_algorithm || "sha3-256",
@@ -118,7 +144,7 @@ export function Clients() {
         title="Clients"
         subtitle="Demand partners, their APIs and outbound redirect endpoints."
         actions={
-          can(PERMS.CLIENTS_CREATE) ? (
+          canCreate ? (
             <Button icon={<Plus size={16} />} onClick={() => setForm({ values: blank })}>
               Add client
             </Button>
@@ -192,6 +218,33 @@ export function Clients() {
                   </span>
                   <Toggle checked={!!Number(c.security_enabled)} onChange={(v) => toggleSecurity(c, v)} label="Toggle security gate" />
                 </div>
+
+                {/* Direct Action Buttons: Edit and Delete */}
+                <div
+                  className="flex items-center justify-end gap-2 pt-2 border-t border-line/60"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {canEdit && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon={<Pencil size={13} />}
+                      onClick={() => edit(c)}
+                    >
+                      Edit
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button
+                      size="sm"
+                      variant="dangerSoft"
+                      icon={<Trash2 size={13} />}
+                      onClick={() => remove(c)}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
               </div>
             </Card>
           ))}
@@ -200,6 +253,8 @@ export function Clients() {
 
       <ClientDrawer
         client={open}
+        canEdit={canEdit}
+        canDelete={canDelete}
         onClose={() => setOpen(null)}
         onEdit={(c) => {
           setOpen(null);
@@ -222,12 +277,16 @@ export function Clients() {
 
 function ClientDrawer({
   client: c,
+  canEdit,
+  canDelete,
   onClose,
   onEdit,
   onDelete,
   onToggleStatus,
 }: {
   client: Client | null;
+  canEdit?: boolean;
+  canDelete?: boolean;
   onClose: () => void;
   onEdit: (c: Client) => void;
   onDelete: (c: Client) => void;
@@ -290,14 +349,14 @@ function ClientDrawer({
       footer={
         c && (
           <>
-            {can(PERMS.CLIENTS_DELETE) && (
+            {canDelete && (
               <Button variant="dangerSoft" icon={<Trash2 size={15} />} onClick={() => onDelete(c)}>
-                Remove
+                Delete client
               </Button>
             )}
-            {can(PERMS.CLIENTS_EDIT) && (
+            {canEdit && (
               <Button variant="secondary" icon={<Pencil size={15} />} onClick={() => onEdit(c)}>
-                Edit
+                Edit client
               </Button>
             )}
             {can(PERMS.CLIENTS_API) && (
@@ -430,10 +489,28 @@ function ClientForm({
     const code = (v.client_code || v.client_name).trim().replace(/\s+/g, "_").toUpperCase();
     setBusy(true);
     try {
-      const body = { ...v, client_code: code, apiType: v.api_type, feedApiUrl: v.feed_api_url };
-      if (state?.id) await api.put(`/clients/${state.id}`, { id: state.id, ...body });
-      else await api.post("/clients", body);
-      toast(state?.id ? "Client updated" : "Client added");
+      const body = {
+        ...v,
+        client_code: code,
+        api_type: v.api_type,
+        apiType: v.api_type,
+        feed_api_url: v.feed_api_url,
+        feedApiUrl: v.feed_api_url,
+        s2s_callback_url: v.s2s_callback_url,
+        master_data_url: v.master_data_url,
+        complete_redirect: v.complete_redirect || null,
+        terminate_redirect: v.terminate_redirect || null,
+        overquota_redirect: v.overquota_redirect || null,
+        security_redirect: v.security_redirect || null,
+        security_enabled: Number(v.security_enabled) ? 1 : 0,
+        status: v.status === "Y" || v.status === "Active" ? "Y" : "N",
+      };
+      if (state?.id) {
+        await api.put(`/clients/${state.id}`, { id: state.id, ...body });
+      } else {
+        await api.post("/clients", body);
+      }
+      toast(state?.id ? "Client updated successfully" : "Client added successfully", "success");
       onSaved();
     } catch (e: any) {
       toast(e.message, "error");
@@ -464,19 +541,20 @@ function ClientForm({
         <Field label="Client name">
           <Input value={v.client_name} onChange={set("client_name")} placeholder="Acme Research" />
         </Field>
-        <Field label="Client code" hint="Auto-generated if left empty">
-          <Input value={v.client_code} onChange={set("client_code")} placeholder="ACME" disabled={!!state?.id} />
+        <Field label="Client code" hint="Identifier for tracking and routing">
+          <Input value={v.client_code} onChange={set("client_code")} placeholder="ACME" />
         </Field>
         <Field label="Email">
-          <Input type="email" value={v.email} onChange={set("email")} />
+          <Input type="email" value={v.email} onChange={set("email")} placeholder="partner@example.com" />
         </Field>
         <Field label="Phone">
-          <Input value={v.phone} onChange={set("phone")} />
+          <Input value={v.phone} onChange={set("phone")} placeholder="+1 (555) 000-0000" />
         </Field>
         <Field label="API type">
           <Select value={v.api_type} onChange={set("api_type")}>
             <option value="marketxcel">MarketXcel</option>
             <option value="zamplia">Zamplia</option>
+            <option value="S2S">S2S API</option>
             <option value="direct">Direct</option>
           </Select>
         </Field>
@@ -497,12 +575,41 @@ function ClientForm({
         <Field label="Master data URL" className="sm:col-span-2">
           <Input value={v.master_data_url} onChange={set("master_data_url")} placeholder="https://" />
         </Field>
+
+        <div className="sm:col-span-2 pt-2 border-t border-line/60">
+          <p className="text-[13px] font-semibold text-ink mb-2">Redirect URLs (Return Callbacks)</p>
+        </div>
+        <Field label="Complete redirect URL" className="sm:col-span-2">
+          <Input value={v.complete_redirect} onChange={set("complete_redirect")} placeholder="https://..." />
+        </Field>
+        <Field label="Terminate redirect URL" className="sm:col-span-2">
+          <Input value={v.terminate_redirect} onChange={set("terminate_redirect")} placeholder="https://..." />
+        </Field>
+        <Field label="Over quota redirect URL" className="sm:col-span-2">
+          <Input value={v.overquota_redirect} onChange={set("overquota_redirect")} placeholder="https://..." />
+        </Field>
+        <Field label="Security redirect URL" className="sm:col-span-2">
+          <Input value={v.security_redirect} onChange={set("security_redirect")} placeholder="https://..." />
+        </Field>
+
+        <div className="sm:col-span-2 pt-2 border-t border-line/60">
+          <p className="text-[13px] font-semibold text-ink mb-2">API Security & Access</p>
+        </div>
         <Field label="Secret key">
-          <Input type="password" autoComplete="new-password" value={v.secret_key} onChange={set("secret_key")} />
+          <Input type="password" autoComplete="new-password" value={v.secret_key} onChange={set("secret_key")} placeholder="Secret key" />
         </Field>
         <Field label="API token">
-          <Input type="password" autoComplete="new-password" value={v.api_token} onChange={set("api_token")} />
+          <Input type="password" autoComplete="new-password" value={v.api_token} onChange={set("api_token")} placeholder="API token" />
         </Field>
+
+        <div className="flex items-center justify-between rounded-2xl bg-fill px-4 py-3 sm:col-span-2">
+          <div>
+            <p className="text-[14px] font-medium">Active Partner</p>
+            <p className="text-[12px] text-ink-3">Inactive clients will hide their surveys from the Marketplace</p>
+          </div>
+          <Toggle checked={v.status === "Y" || v.status === "Active"} onChange={(on) => setV((p) => ({ ...p, status: on ? "Y" : "N" }))} label="Active client" />
+        </div>
+
         <div className="flex items-center justify-between rounded-2xl bg-fill px-4 py-3 sm:col-span-2">
           <div>
             <p className="text-[14px] font-medium">Security gate</p>

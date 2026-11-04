@@ -479,26 +479,38 @@ export const api = {
       }
 
       // 3. Save Client
-      if (path === "/clients" || path === "/manage/clients") {
+      if (path === "/clients" || path === "/manage/clients" || path === "/clients/save") {
         const c = body;
-        const payload = {
+        const payload: any = {
           client_code: c.client_code || `CLI-${Date.now().toString().slice(-4)}`,
           client_name: c.client_name,
           email: c.email || null,
           phone: c.phone || null,
-          api_type: c.api_type || "S2S API",
+          api_type: c.api_type || c.apiType || "S2S API",
+          feed_api_url: c.feed_api_url || c.feedApiUrl || null,
+          s2s_callback_url: c.s2s_callback_url || null,
+          master_data_url: c.master_data_url || null,
           secret_key: c.secret_key || `sk_${Math.random().toString(36).substring(2, 10)}`,
           api_token: c.api_token || `tok_${Math.random().toString(36).substring(2, 12)}`,
+          hash_algorithm: c.hash_algorithm || "sha256",
           complete_redirect: c.complete_redirect || null,
           terminate_redirect: c.terminate_redirect || null,
           overquota_redirect: c.overquota_redirect || null,
           security_redirect: c.security_redirect || null,
-          status: c.status || "active",
+          security_enabled: c.security_enabled !== undefined ? (Number(c.security_enabled) ? 1 : 0) : 1,
+          status: (c.status === "Y" || c.status === "Active" || c.status === true || c.status === "active") ? "Y" : "N",
           updated_at: new Date().toISOString(),
         };
-        const { data, error } = await supabase.from("smr_clients").insert([payload]).select().single();
-        if (error) throw error;
-        return { success: true, data } as unknown as T;
+
+        if (c.id) {
+          const { data, error } = await supabase.from("smr_clients").update(payload).eq("id", c.id).select().single();
+          if (error) throw error;
+          return { success: true, data } as unknown as T;
+        } else {
+          const { data, error } = await supabase.from("smr_clients").insert([payload]).select().single();
+          if (error) throw error;
+          return { success: true, data } as unknown as T;
+        }
       }
       if (path === "/clients/toggle-security") {
         const { error } = await supabase
@@ -612,8 +624,8 @@ export const api = {
 
   put: async <T = any>(path: string, body?: any): Promise<T> => {
     try {
-      if (path.startsWith("/clients/")) {
-        const id = path.split("/").pop();
+      if (path.startsWith("/clients/") || path === "/clients" || path === "/manage/clients") {
+        const id = path.startsWith("/clients/") ? path.split("/").pop() : body?.id;
         if (id) {
           const allowed = [
             "client_code", "client_name", "email", "phone", "api_type",
@@ -629,10 +641,15 @@ export const api = {
             }
             if (body.apiType && !clean.api_type) clean.api_type = body.apiType;
             if (body.feedApiUrl && !clean.feed_api_url) clean.feed_api_url = body.feedApiUrl;
+            if (body.status !== undefined) clean.status = (body.status === "Y" || body.status === "Active" || body.status === true) ? "Y" : "N";
+            if (body.security_enabled !== undefined) clean.security_enabled = Number(body.security_enabled) ? 1 : 0;
           }
           const { data, error } = await supabase.from("smr_clients").update(clean).eq("id", id).select().single();
-          if (!error && data) return { success: true, data } as unknown as T;
-          if (error) console.error("Client update error:", error);
+          if (error) {
+            console.error("Client update error:", error);
+            throw error;
+          }
+          return { success: true, data } as unknown as T;
         }
       }
       if (path === "/security/policy") {
@@ -664,11 +681,15 @@ export const api = {
           if (!error) return { success: true } as unknown as T;
         }
       }
-      if (path.startsWith("/clients/")) {
-        const id = path.split("/").pop();
+      if (path.startsWith("/clients/") || path === "/clients" || path === "/manage/clients") {
+        const id = path.startsWith("/clients/") ? path.split("/").pop() : body?.id;
         if (id) {
           const { error } = await supabase.from("smr_clients").delete().eq("id", id);
-          if (!error) return { success: true } as unknown as T;
+          if (error) {
+            console.error("Delete client error:", error);
+            throw error;
+          }
+          return { success: true } as unknown as T;
         }
       }
       if (path.startsWith("/manage/vendors/")) {
