@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Copy, Download, ExternalLink, Link2, Plus, RefreshCw, Share2, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowUpRight, ChevronDown, Copy, Download, ExternalLink, Link2, Plus, RefreshCw, Share2, Trash2 } from "lucide-react";
 import { api, type Client, type Project } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { entryLink, normalizeSurvey, type NSurvey } from "../lib/data";
 import { exportCSV, formatDate, money, num } from "../lib/utils";
+import { cn } from "../utils/cn";
 import {
   Badge,
   Button,
@@ -136,6 +137,84 @@ export function Surveys() {
   );
 }
 
+/* ───────────── Custom Action Dropdown (Theme Safe, No Browser Select Quirks) ───────────── */
+function ActionDropdown({
+  value,
+  onChange,
+  actions,
+}: {
+  value: "assign" | "link" | "clone";
+  onChange: (v: "assign" | "link" | "clone") => void;
+  actions: { id: "assign" | "link" | "clone"; label: string; icon: React.ReactNode }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [open]);
+
+  const current = actions.find((a) => a.id === value) || actions[0];
+
+  return (
+    <div className="relative inline-block text-left" ref={ref} onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-[12px] font-semibold text-ink shadow-sm transition hover:bg-fill hover:border-line-strong focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="flex items-center gap-1.5">
+          {current?.icon}
+          {current?.label}
+        </span>
+        <ChevronDown size={13} className={cn("text-ink-3 transition-transform duration-200", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          className="anim-scale-in absolute right-0 z-50 mt-1 min-w-[130px] overflow-hidden rounded-xl border border-line bg-surface p-1 shadow-[var(--shadow-lg)]"
+        >
+          {actions.map((act) => {
+            const isSelected = act.id === value;
+            return (
+              <button
+                key={act.id}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => {
+                  onChange(act.id);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] font-medium transition cursor-pointer",
+                  isSelected
+                    ? "bg-accent text-white font-semibold"
+                    : "text-ink hover:bg-fill"
+                )}
+              >
+                <span className={isSelected ? "text-white" : "text-ink-2"}>{act.icon}</span>
+                <span>{act.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ───────────── Marketplace ───────────── */
 function Marketplace({
   q,
@@ -158,10 +237,10 @@ function Marketplace({
   const [cloneStudy, setCloneStudy] = useState<NSurvey | null>(null);
 
   const availableActions = useMemo(() => {
-    const acts: { id: "assign" | "link" | "clone"; label: string }[] = [];
-    if (can(PERMS.SURVEYS_ASSIGN)) acts.push({ id: "assign", label: "Assign" });
-    acts.push({ id: "link", label: "Link" });
-    if (can(PERMS.SURVEYS_CLONE)) acts.push({ id: "clone", label: "Clone" });
+    const acts: { id: "assign" | "link" | "clone"; label: string; icon: React.ReactNode }[] = [];
+    if (can(PERMS.SURVEYS_ASSIGN)) acts.push({ id: "assign", label: "Assign", icon: <Share2 size={13} /> });
+    acts.push({ id: "link", label: "Link", icon: <Link2 size={13} /> });
+    if (can(PERMS.SURVEYS_CLONE)) acts.push({ id: "clone", label: "Clone", icon: <Copy size={13} /> });
     return acts;
   }, [can]);
 
@@ -225,19 +304,12 @@ function Marketplace({
           {
             key: "action",
             header: (
-              <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
-                <select
+              <div className="flex items-center justify-end">
+                <ActionDropdown
                   value={actionType}
-                  onChange={(e) => setActionType(e.target.value as "assign" | "link" | "clone")}
-                  className="cursor-pointer rounded-lg border border-line bg-surface px-2.5 py-1 text-[12px] font-semibold text-ink shadow-sm outline-none transition hover:bg-fill focus:border-accent"
-                  aria-label="Action selector"
-                >
-                  {availableActions.map((act) => (
-                    <option key={act.id} value={act.id}>
-                      {act.label} ▾
-                    </option>
-                  ))}
-                </select>
+                  onChange={setActionType}
+                  actions={availableActions}
+                />
               </div>
             ),
             align: "right" as const,
