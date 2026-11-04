@@ -231,67 +231,49 @@ export function getUserPermissionSet(user: AuthUser | null | undefined): Set<num
   return new Set(rawList.map((id) => Number(id)).filter((id) => !isNaN(id) && id > 0));
 }
 
+/**
+ * Strict permission check:
+ * ONLY permissions explicitly selected and present in user's permSet are granted.
+ * Unchecked permissions (such as Clone, Quotas, Targeting, Delete) are strictly denied.
+ */
 export function hasPermission(user: AuthUser | null | undefined, permissionId: number): boolean {
   if (!user) return false;
-  const isAdmin =
-    user.role_id === 1 ||
-    user.role_name === "Admin" ||
-    (typeof user.role_name === "string" && user.role_name.toLowerCase().includes("admin"));
   const permSet = getUserPermissionSet(user);
 
-  // If no permissions array exists at all
+  // If no permissions array exists at all (unconfigured account), fallback to Super Admin check
   if (permSet.size === 0) {
-    return isAdmin;
+    return (
+      user.role_id === 1 ||
+      user.role_name === "Admin" ||
+      (typeof user.role_name === "string" && user.role_name.toLowerCase().includes("admin"))
+    );
   }
 
-  // 1. Direct match: if user explicitly has this permission ID in their set
+  // Exact match: if this permission ID was explicitly checked and saved
   if (permSet.has(permissionId)) {
     return true;
   }
 
-  // 2. Check if this is a sub-permission under a parent module in MENU_TREE
-  const parentNode = MENU_TREE.find((node) => node.children?.some((c) => c.id === permissionId));
-
-  if (parentNode) {
-    // Check if user has access to the parent module
-    const hasParent = permSet.has(parentNode.id) || (parentNode.children?.some((c) => permSet.has(c.id)) ?? false);
-    if (!hasParent && !isAdmin) {
-      return false;
-    }
-
-    // Check if the user has ANY explicit sub-permissions configured for this module
-    const configuredChildren = parentNode.children?.filter((c) => permSet.has(c.id)) || [];
-
-    if (configuredChildren.length > 0) {
-      // The user HAS explicit sub-permissions configured for this module,
-      // and this permissionId was NOT in permSet (direct match above failed).
-      // Deny access so unchecked permissions (e.g. Clone, Delete) are strictly hidden.
-      return false;
-    }
-
-    // User has parent module access (or is Super Admin) and NO explicit sub-permissions were configured.
-    // Default grant all sub-actions under this module.
-    return true;
+  // If this is a top-level module ID (e.g. PERMS.USERS === 2), grant if any child is allowed
+  const topNode = MENU_TREE.find((node) => node.id === permissionId);
+  if (topNode && topNode.children) {
+    return topNode.children.some((c) => permSet.has(c.id));
   }
 
-  // 3. For top-level module ID or unlisted ID
-  if (isAdmin) {
-    return true;
-  }
-
-  return permSet.has(permissionId);
+  // Any other sub-action (e.g. Clone 703, Assign 704, Delete 607) that was NOT checked is strictly denied
+  return false;
 }
 
 export function hasModuleAccess(user: AuthUser | null | undefined, moduleId: number): boolean {
   if (!user) return false;
-  const isAdmin =
-    user.role_id === 1 ||
-    user.role_name === "Admin" ||
-    (typeof user.role_name === "string" && user.role_name.toLowerCase().includes("admin"));
-  if (isAdmin) return true;
-
   const permSet = getUserPermissionSet(user);
-  if (permSet.size === 0) return true;
+  if (permSet.size === 0) {
+    return (
+      user.role_id === 1 ||
+      user.role_name === "Admin" ||
+      (typeof user.role_name === "string" && user.role_name.toLowerCase().includes("admin"))
+    );
+  }
 
   if (permSet.has(moduleId)) return true;
   const node = MENU_TREE.find((n) => n.id === moduleId);

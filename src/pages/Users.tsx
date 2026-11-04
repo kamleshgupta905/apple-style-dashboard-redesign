@@ -238,16 +238,6 @@ function UserForm({
     const initSet = new Set<number>();
     if (u?.menu_permissions && Array.isArray(u.menu_permissions)) {
       u.menu_permissions.forEach((id) => initSet.add(Number(id)));
-      // For any parent module granted without sub-ids (e.g. legacy account with [1..13]),
-      // auto-expand its children so all action checkboxes initialize as checked
-      MENU_TREE.forEach((node) => {
-        if (initSet.has(node.id)) {
-          const hasAnyChild = node.children?.some((c) => initSet.has(c.id));
-          if (!hasAnyChild && node.children) {
-            node.children.forEach((c) => initSet.add(c.id));
-          }
-        }
-      });
     } else if (!u) {
       // Default permissions for new users
       [7, 701, 702].forEach((id) => initSet.add(id));
