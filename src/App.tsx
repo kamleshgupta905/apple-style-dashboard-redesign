@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Component, type ReactNode, useCallback, useEffect, useState } from "react";
 import { Lock } from "lucide-react";
 import { auth, refreshCurrentUser, type AuthUser } from "./lib/api";
 import { FeedbackProvider } from "./components/feedback";
@@ -62,6 +62,48 @@ function useTheme() {
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#000000" : "#f5f5f7");
   }, [dark]);
   return [dark, setDark] as const;
+}
+
+class PageErrorBoundary extends Component<{ children: ReactNode; route: string }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode; route: string }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: any) {
+    console.error("Page error caught by boundary:", error, info);
+  }
+  componentDidUpdate(prevProps: { route: string }) {
+    if (prevProps.route !== this.props.route && this.state.hasError) {
+      this.setState({ hasError: false, error: null });
+    }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-[50vh] flex-col items-center justify-center p-6 text-center">
+          <div className="max-w-md rounded-3xl border border-line bg-surface p-6 shadow-sm">
+            <h3 className="text-[17px] font-semibold text-ink">Something went wrong on this page</h3>
+            <p className="mt-2 text-[13px] text-ink-3">
+              {this.state.error?.message || "An unexpected error occurred while rendering this module."}
+            </p>
+            <Button
+              className="mt-4"
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                window.location.reload();
+              }}
+            >
+              Reload page
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 export default function App() {
@@ -149,7 +191,7 @@ export default function App() {
           <Login onSuccess={setUser} />
         ) : (
           <Shell route={route} user={user} dark={dark} onToggleTheme={() => setDark((d) => !d)} onLogout={logout}>
-            {page()}
+            <PageErrorBoundary route={route}>{page()}</PageErrorBoundary>
           </Shell>
         )}
       </PermissionsProvider>

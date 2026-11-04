@@ -3,6 +3,7 @@ import { Building2, Eye, EyeOff, Pencil, Plug, Plus, ShieldCheck, Trash2 } from 
 import { api, type Client } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { initials, mask } from "../lib/utils";
+import { cn } from "../utils/cn";
 import {
   Badge,
   Button,

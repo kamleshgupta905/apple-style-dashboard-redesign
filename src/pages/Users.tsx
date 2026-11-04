@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, CheckSquare, MinusSquare, Plus, Search, Square, Trash2 } from "lucide-react";
+import { Check, CheckSquare, MinusSquare, Pencil, Plus, Search, Square, Trash2 } from "lucide-react";
 import { api, auth } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { formatDate, initials } from "../lib/utils";
@@ -144,16 +144,24 @@ export function Users() {
       align: "right",
       render: (u) =>
         can(PERMS.USERS) && (
-          <Button
-            size="sm"
-            variant="dangerSoft"
-            aria-label="Delete user"
-            icon={<Trash2 size={14} />}
-            onClick={(e) => {
-              e.stopPropagation();
-              remove(u);
-            }}
-          />
+          <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-label="Edit user"
+              icon={<Pencil size={14} />}
+              onClick={() => setEdit({ user: u })}
+            >
+              Edit
+            </Button>
+            <Button
+              size="sm"
+              variant="dangerSoft"
+              aria-label="Delete user"
+              icon={<Trash2 size={14} />}
+              onClick={() => remove(u)}
+            />
+          </div>
         ),
     },
   ];
