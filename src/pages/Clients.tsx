@@ -65,6 +65,19 @@ export function Clients() {
     }
   };
 
+  const toggleStatus = async (c: Client, on: boolean) => {
+    const newStatus = on ? "Y" : "N";
+    q.setData((d) => (d || []).map((x) => (x.id === c.id ? { ...x, status: newStatus } : x)));
+    setOpen((o) => (o && o.id === c.id ? { ...o, status: newStatus } : o));
+    try {
+      await api.post("/clients/toggle-status", { client_id: c.id, status: newStatus });
+      toast(`${c.client_name} is now ${on ? "Active" : "Inactive"}`);
+    } catch (e: any) {
+      toast(e.message, "error");
+      q.reload();
+    }
+  };
+
   const remove = async (c: Client) => {
     if (!(await confirm({ title: `Remove ${c.client_name}?`, message: "Studies linked to this client may stop routing.", confirmLabel: "Remove", danger: true }))) return;
     try {
@@ -153,14 +166,31 @@ export function Clients() {
                   <dd className="max-w-[60%] truncate font-medium text-ink">{c.email || "—"}</dd>
                 </div>
               </dl>
-              <div
-                className="mt-auto flex items-center justify-between rounded-2xl bg-fill px-3.5 py-2.5"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <span className="flex items-center gap-2 text-[13px] font-medium text-ink-2">
-                  <ShieldCheck size={16} className={c.security_enabled ? "text-green" : "text-ink-3"} /> Security gate
-                </span>
-                <Toggle checked={!!Number(c.security_enabled)} onChange={(v) => toggleSecurity(c, v)} label="Toggle security gate" />
+              <div className="mt-auto space-y-2">
+                <div
+                  className="flex items-center justify-between rounded-2xl bg-fill px-3.5 py-2.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span className="flex items-center gap-2 text-[13px] font-medium text-ink">
+                    <span className={cn("h-2.5 w-2.5 rounded-full", (c.status === "Y" || c.status === "Active") ? "bg-green" : "bg-ink-3")} />
+                    {(c.status === "Y" || c.status === "Active") ? "Active Partner" : "Inactive Partner"}
+                  </span>
+                  <Toggle
+                    checked={c.status === "Y" || c.status === "Active"}
+                    onChange={(on) => toggleStatus(c, on)}
+                    label="Toggle client active status"
+                  />
+                </div>
+
+                <div
+                  className="flex items-center justify-between rounded-2xl bg-fill px-3.5 py-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span className="flex items-center gap-2 text-[12px] font-medium text-ink-3">
+                    <ShieldCheck size={15} className={c.security_enabled ? "text-green" : "text-ink-3"} /> Security gate
+                  </span>
+                  <Toggle checked={!!Number(c.security_enabled)} onChange={(v) => toggleSecurity(c, v)} label="Toggle security gate" />
+                </div>
               </div>
             </Card>
           ))}
@@ -175,6 +205,7 @@ export function Clients() {
           edit(c);
         }}
         onDelete={remove}
+        onToggleStatus={toggleStatus}
       />
       <ClientForm
         state={form}
@@ -193,11 +224,13 @@ function ClientDrawer({
   onClose,
   onEdit,
   onDelete,
+  onToggleStatus,
 }: {
   client: Client | null;
   onClose: () => void;
   onEdit: (c: Client) => void;
   onDelete: (c: Client) => void;
+  onToggleStatus?: (c: Client, on: boolean) => void;
 }) {
   const { can } = usePermissions();
   const { toast } = useFeedback();
@@ -277,6 +310,19 @@ function ClientDrawer({
     >
       {c && (
         <div className="space-y-6">
+          <div className="flex items-center justify-between rounded-2xl bg-fill p-3.5">
+            <span className="flex items-center gap-2 text-[14px] font-semibold text-ink">
+              <span className={cn("h-2.5 w-2.5 rounded-full", (c.status === "Y" || c.status === "Active") ? "bg-green" : "bg-ink-3")} />
+              {(c.status === "Y" || c.status === "Active") ? "Active Partner" : "Inactive Partner"}
+            </span>
+            {onToggleStatus && (
+              <Toggle
+                checked={c.status === "Y" || c.status === "Active"}
+                onChange={(on) => onToggleStatus(c, on)}
+                label="Toggle client status"
+              />
+            )}
+          </div>
           {result && (
             <div className="anim-scale-in rounded-2xl bg-green-soft p-4">
               <p className="text-[14px] font-semibold text-green">{String(result.result?.status || "OK").replace(/_/g, " ")}</p>

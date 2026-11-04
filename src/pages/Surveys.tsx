@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, Download, Link2, Plus, RefreshCw, Share2, Trash2 } from "lucide-react";
+import { ArrowUpRight, Copy, Download, ExternalLink, Link2, Plus, RefreshCw, Share2, Trash2 } from "lucide-react";
 import { api, type Client, type Project } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
-import { normalizeSurvey, type NSurvey } from "../lib/data";
+import { entryLink, normalizeSurvey, type NSurvey } from "../lib/data";
 import { exportCSV, formatDate, money, num } from "../lib/utils";
 import {
   Badge,
@@ -33,8 +33,39 @@ export function Surveys() {
   const [syncing, setSyncing] = useState(false);
 
   const market = useQuery(async () => {
-    const r = await api.get<{ data: any[] }>("/zamplia");
-    return (r.data || []).map(normalizeSurvey);
+    const [surveysRes, clientsRes] = await Promise.all([
+      api.get<{ data: any[] }>("/zamplia"),
+      api.get<{ data: Client[] }>("/clients").catch(() => ({ data: [] })),
+    ]);
+    const rawSurveys = surveysRes.data || [];
+    const clientList: Client[] = clientsRes.data || [];
+
+    // Map all inactive client names and codes
+    const inactiveClients = new Set(
+      clientList
+        .filter((c) => c.status !== "Y" && c.status !== "Active")
+        .flatMap((c) => [
+          (c.client_name || "").toLowerCase().trim(),
+          (c.client_code || "").toLowerCase().trim(),
+        ])
+        .filter(Boolean),
+    );
+
+    const normalized = rawSurveys.map(normalizeSurvey);
+
+    return normalized.filter((s) => {
+      const cName = (s.client || "").toLowerCase().trim();
+      if (inactiveClients.has(cName)) return false;
+      if (
+        cName.includes("zamplia") &&
+        (inactiveClients.has("zamplia") ||
+          inactiveClients.has("zamplia global") ||
+          inactiveClients.has("zamp_global"))
+      ) {
+        return false;
+      }
+      return true;
+    });
   }, []);
   const mine = useQuery(async () => (await api.get<{ data: Project[] }>("/manage/projects")).data || [], []);
 
@@ -81,7 +112,14 @@ export function Surveys() {
         ]}
       />
       {tab === "market" ? (
-        <Marketplace q={market} />
+        <Marketplace
+          q={market}
+          onCloned={() => {
+            mine.reload();
+            market.reload();
+            setTab("mine");
+          }}
+        />
       ) : (
         <MyStudies q={mine} onNew={() => setCreating(true)} />
       )}
@@ -99,8 +137,15 @@ export function Surveys() {
 }
 
 /* ───────────── Marketplace ───────────── */
-function Marketplace({ q }: { q: ReturnType<typeof useQuery<NSurvey[]>> }) {
+function Marketplace({
+  q,
+  onCloned,
+}: {
+  q: ReturnType<typeof useQuery<NSurvey[]>>;
+  onCloned?: () => void;
+}) {
   const { can } = usePermissions();
+  const { toast } = useFeedback();
   const [search, setSearch] = useState("");
   const [client, setClient] = useState("all");
   const [status, setStatus] = useState("all");
@@ -108,6 +153,23 @@ function Marketplace({ q }: { q: ReturnType<typeof useQuery<NSurvey[]>> }) {
   const [selected, setSelected] = useState<Set<string | number>>(new Set());
   const [detail, setDetail] = useState<NSurvey | null>(null);
   const [assign, setAssign] = useState<NSurvey[]>([]);
+  const [actionType, setActionType] = useState<"assign" | "link" | "clone">("assign");
+  const [activeLink, setActiveLink] = useState<{ id: string; name: string; url: string } | null>(null);
+  const [cloneStudy, setCloneStudy] = useState<NSurvey | null>(null);
+
+  const availableActions = useMemo(() => {
+    const acts: { id: "assign" | "link" | "clone"; label: string }[] = [];
+    if (can(PERMS.SURVEYS_ASSIGN)) acts.push({ id: "assign", label: "Assign" });
+    acts.push({ id: "link", label: "Link" });
+    if (can(PERMS.SURVEYS_CLONE)) acts.push({ id: "clone", label: "Clone" });
+    return acts;
+  }, [can]);
+
+  useEffect(() => {
+    if (availableActions.length > 0 && !availableActions.some((a) => a.id === actionType)) {
+      setActionType(availableActions[0].id);
+    }
+  }, [availableActions, actionType]);
 
   const list = q.data || [];
   const clients = useMemo(() => [...new Set(list.map((s) => s.client))], [list]);
@@ -134,12 +196,17 @@ function Marketplace({ q }: { q: ReturnType<typeof useQuery<NSurvey[]>> }) {
   if (q.error && !q.data) return <ErrorState message={q.error} onRetry={q.reset} />;
 
   const cols: Column<NSurvey>[] = [
-    { key: "id", header: "Survey", primary: true, render: (s) => (
+    {
+      key: "id",
+      header: "Survey",
+      primary: true,
+      render: (s) => (
         <div className="min-w-0">
           <p className="font-mono text-[13px] font-semibold text-ink">#{s.id}</p>
           <p className="max-w-[220px] truncate text-[12px] text-ink-3">{s.name}</p>
         </div>
-      ) },
+      ),
+    },
     { key: "client", header: "Client", render: (s) => <span className="text-ink-2">{s.client}</span> },
     { key: "cpi", header: "CPI", align: "right", sortValue: (s) => s.cpi, render: (s) => <span className="font-semibold">{money(s.cpi)}</span> },
     { key: "loi", header: "LOI", align: "right", sortValue: (s) => s.loi, render: (s) => `${s.loi} min` },
@@ -153,26 +220,76 @@ function Marketplace({ q }: { q: ReturnType<typeof useQuery<NSurvey[]>> }) {
     { key: "target", header: "Target", align: "right", sortValue: (s) => s.target, render: (s) => num(s.target).toLocaleString() },
     { key: "end", header: "Ends", hideMobile: true, render: (s) => <span className="text-ink-3">{formatDate(s.endDate, false)}</span> },
     { key: "status", header: "Status", render: (s) => <StatusBadge status={s.status} /> },
-    ...(can(PERMS.SURVEYS_ASSIGN)
+    ...(availableActions.length > 0
       ? [
           {
-            key: "act",
-            header: "",
+            key: "action",
+            header: (
+              <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+                <select
+                  value={actionType}
+                  onChange={(e) => setActionType(e.target.value as "assign" | "link" | "clone")}
+                  className="cursor-pointer rounded-lg border border-line bg-surface px-2.5 py-1 text-[12px] font-semibold text-ink shadow-sm outline-none transition hover:bg-fill focus:border-accent"
+                  aria-label="Action selector"
+                >
+                  {availableActions.map((act) => (
+                    <option key={act.id} value={act.id}>
+                      {act.label} ▾
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
             align: "right" as const,
             hideMobile: true,
-            render: (s: NSurvey) => (
-              <Button
-                size="sm"
-                variant="tinted"
-                icon={<Share2 size={14} />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setAssign([s]);
-                }}
-              >
-                Assign
-              </Button>
-            ),
+            render: (s: NSurvey) => {
+              if (actionType === "assign") {
+                return (
+                  <Button
+                    size="sm"
+                    variant="tinted"
+                    icon={<Share2 size={14} />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAssign([s]);
+                    }}
+                  >
+                    Assign
+                  </Button>
+                );
+              }
+              if (actionType === "link") {
+                return (
+                  <Button
+                    size="sm"
+                    variant="tinted"
+                    icon={<Link2 size={14} />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const url = entryLink(s.id);
+                      navigator.clipboard?.writeText?.(url);
+                      toast("Survey entry link copied!", "success");
+                      setActiveLink({ id: s.id, name: s.name, url });
+                    }}
+                  >
+                    Link
+                  </Button>
+                );
+              }
+              return (
+                <Button
+                  size="sm"
+                  variant="tinted"
+                  icon={<Copy size={14} />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCloneStudy(s);
+                  }}
+                >
+                  Clone
+                </Button>
+              );
+            },
           },
         ]
       : []),
@@ -263,6 +380,68 @@ function Marketplace({ q }: { q: ReturnType<typeof useQuery<NSurvey[]>> }) {
         onClose={() => setAssign([])}
         onDone={() => setSelected(new Set())}
       />
+      <StudyForm
+        open={!!cloneStudy}
+        base={cloneStudy || undefined}
+        duplicate
+        onClose={() => setCloneStudy(null)}
+        onSaved={() => {
+          setCloneStudy(null);
+          onCloned?.();
+        }}
+      />
+      <Modal
+        open={!!activeLink}
+        onClose={() => setActiveLink(null)}
+        title="Survey Entry Link"
+        subtitle={`Live respondent routing link for survey #${activeLink?.id}`}
+      >
+        <div className="space-y-4">
+          <div>
+            <p className="mb-1 text-[12px] font-semibold uppercase tracking-wider text-ink-3">Study Name</p>
+            <p className="text-[14px] font-medium text-ink">{activeLink?.name}</p>
+          </div>
+          <div>
+            <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wider text-ink-3">Direct Entry URL</p>
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={activeLink?.url || ""}
+                onFocus={(e) => e.target.select()}
+                className="flex-1 rounded-xl border border-line bg-fill px-3 py-2 font-mono text-[13px] text-ink outline-none select-all"
+              />
+              <Button
+                variant="primary"
+                icon={<Copy size={14} />}
+                onClick={() => {
+                  if (activeLink?.url) {
+                    navigator.clipboard?.writeText?.(activeLink.url);
+                    toast("Link copied to clipboard!", "success");
+                  }
+                }}
+              >
+                Copy
+              </Button>
+            </div>
+            <p className="mt-2 text-[12px] text-ink-3">
+              Append your supply tracking parameters such as{" "}
+              <code className="rounded bg-fill px-1 py-0.5 text-accent">&uid=[USER_ID]</code> or{" "}
+              <code className="rounded bg-fill px-1 py-0.5 text-accent">&rid=[TRANSACTION_ID]</code>.
+            </p>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button
+              variant="secondary"
+              icon={<ExternalLink size={14} />}
+              onClick={() => {
+                if (activeLink?.url) window.open(activeLink.url, "_blank", "noopener,noreferrer");
+              }}
+            >
+              Test link in new tab
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }
@@ -465,7 +644,7 @@ function StudyForm({
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
-  base?: Project;
+  base?: Project | NSurvey;
   duplicate?: boolean;
 }) {
   const { toast } = useFeedback();
@@ -476,22 +655,37 @@ function StudyForm({
 
   // reset whenever the dialog opens
   useEffect(() => {
-    if (open)
-      setF(
-        base
-          ? {
-              name: `${base.project_name} (Clone)`,
-              client_id: String(base.client_id || ""),
-              cpi: String(base.cpi),
-              loi: String(base.loi),
-              ir: String(base.ir),
-              target: String(base.target_completes),
-              live_url: base.live_url || "",
-              auto_pause: String(base.auto_pause_clicks || 50),
-              country: "United States",
-            }
-          : blank,
-      );
+    if (open) {
+      if (base) {
+        const isProject = "project_name" in base;
+        const name = isProject ? (base as Project).project_name : (base as NSurvey).name;
+        const cpi = isProject ? String((base as Project).cpi) : String((base as NSurvey).cpi);
+        const loi = isProject ? String((base as Project).loi) : String((base as NSurvey).loi);
+        const ir = isProject ? String((base as Project).ir) : String((base as NSurvey).ir);
+        const target = isProject
+          ? String((base as Project).target_completes)
+          : String((base as NSurvey).target || 500);
+        const liveUrl = isProject
+          ? (base as Project).live_url || ""
+          : (base as NSurvey).liveUrl || entryLink((base as NSurvey).id);
+        const clientId = isProject
+          ? String((base as Project).client_id || "")
+          : String((base as NSurvey).clientId || "");
+        setF({
+          name: `${name} (Clone)`,
+          client_id: clientId,
+          cpi,
+          loi,
+          ir,
+          target,
+          live_url: liveUrl,
+          auto_pause: isProject ? String((base as Project).auto_pause_clicks || 50) : "50",
+          country: "United States",
+        });
+      } else {
+        setF(blank);
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -501,6 +695,9 @@ function StudyForm({
     if (!f.name.trim()) return toast("Give the study a name.", "error");
     if (num(f.cpi) <= 0 || num(f.target) <= 0) return toast("CPI and target must be above zero.", "error");
     const client = (clients.data || []).find((c) => String(c.id) === f.client_id);
+    const isProject = base && "project_name" in base;
+    const baseId = isProject ? (base as Project).id : undefined;
+    const baseProjectId = isProject ? (base as Project).project_id : (base as NSurvey)?.id;
     const body = {
       project_name: f.name.trim(),
       target_name: f.name.trim(),
@@ -516,7 +713,7 @@ function StudyForm({
       auto_pause_clicks: num(f.auto_pause),
       country: f.country,
       status: "Live",
-      ...(base ? { source_project_id: base.project_id, id: base.id } : {}),
+      ...(base ? { source_project_id: baseProjectId, id: baseId } : {}),
     };
     setBusy(true);
     try {

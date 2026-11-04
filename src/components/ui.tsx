@@ -536,7 +536,7 @@ export function CountUp({
 /* ───────────── Data table (cards on mobile) ───────────── */
 export interface Column<T> {
   key: string;
-  header: string;
+  header: ReactNode;
   render?: (row: T) => ReactNode;
   sortValue?: (row: T) => string | number;
   align?: "left" | "right";
