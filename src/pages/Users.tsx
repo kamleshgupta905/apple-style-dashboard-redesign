@@ -213,6 +213,7 @@ function UserForm({
   onSaved: () => void;
 }) {
   const { toast } = useFeedback();
+  const { can } = usePermissions();
   const [f, setF] = useState({
     name: "",
     username: "",
@@ -309,7 +310,7 @@ function UserForm({
       setTab("profile");
       return toast("Name and username are required.", "error");
     }
-    if (!u && f.password.length < 6) {
+    if (!u && can(PERMS.USERS_PASSWORDS) && f.password.length < 6) {
       setTab("profile");
       return toast("Set a password of at least 6 characters.", "error");
     }
@@ -432,18 +433,29 @@ function UserForm({
               ))}
             </Select>
           </Field>
-          <Field
-            label={u ? "New password" : "Password"}
-            hint={u ? "Leave blank to keep existing password" : "Minimum 6 characters"}
-          >
-            <Input
-              type="password"
-              autoComplete="new-password"
-              value={f.password}
-              onChange={set("password")}
-              placeholder="••••••••"
-            />
-          </Field>
+          {can(PERMS.USERS_PASSWORDS) ? (
+            <Field
+              label={u ? "New password" : "Password"}
+              hint={u ? "Leave blank to keep existing password" : "Minimum 6 characters"}
+            >
+              <Input
+                type="password"
+                autoComplete="new-password"
+                value={f.password}
+                onChange={set("password")}
+                placeholder={u ? "••••••••" : "Create password"}
+              />
+            </Field>
+          ) : !u ? (
+            <Field label="Password" hint="Default password will be assigned">
+              <Input
+                type="password"
+                disabled
+                value="••••••••••••"
+                className="opacity-70 cursor-not-allowed"
+              />
+            </Field>
+          ) : null}
           <div className="flex items-center justify-between rounded-2xl bg-fill px-4 py-3 sm:col-span-2">
             <div>
               <p className="text-[14px] font-medium">Account active</p>

@@ -3,10 +3,12 @@ import { KeyRound, LogOut, Moon, Sun } from "lucide-react";
 import { api, type AuthUser } from "../lib/api";
 import { Button, Card, Field, Input, PageHeader, SectionTitle, Segmented } from "../components/ui";
 import { useFeedback } from "../components/feedback";
+import { PERMS, usePermissions } from "../lib/permissions";
 import { initials } from "../lib/utils";
 
 export function Settings({ user, dark, onSetDark, onLogout }: { user: AuthUser; dark: boolean; onSetDark: (d: boolean) => void; onLogout: () => void }) {
   const { toast } = useFeedback();
+  const { can } = usePermissions();
   const [f, setF] = useState({ next: "", confirm: "" });
   const [busy, setBusy] = useState(false);
 
@@ -71,30 +73,32 @@ export function Settings({ user, dark, onSetDark, onLogout }: { user: AuthUser; 
           </p>
         </Card>
 
-        <Card className="p-5 sm:p-6">
-          <SectionTitle title="Change password" hint="Choose something unique you don't use elsewhere" />
-          <form onSubmit={save} className="space-y-4">
-            <Field label="New password">
-              <Input type="password" autoComplete="new-password" value={f.next} onChange={(e) => setF({ ...f, next: e.target.value })} />
-            </Field>
-            {f.next && (
-              <div className="anim-fade-in">
-                <div className="flex gap-1.5">
-                  {[1, 2, 3, 4].map((i) => (
-                    <span key={i} className="h-1.5 flex-1 rounded-full transition-colors duration-500" style={{ background: strength >= i ? colors[strength] : "var(--fill)" }} />
-                  ))}
+        {can(PERMS.USERS_PASSWORDS) && (
+          <Card className="p-5 sm:p-6">
+            <SectionTitle title="Change password" hint="Choose something unique you don't use elsewhere" />
+            <form onSubmit={save} className="space-y-4">
+              <Field label="New password">
+                <Input type="password" autoComplete="new-password" value={f.next} onChange={(e) => setF({ ...f, next: e.target.value })} />
+              </Field>
+              {f.next && (
+                <div className="anim-fade-in">
+                  <div className="flex gap-1.5">
+                    {[1, 2, 3, 4].map((i) => (
+                      <span key={i} className="h-1.5 flex-1 rounded-full transition-colors duration-500" style={{ background: strength >= i ? colors[strength] : "var(--fill)" }} />
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-[12px] text-ink-3">{labels[strength]}</p>
                 </div>
-                <p className="mt-1.5 text-[12px] text-ink-3">{labels[strength]}</p>
-              </div>
-            )}
-            <Field label="Confirm password">
-              <Input type="password" autoComplete="new-password" value={f.confirm} onChange={(e) => setF({ ...f, confirm: e.target.value })} />
-            </Field>
-            <Button type="submit" loading={busy} icon={<KeyRound size={16} />}>
-              Update password
-            </Button>
-          </form>
-        </Card>
+              )}
+              <Field label="Confirm password">
+                <Input type="password" autoComplete="new-password" value={f.confirm} onChange={(e) => setF({ ...f, confirm: e.target.value })} />
+              </Field>
+              <Button type="submit" loading={busy} icon={<KeyRound size={16} />}>
+                Update password
+              </Button>
+            </form>
+          </Card>
+        )}
       </div>
     </div>
   );
