@@ -35,11 +35,11 @@ export function Login({ onSuccess }: { onSuccess: (u: AuthUser) => void }) {
     <div className="flex min-h-dvh items-center justify-center bg-bg px-4 py-10">
       <div className="w-full max-w-[400px]">
         <div className="anim-fade-up mb-8 flex flex-col items-center text-center">
-          <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-[20px] bg-ink text-bg shadow-[var(--shadow-md)]">
-            <BarChart3 size={30} strokeWidth={2.2} />
+          <div className="mb-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-[24px] bg-white p-2.5 shadow-[var(--shadow-md)] ring-1 ring-line">
+            <img src="/vmh-logo.png" alt="VMH Group" className="h-full w-full object-contain" />
           </div>
-          <h1 className="text-[30px] font-bold tracking-tight text-ink">Sign in to SMR</h1>
-          <p className="mt-1.5 text-[15px] text-ink-3">VMH Group · Survey Marketplace &amp; Traffic Router</p>
+          <h1 className="text-[28px] font-bold tracking-tight text-ink">Sign in to SMR</h1>
+          <p className="mt-1 text-[14px] text-ink-3">VMH GROUP'S · SMR PLATFORM</p>
         </div>
 
         <form

@@ -245,6 +245,7 @@ export function hasPermission(user: AuthUser | null | undefined, permissionId: n
     return (
       user.role_id === 1 ||
       user.role_name === "Admin" ||
+      user.role_name === "Developer" ||
       (typeof user.role_name === "string" && user.role_name.toLowerCase().includes("admin"))
     );
   }
@@ -254,13 +255,43 @@ export function hasPermission(user: AuthUser | null | undefined, permissionId: n
     return true;
   }
 
-  // If this is a top-level module ID (e.g. PERMS.USERS === 2), grant if any child is allowed
+  // If this is a top-level module ID (e.g. PERMS.SURVEYS === 7, PERMS.OVERVIEW === 1)
   const topNode = MENU_TREE.find((node) => node.id === permissionId);
-  if (topNode && topNode.children) {
-    return topNode.children.some((c) => permSet.has(c.id));
+  if (topNode) {
+    if (permSet.has(topNode.id)) return true;
+    if (topNode.children && topNode.children.some((c) => permSet.has(c.id))) return true;
+    return false;
   }
 
-  // Any other sub-action (e.g. Clone 703, Assign 704, Delete 607) that was NOT checked is strictly denied
+  // If this is a child permission (e.g. 101, 102, 703, etc.):
+  const parentNode = MENU_TREE.find((node) => node.children?.some((c) => c.id === permissionId));
+  if (parentNode) {
+    const parentGranted = permSet.has(parentNode.id);
+    const configuredChildren = parentNode.children?.filter((c) => permSet.has(c.id)) || [];
+
+    // If specific child permissions are configured in user's permSet for this module:
+    if (configuredChildren.length > 0) {
+      // STRICT: Only grant if this specific child is in permSet!
+      // (This guarantees that if Clone 703 or Delete 607 is NOT checked, it returns FALSE!)
+      return permSet.has(permissionId);
+    }
+
+    // If NO child permissions are configured for this module, but the parent module was granted (legacy / whole module):
+    if (parentGranted) {
+      // If the user is Super Admin or Developer (role_id === 1), grant all
+      if (user.role_id === 1 || user.role_name === "Developer" || user.role_name === "Admin") {
+        return true;
+      }
+      // For standard users with module 1 (Overview) granted, allow KPIs, charts, and activity:
+      if (parentNode.id === 1) return true;
+      // For other modules, only view directory by default if parent was granted without sub-selection
+      if ([601, 701, 801, 901, 1001, 1101, 1201, 1301, 1401].includes(permissionId)) {
+        return true;
+      }
+      return false;
+    }
+  }
+
   return false;
 }
 
@@ -271,6 +302,7 @@ export function hasModuleAccess(user: AuthUser | null | undefined, moduleId: num
     return (
       user.role_id === 1 ||
       user.role_name === "Admin" ||
+      user.role_name === "Developer" ||
       (typeof user.role_name === "string" && user.role_name.toLowerCase().includes("admin"))
     );
   }

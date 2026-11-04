@@ -70,13 +70,13 @@ export const NAV: NavItem[] = [
 
 function Logo() {
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-ink text-bg">
-        <BarChart3 size={18} strokeWidth={2.4} />
+    <div className="flex items-center gap-2.5">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1 shadow-sm ring-1 ring-line">
+        <img src="/vmh-logo.png" alt="VMH Group" className="h-full w-full object-contain" />
       </div>
       <div className="leading-tight">
-        <p className="text-[15px] font-semibold tracking-tight text-ink">VMH SMR</p>
-        <p className="text-[11px] font-medium text-ink-3">Traffic Console</p>
+        <p className="text-[14px] font-bold tracking-tight text-ink">VMH GROUP'S</p>
+        <p className="text-[10px] font-semibold tracking-wider text-ink-3">SMR PLATFORM</p>
       </div>
     </div>
   );

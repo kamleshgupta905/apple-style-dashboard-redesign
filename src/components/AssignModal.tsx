@@ -23,8 +23,8 @@ export function AssignModal({
   const [vendors, setVendors] = useState<VendorOption[] | null>(null);
   const [vendor, setVendor] = useState(presetVendor || "");
   const [custom, setCustom] = useState("");
-  const [pct, setPct] = useState(70);
-  const [quota, setQuota] = useState(100);
+  const [pct, setPct] = useState<string | number>(70);
+  const [quota, setQuota] = useState<string | number>(100);
   const [busy, setBusy] = useState(false);
   const [links, setLinks] = useState<{ id: string; name: string; link: string }[] | null>(null);
 
@@ -37,7 +37,7 @@ export function AssignModal({
       const pick = v.find((x) => x.code === presetVendor) || v[0];
       if (pick) {
         setVendor(pick.code);
-        setPct(pick.sharePct);
+        setPct(pick.sharePct && pick.sharePct > 0 ? pick.sharePct : 70);
       } else setVendor("__custom");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -45,10 +45,12 @@ export function AssignModal({
 
   const code = vendor === "__custom" ? custom.trim() : vendor;
   const single = surveys.length === 1 ? surveys[0] : null;
+  const numPct = Math.max(1, Math.min(100, Number(pct) || 70));
+  const numQuota = Math.max(1, Number(quota) || 100);
 
   const submit = async () => {
     if (!code) return toast("Choose a vendor first.", "error");
-    if (quota <= 0) return toast("Quota must be greater than zero.", "error");
+    if (numQuota <= 0) return toast("Quota must be greater than zero.", "error");
     setBusy(true);
     try {
       const out: { id: string; name: string; link: string }[] = [];
@@ -56,8 +58,8 @@ export function AssignModal({
         const res = await api.post<any>("/vendor/allot", {
           project_id: s.id,
           vendor_id: code,
-          vendor_cpi: Number(((s.cpi * pct) / 100).toFixed(2)),
-          quota_limit: quota,
+          vendor_cpi: Number(((s.cpi * numPct) / 100).toFixed(2)),
+          quota_limit: numQuota,
           status: "Active",
         });
         const link = res?.entry_link || res?.data?.entry_link || entryLink(code, s.id);
@@ -133,7 +135,7 @@ export function AssignModal({
               onChange={(e) => {
                 setVendor(e.target.value);
                 const v = vendors.find((x) => x.code === e.target.value);
-                if (v) setPct(v.sharePct);
+                if (v) setPct(v.sharePct && v.sharePct > 0 ? v.sharePct : 70);
               }}
             >
               {vendors.map((v) => (
@@ -151,10 +153,30 @@ export function AssignModal({
           )}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Vendor share (%)" hint="Percent of client CPI paid out">
-              <Input type="number" min={1} max={100} value={pct} onChange={(e) => setPct(num(e.target.value))} />
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                value={pct}
+                onChange={(e) => setPct(e.target.value === "" ? "" : e.target.value)}
+                onBlur={() => {
+                  const n = Number(pct);
+                  if (pct === "" || isNaN(n) || n <= 0) setPct(70);
+                  else if (n > 100) setPct(100);
+                }}
+              />
             </Field>
             <Field label={single ? "Quota (completes)" : "Quota per survey"}>
-              <Input type="number" min={1} value={quota} onChange={(e) => setQuota(num(e.target.value))} />
+              <Input
+                type="number"
+                min={1}
+                value={quota}
+                onChange={(e) => setQuota(e.target.value === "" ? "" : e.target.value)}
+                onBlur={() => {
+                  const n = Number(quota);
+                  if (quota === "" || isNaN(n) || n <= 0) setQuota(100);
+                }}
+              />
             </Field>
           </div>
           {single && (
@@ -165,11 +187,11 @@ export function AssignModal({
               </div>
               <div>
                 <p className="text-[11px] font-semibold uppercase text-ink-3">Vendor CPI</p>
-                <p className="text-[17px] font-semibold tabular">{money((single.cpi * pct) / 100)}</p>
+                <p className="text-[17px] font-semibold tabular">{money((single.cpi * numPct) / 100)}</p>
               </div>
               <div>
                 <p className="text-[11px] font-semibold uppercase text-ink-3">Margin</p>
-                <p className="text-[17px] font-semibold text-green tabular">{money((single.cpi * (100 - pct)) / 100)}</p>
+                <p className="text-[17px] font-semibold text-green tabular">{money((single.cpi * (100 - numPct)) / 100)}</p>
               </div>
             </div>
           )}

@@ -238,6 +238,13 @@ export function Dashboard({ userName }: { userName: string }) {
           </div>
         </div>
       )}
+
+      {!can(PERMS.OVERVIEW_KPIS) && !can(PERMS.OVERVIEW_CHARTS) && !can(PERMS.OVERVIEW_ACTIVITY) && (
+        <div className="mt-8 rounded-3xl border border-line bg-surface p-8 text-center shadow-sm">
+          <p className="text-[16px] font-medium text-ink">Welcome to VMH GROUP'S SMR Platform</p>
+          <p className="mt-1 text-[13px] text-ink-3">Your account is active. Use the navigation menu on the left to access your authorized modules.</p>
+        </div>
+      )}
     </div>
   );
 }
