@@ -226,6 +226,7 @@ function SimTab() {
         await api.post("/security/simulate-check", {
           ip: f.ip,
           uid: f.uid,
+          device: f.device,
           userAgent: ua[f.device],
           timeTaken: num(f.timeTaken),
           loi: num(f.loi),

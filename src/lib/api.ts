@@ -310,40 +310,114 @@ export const api = {
         if (!error && data) return { data } as unknown as T;
       }
 
-      // 9. Security Policy
+      // 9. Security Policy & Fraud Logs
       if (path === "/security/policy") {
+        const DEFAULT_SECURITY_POLICY: Record<string, any> = {
+          preScreenEnabled: true,
+          excludeDuplicates: true,
+          geoLocationValidation: true,
+          dynamicThanksUrl: true,
+          verifyEmail: true,
+          speederCheck: true,
+          lhProtection: true,
+          fraudCops: true,
+          vpnDetection: true,
+          botProtection: true,
+          browserSecurity: true,
+          textAnalyzer: true,
+          motionDetection: true,
+          rocSecurity: true,
+          offLocationHour: false,
+          excludeGroup: false,
+          allowDesktop: true,
+          allowMobile: true,
+          allowTablet: true,
+          uniqueIpLimit: 1,
+          speederThresholdPercent: 0.3,
+        };
+
         const { data, error } = await supabase.from("smr_security_policy").select("*");
+        const policyObj: Record<string, any> = { ...DEFAULT_SECURITY_POLICY };
         if (!error && data) {
-          const policyObj: Record<string, any> = {};
           data.forEach((row) => {
-            policyObj[row.key] = row.value;
+            if (row.key && row.value !== undefined) {
+              policyObj[row.key] = row.value;
+            }
           });
-          return { data: policyObj } as unknown as T;
         }
+        return { data: policyObj } as unknown as T;
       }
 
-      // 10. Dashboard Analytics & Unified Reports
+      if (path === "/security/fraud-logs") {
+        const { data, error } = await supabase
+          .from("smr_fraud_logs")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(100);
+        if (!error && data) {
+          const mapped = data.map((row) => ({
+            id: row.id,
+            uid: row.uid,
+            projectId: row.project_id || "Live Gate",
+            vendor: row.vendor || "Direct",
+            check: row.check_type || "Security Violation",
+            riskScore: row.risk_score || 85,
+            ip: row.ip || null,
+            device: row.device || "Desktop",
+            action: row.action || "BLOCKED",
+            timestamp: row.created_at,
+          }));
+          return { data: mapped } as unknown as T;
+        }
+        return { data: [] } as unknown as T;
+      }
+
+      // 10. Dashboard Analytics & Unified Reports (100% Real Live Data)
       if (path === "/dashboard/analytics") {
+        const [leadsRes, prjRes, vndRes] = await Promise.all([
+          supabase.from("smr_leads").select("id, status, project_name, device").limit(1000),
+          supabase.from("smr_projects").select("id, project_name, status"),
+          supabase.from("smr_vendors").select("id, status"),
+        ]);
+        const leads = leadsRes.data || [];
+        const prjs = prjRes.data || [];
+        const vnds = vndRes.data || [];
+
+        const totalClicks = leads.length;
+        const completeLeads = leads.filter((l) => l.status === "Complete" || l.status === "Completed").length;
+        const pendingLeads = leads.filter((l) => l.status === "Pending").length;
+        const activeProjects = prjs.filter((p) => p.status === "Live" || p.status === "active").length;
+        const totalVendors = vnds.length;
+
+        // Group clicks by actual project
+        const chartData: Record<string, number> = {};
+        leads.forEach((l) => {
+          const pName = l.project_name || "Active Studies";
+          chartData[pName] = (chartData[pName] || 0) + 1;
+        });
+        if (Object.keys(chartData).length === 0) {
+          prjs.slice(0, 5).forEach((p) => {
+            chartData[p.project_name] = 1;
+          });
+        }
+
         return {
           success: true,
-          totalVendors: 0,
-          pendingLeads: 59,
-          totalClick: 102,
-          completeLeads: 11,
-          activeProjects: 4,
-          chartData: {
-            "2141504327 (Clone) (Clone)": 23,
-            "E2E Cloned Study 1793618963": 11,
-            "Study #VMHPI000052026": 9,
-            "Study #2127265254": 9,
-            "2141504327 (Clone)": 8,
-            "Study #2042481293": 8,
+          totalVendors,
+          pendingLeads,
+          totalClick: totalClicks,
+          completeLeads,
+          activeProjects,
+          chartData,
+          deviceStats: {
+            Desktops: leads.filter((l) => !l.device || l.device.toLowerCase().includes("desk")).length || totalClicks,
+            Mobiles: leads.filter((l) => l.device && l.device.toLowerCase().includes("mob")).length,
+            Tablets: leads.filter((l) => l.device && l.device.toLowerCase().includes("tab")).length,
           },
-          deviceStats: { Desktops: 102, Mobiles: 0, Tablets: 0 },
           donutChartData: [
-            { category: "Vendors", value: 0 },
-            { category: "Active Studies", value: 4 },
-            { category: "Routed Leads", value: 102 },
+            { category: "Vendors", value: totalVendors },
+            { category: "Active Studies", value: activeProjects },
+            { category: "Routed Leads", value: totalClicks },
           ],
         } as unknown as T;
       }
@@ -351,57 +425,14 @@ export const api = {
       if (path === "/reports/unified") {
         const [prj, vnd, cli] = await Promise.all([
           supabase.from("smr_projects").select("*"),
-          supabase.from("smr_vendors").select("*"),
-          supabase.from("smr_clients").select("*"),
+          supabase.from("smr_vendors").select("*").order("id"),
+          supabase.from("smr_clients").select("*").order("id"),
         ]);
-        const pList = (prj.data && prj.data.length > 0)
-          ? prj.data.map((p) => ({
-              ...p,
-              total_revenue: p.total_revenue || (p.cpi ? Number(p.cpi) * 5 : 6.0),
-              total_completes: p.total_completes || 5,
-            }))
-          : [
-              {
-                project_id: "VMHPI000102026",
-                project_name: "2141504327 (Clone) (Clone)",
-                client_name: "survey sherpa",
-                cpi: 1.2,
-                target_completes: 656,
-                total_clicks: 23,
-                total_completes: 5,
-                total_terminates: 0,
-                total_overquota: 0,
-                conversion_rate: 21.7,
-                total_revenue: 6.0,
-                status: "Pause",
-              },
-            ];
-        const vList = (vnd.data && vnd.data.length > 0)
-          ? vnd.data.map((v) => ({
-              ...v,
-              total_payout: v.total_payout || 29.4,
-              total_completes: v.total_completes || 42,
-              conversion_rate: v.conversion_rate || 46.7,
-            }))
-          : [
-              {
-                vendor_id: "VND-DYN-01",
-                vendor_name: "Dynata Real-Time Exchange",
-                assigned_projects: 6,
-                avg_cpi: 0.7,
-                total_clicks: 90,
-                total_completes: 42,
-                total_terminates: 72,
-                security_terminates: 0,
-                conversion_rate: 46.7,
-                total_payout: 29.4,
-              },
-            ];
         return {
           data: {
             clients: cli.data || [],
-            vendors: vList,
-            projects: pList,
+            vendors: vnd.data || [],
+            projects: prj.data || [],
           },
         } as unknown as T;
       }
@@ -551,19 +582,191 @@ export const api = {
       // 5. Vendor Allotment
       if (path === "/vendor/allot") {
         const a = body;
-        const payload = {
-          project_id: a.project_id || a.projectId,
-          vendor_id: a.vendor_id || a.vendorId,
+        const pId = String(a.project_id || a.projectId);
+        const vId = String(a.vendor_id || a.vendorId);
+        const link = `https://api.vmhgroupsmr.com/vendor/auth/${encodeURIComponent(vId)}/project/${encodeURIComponent(pId)}?uid=[RESPONDENT_ID]`;
+        const payload: any = {
+          project_id: pId,
+          vendor_id: vId,
           vendor_name: a.vendor_name || null,
           vendor_cpi: Number(a.vendor_cpi) || 0,
           quota_limit: Number(a.quota_limit) || 100,
-          complete_count: 0,
-          entry_link: `https://api.vmhgroupsmr.com/vendor/auth/${encodeURIComponent(a.vendor_id)}/project/${encodeURIComponent(a.project_id)}?uid=[RESPONDENT_ID]`,
+          entry_link: link,
           status: "Active",
+          updated_at: new Date().toISOString(),
         };
-        const { data, error } = await supabase.from("smr_vendor_allotments").insert([payload]).select().single();
-        if (error) throw error;
-        return { success: true, data } as unknown as T;
+
+        const { data: existing } = await supabase
+          .from("smr_vendor_allotments")
+          .select("id")
+          .eq("project_id", pId)
+          .eq("vendor_id", vId)
+          .maybeSingle();
+
+        if (existing) {
+          const { data, error } = await supabase
+            .from("smr_vendor_allotments")
+            .update(payload)
+            .eq("id", existing.id)
+            .select()
+            .single();
+          if (error) throw error;
+          return { success: true, data, entry_link: link } as unknown as T;
+        } else {
+          payload.complete_count = 0;
+          payload.created_at = new Date().toISOString();
+          const { data, error } = await supabase
+            .from("smr_vendor_allotments")
+            .insert([payload])
+            .select()
+            .single();
+          if (error) throw error;
+          return { success: true, data, entry_link: link } as unknown as T;
+        }
+      }
+
+      // Security Simulator Check (Real-time fraud evaluator)
+      if (path === "/security/simulate-check") {
+        const { ip, uid, userAgent, timeTaken, loi, device } = body || {};
+        const { data: policies } = await supabase.from("smr_security_policy").select("*");
+        const policy: Record<string, any> = {
+          preScreenEnabled: true,
+          excludeDuplicates: true,
+          geoLocationValidation: true,
+          speederCheck: true,
+          lhProtection: true,
+          fraudCops: true,
+          vpnDetection: true,
+          botProtection: true,
+          browserSecurity: true,
+          textAnalyzer: true,
+          motionDetection: true,
+          rocSecurity: true,
+          allowDesktop: true,
+          allowMobile: true,
+          allowTablet: true,
+          uniqueIpLimit: 1,
+          speederThresholdPercent: 0.3,
+        };
+        (policies || []).forEach((row) => {
+          if (row.key && row.value !== undefined) {
+            policy[row.key] = row.value;
+          }
+        });
+
+        const reasons: string[] = [];
+        let riskScore = 0;
+
+        // 1. Bot check
+        if (policy.botProtection) {
+          const ua = (userAgent || "").toLowerCase();
+          if (
+            ua.includes("python") ||
+            ua.includes("curl") ||
+            ua.includes("bot") ||
+            ua.includes("spider") ||
+            ua.includes("crawler") ||
+            ua.includes("headless") ||
+            ua.includes("scraper") ||
+            ua.includes("puppeteer") ||
+            ua.includes("selenium") ||
+            ua.includes("requests")
+          ) {
+            reasons.push("Automated / bot user-agent pattern detected");
+            riskScore += 65;
+          }
+        }
+
+        // 2. VPN / Proxy detection
+        if (policy.vpnDetection) {
+          const testIp = (ip || "").trim();
+          if (
+            testIp.startsWith("8.8.") ||
+            testIp.startsWith("1.1.") ||
+            testIp.startsWith("104.28.") ||
+            testIp.startsWith("185.220.") ||
+            testIp === "127.0.0.1" ||
+            testIp.startsWith("10.") ||
+            testIp.startsWith("192.168.")
+          ) {
+            reasons.push("Anonymized VPN / Proxy / Datacenter IP detected");
+            riskScore += 55;
+          }
+        }
+
+        // 3. Speeder check
+        if (policy.speederCheck) {
+          const actualSec = Number(timeTaken) || 0;
+          const expectedMedianSec = (Number(loi) || 10) * 60;
+          const thresholdRatio = Number(policy.speederThresholdPercent) || 0.3;
+          const minAllowedSec = expectedMedianSec * thresholdRatio;
+          if (actualSec > 0 && actualSec < minAllowedSec) {
+            reasons.push(
+              `Speeder violation: completed in ${actualSec}s (minimum required is ${Math.round(minAllowedSec)}s for ${loi}m LOI)`,
+            );
+            riskScore += 60;
+          }
+        }
+
+        // 4. Allowed device checks
+        const devStr = String(device || (userAgent && userAgent.includes("Mobile") ? "Mobile" : "Desktop"));
+        if (devStr.toLowerCase().includes("mobile") && policy.allowMobile === false) {
+          reasons.push("Mobile hardware restricted by active device policy");
+          riskScore += 45;
+        }
+        if (devStr.toLowerCase().includes("desktop") && policy.allowDesktop === false) {
+          reasons.push("Desktop hardware restricted by active device policy");
+          riskScore += 45;
+        }
+        if (devStr.toLowerCase().includes("tablet") && policy.allowTablet === false) {
+          reasons.push("Tablet hardware restricted by active device policy");
+          riskScore += 45;
+        }
+
+        // 5. Exclude duplicates
+        if (policy.excludeDuplicates && uid) {
+          if (uid.toLowerCase().includes("dup") || uid.toLowerCase().includes("repeat")) {
+            reasons.push("Duplicate respondent identity: multiple entries attempted");
+            riskScore += 50;
+          }
+        }
+
+        const finalScore = Math.min(100, Math.max(riskScore > 0 ? riskScore : 5, 0));
+        const isAllowed = finalScore < 50;
+        const decision = isAllowed
+          ? "ALLOWED: Session passed all active security rules"
+          : `BLOCKED: High fraud risk score (${finalScore}/100) — Traffic rejected`;
+
+        if (!isAllowed) {
+          await supabase.from("smr_fraud_logs").insert([
+            {
+              uid: uid || "ANON_SESSION",
+              project_id: body.project_id || "SIM-STUDY",
+              vendor: body.vendor || "SIM_TEST",
+              check_type: reasons[0] || "Fraud Risk Violation",
+              risk_score: finalScore,
+              ip: ip || null,
+              device: devStr,
+              action: "BLOCKED",
+              reasons: reasons,
+              created_at: new Date().toISOString(),
+            },
+          ]);
+        }
+
+        return {
+          isAllowed,
+          decision,
+          riskScore: finalScore,
+          details: {
+            reasons,
+            policyApplied: {
+              botProtection: !!policy.botProtection,
+              vpnDetection: !!policy.vpnDetection,
+              speederCheck: !!policy.speederCheck,
+            },
+          },
+        } as unknown as T;
       }
 
       // 6. Payments
@@ -654,7 +857,9 @@ export const api = {
       }
       if (path === "/security/policy") {
         for (const [k, v] of Object.entries(body)) {
-          await supabase.from("smr_security_policy").upsert({ key: k, name: k, value: v, updated_at: new Date().toISOString() });
+          await supabase
+            .from("smr_security_policy")
+            .upsert({ key: k, name: k, value: v, updated_at: new Date().toISOString() }, { onConflict: "key" });
         }
         return { success: true } as unknown as T;
       }

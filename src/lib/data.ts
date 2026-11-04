@@ -50,6 +50,11 @@ export interface VendorOption {
   sharePct: number;
 }
 
+const DUMMY_CODES = new Set([
+  "VND-DYN-01", "VND-CNT-01", "VND-LUC-01", "VND-PSP-01",
+  "VND-POLLFISH", "VND-BITLABS", "VND-CPX", "VND-INBRAIN"
+]);
+
 /** Vendors are spread over several tables — merge them all into a single picker list. */
 export async function fetchVendorOptions(): Promise<VendorOption[]> {
   const map = new Map<string, VendorOption>();
@@ -67,16 +72,22 @@ export async function fetchVendorOptions(): Promise<VendorOption[]> {
   ]);
   (mv?.data || []).forEach((v) => {
     const code = v.vendor_code || v.vendor_id;
-    const rawShare = num(v.cpi_percentage ?? v.rev_share, 70);
-    if (code) map.set(code, { code, name: v.name || v.vendor_name || code, sharePct: rawShare > 0 ? rawShare : 70 });
+    if (code && !DUMMY_CODES.has(code)) {
+      const rawShare = num(v.cpi_percentage ?? v.rev_share, 70);
+      map.set(code, { code, name: v.name || v.vendor_name || code, sharePct: rawShare > 0 ? rawShare : 70 });
+    }
   });
   (uni?.data?.vendors || []).forEach((v) => {
-    if (v.vendor_id && !map.has(v.vendor_id)) map.set(v.vendor_id, { code: v.vendor_id, name: v.vendor_name || v.vendor_id, sharePct: 70 });
+    if (v.vendor_id && !DUMMY_CODES.has(v.vendor_id) && !map.has(v.vendor_id)) {
+      map.set(v.vendor_id, { code: v.vendor_id, name: v.vendor_name || v.vendor_id, sharePct: 70 });
+    }
   });
   (al?.data || []).forEach((a) => {
-    if (a.vendor_id && !map.has(a.vendor_id)) map.set(a.vendor_id, { code: a.vendor_id, name: a.vendor_name || a.vendor_id, sharePct: 70 });
+    if (a.vendor_id && !DUMMY_CODES.has(a.vendor_id) && !map.has(a.vendor_id)) {
+      map.set(a.vendor_id, { code: a.vendor_id, name: a.vendor_name || a.vendor_id, sharePct: 70 });
+    }
   });
-  return [...map.values()];
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export const entryLink = (vendor: string, project: string) =>
