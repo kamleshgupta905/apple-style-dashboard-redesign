@@ -580,19 +580,65 @@ export const api = {
       // 4. Save Vendor
       if (path === "/manage/vendors" || path === "/vendors") {
         const v = body;
-        const payload = {
-          vendor_code: v.vendor_code || v.vendor_id || `VND-${Date.now().toString().slice(-4)}`,
-          vendor_name: v.vendor_name || v.name,
+        let vendorCode = String(v.vendor_code || v.vendor_id || v.code || "").trim();
+
+        // Sequential auto-generation if not explicitly passed
+        if (!vendorCode) {
+          const { data: allVendors } = await supabase.from("smr_vendors").select("vendor_code");
+          let maxSeq = 0;
+          (allVendors || []).forEach((row: any) => {
+            const m = String(row.vendor_code || "").match(/(?:VND|VI)[-_]?(\d+)/i) || String(row.vendor_code || "").match(/(\d+)/);
+            if (m && m[1]) {
+              const num = parseInt(m[1], 10);
+              if (!isNaN(num) && num > maxSeq) maxSeq = num;
+            }
+          });
+          vendorCode = `VND${String(maxSeq + 1).padStart(3, "0")}`;
+        }
+
+        const payload: any = {
+          vendor_code: vendorCode,
+          vendor_name: v.vendor_name || v.name || vendorCode,
           email: v.email || null,
           phone: v.phone || null,
-          cpi_percentage: Number(v.cpi_percentage || v.rev_share) || 70,
-          rev_share: Number(v.cpi_percentage || v.rev_share) || 70,
+          cpi_percentage: Number(v.cpi_percentage || v.rev_share || v.share) || 70,
+          rev_share: Number(v.cpi_percentage || v.rev_share || v.share) || 70,
           status: v.status || "Active",
           updated_at: new Date().toISOString(),
         };
-        const { data, error } = await supabase.from("smr_vendors").insert([payload]).select().single();
-        if (error) throw error;
-        return { success: true, data } as unknown as T;
+
+        if (v.id || v.dbId) {
+          const id = v.id || v.dbId;
+          const { data, error } = await supabase.from("smr_vendors").update(payload).eq("id", id).select().single();
+          if (error) throw error;
+          return { success: true, data } as unknown as T;
+        } else {
+          const { data: existing } = await supabase
+            .from("smr_vendors")
+            .select("id")
+            .eq("vendor_code", vendorCode)
+            .maybeSingle();
+
+          if (existing) {
+            const { data, error } = await supabase
+              .from("smr_vendors")
+              .update(payload)
+              .eq("id", existing.id)
+              .select()
+              .single();
+            if (error) throw error;
+            return { success: true, data } as unknown as T;
+          } else {
+            payload.created_at = new Date().toISOString();
+            const { data, error } = await supabase
+              .from("smr_vendors")
+              .insert([payload])
+              .select()
+              .single();
+            if (error) throw error;
+            return { success: true, data } as unknown as T;
+          }
+        }
       }
 
       // 5. Vendor Allotment
@@ -913,10 +959,16 @@ export const api = {
           return { success: true } as unknown as T;
         }
       }
-      if (path.startsWith("/manage/vendors/")) {
-        const id = path.split("/").pop();
-        if (id) {
-          const { error } = await supabase.from("smr_vendors").delete().eq("id", id);
+      if (path.startsWith("/manage/vendors/") || path === "/manage/vendors" || path === "/vendors") {
+        const idOrCode = path.startsWith("/manage/vendors/")
+          ? path.split("/").pop()
+          : (body?.id || body?.dbId || body?.vendor_code || body?.vendor_id);
+        if (idOrCode) {
+          const isNum = /^\d+$/.test(String(idOrCode));
+          const query = isNum
+            ? supabase.from("smr_vendors").delete().eq("id", Number(idOrCode))
+            : supabase.from("smr_vendors").delete().eq("vendor_code", String(idOrCode));
+          const { error } = await query;
           if (!error) return { success: true } as unknown as T;
         }
       }

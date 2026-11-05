@@ -63,12 +63,12 @@ export function Vendors() {
     
     // Clean allotments: remove dummy vendor allotments
     const realAllotments = (al.data || []).filter(
-      (a) => !DUMMY_CODES.has(a.vendor_id) && !a.vendor_id?.startsWith("VND-")
+      (a) => !DUMMY_CODES.has(a.vendor_id)
     );
 
     (mv.data || []).forEach((v) => {
       const code = v.vendor_code || v.vendor_id || String(v.id);
-      if (code && !DUMMY_CODES.has(code) && !code.startsWith("VND-")) {
+      if (code && !DUMMY_CODES.has(code)) {
         map.set(code, {
           ...blank(code, v.name || v.vendor_name || code),
           email: v.email,
@@ -81,7 +81,7 @@ export function Vendors() {
     });
 
     (uni.data?.vendors || []).forEach((v) => {
-      if (v.vendor_id && !DUMMY_CODES.has(v.vendor_id) && !v.vendor_id.startsWith("VND-")) {
+      if (v.vendor_id && !DUMMY_CODES.has(v.vendor_id)) {
         const cur = map.get(v.vendor_id) || blank(v.vendor_id, v.vendor_name || v.vendor_id);
         map.set(v.vendor_id, {
           ...cur,
@@ -133,10 +133,9 @@ export function Vendors() {
   };
 
   const removeVendor = async (v: VRow) => {
-    if (!v.dbId) return toast("This vendor only exists through allotments and cannot be deleted.", "info");
-    if (!(await confirm({ title: `Delete ${v.name}?`, message: "Their profile is removed. Existing allotments remain.", confirmLabel: "Delete", danger: true }))) return;
+    if (!(await confirm({ title: `Delete ${v.name}?`, message: `Supply partner ${v.name} (${v.code}) will be deleted.`, confirmLabel: "Delete", danger: true }))) return;
     try {
-      await api.del(`/manage/vendors/${v.dbId}`);
+      await api.del(`/manage/vendors/${v.dbId || v.code}`);
       toast("Vendor deleted");
       setOpen(null);
       q.reload();
@@ -167,6 +166,31 @@ export function Vendors() {
     { key: "conv", header: "Conv.", align: "right", sortValue: (v) => v.conv, render: (v) => <Badge tone={v.conv >= 50 ? "green" : v.conv >= 20 ? "orange" : "gray"}>{v.conv}%</Badge> },
     { key: "payout", header: "Payout", align: "right", sortValue: (v) => v.payout, render: (v) => money(v.payout) },
     { key: "share", header: "Share", align: "right", render: (v) => `${v.share}%` },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      render: (v) => (
+        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            title="Edit partner"
+            onClick={() => setForm({ vendor: v })}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-3 hover:bg-fill hover:text-ink transition cursor-pointer"
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            type="button"
+            title="Delete partner"
+            onClick={() => removeVendor(v)}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-3 hover:bg-red-soft hover:text-red transition cursor-pointer"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      ),
+    },
   ];
 
   const aCols: Column<Allotment>[] = [
@@ -330,31 +354,74 @@ export function Vendors() {
         )}
       </Modal>
 
-      <VendorForm state={form} onClose={() => setForm(null)} onSaved={() => { setForm(null); q.reload(); }} />
+      <VendorForm
+        state={form}
+        existingVendors={q.data?.vendors || []}
+        onClose={() => setForm(null)}
+        onSaved={() => {
+          setForm(null);
+          q.reload();
+        }}
+      />
     </div>
   );
 }
 
-function VendorForm({ state, onClose, onSaved }: { state: null | { vendor?: VRow }; onClose: () => void; onSaved: () => void }) {
+function getNextVendorCode(vendors: VRow[]): string {
+  let maxSeq = 0;
+  vendors.forEach((x) => {
+    const code = x.code || "";
+    const m = code.match(/(?:VND|VI)[-_]?(\d+)/i) || code.match(/(\d+)/);
+    if (m && m[1]) {
+      const num = parseInt(m[1], 10);
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num;
+      }
+    }
+  });
+  return `VND${String(maxSeq + 1).padStart(3, "0")}`;
+}
+
+function VendorForm({
+  state,
+  existingVendors = [],
+  onClose,
+  onSaved,
+}: {
+  state: null | { vendor?: VRow };
+  existingVendors?: VRow[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const { toast } = useFeedback();
   const [v, setV] = useState({ code: "", name: "", email: "", phone: "", share: "70" });
   const [busy, setBusy] = useState(false);
   const [key, setKey] = useState<unknown>(null);
+
   if (state && key !== state) {
     setKey(state);
     const x = state.vendor;
-    setV({ code: x?.code || "", name: x?.name || "", email: x?.email || "", phone: x?.phone || "", share: String(x?.share ?? 70) });
+    const defaultCode = x?.code || getNextVendorCode(existingVendors);
+    setV({
+      code: defaultCode,
+      name: x?.name || "",
+      email: x?.email || "",
+      phone: x?.phone || "",
+      share: String(x?.share ?? 70),
+    });
   }
+
   const set = (k: keyof typeof v) => (e: React.ChangeEvent<HTMLInputElement>) => setV((p) => ({ ...p, [k]: e.target.value }));
 
   const save = async () => {
     if (!v.name.trim()) return toast("Vendor name is required.", "error");
-    const code = (v.code || "VND-" + v.name.replace(/[^a-z0-9]/gi, "").slice(0, 6).toUpperCase()).trim();
+    const code = (v.code || getNextVendorCode(existingVendors)).trim();
     const share = num(v.share, 70);
     if (share <= 0 || share > 100) return toast("Share must be between 1 and 100.", "error");
     setBusy(true);
     try {
       await api.post("/manage/vendors", {
+        id: state?.vendor?.dbId,
         vendor_code: code,
         vendor_id: code,
         name: v.name.trim(),
@@ -362,9 +429,10 @@ function VendorForm({ state, onClose, onSaved }: { state: null | { vendor?: VRow
         email: v.email,
         phone: v.phone,
         cpi_percentage: share,
+        rev_share: share,
         status: "Active",
       });
-      toast(state?.vendor ? "Vendor updated" : "Vendor added");
+      toast(state?.vendor ? "Vendor updated" : `Vendor added (${code})`);
       onSaved();
     } catch (e: any) {
       toast(e.message, "error");
@@ -378,7 +446,11 @@ function VendorForm({ state, onClose, onSaved }: { state: null | { vendor?: VRow
       open={!!state}
       onClose={onClose}
       title={state?.vendor ? "Edit vendor" : "Add vendor"}
-      subtitle="Supply partner profile and default revenue share"
+      subtitle={
+        state?.vendor
+          ? `Editing supply partner ${state.vendor.name}`
+          : "Supply partner profile with auto-generated sequential vendor code"
+      }
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -392,19 +464,35 @@ function VendorForm({ state, onClose, onSaved }: { state: null | { vendor?: VRow
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Vendor name" className="sm:col-span-2">
-          <Input value={v.name} onChange={set("name")} placeholder="Panel company" />
+          <Input value={v.name} onChange={set("name")} placeholder="e.g. Acme Research Panel" />
         </Field>
-        <Field label="Vendor code" hint="Used in entry links">
-          <Input value={v.code} onChange={set("code")} placeholder="VND-ABC-01" disabled={!!state?.vendor} />
+        <Field
+          label="Vendor code"
+          hint={!state?.vendor ? "Auto-generated sequential code (editable)" : "Unique partner tracking code"}
+        >
+          <div className="relative">
+            <Input
+              value={v.code}
+              onChange={set("code")}
+              placeholder="e.g. VND001"
+              disabled={!!state?.vendor}
+              className="font-mono pr-28"
+            />
+            {!state?.vendor && (
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+                Auto Sequence
+              </span>
+            )}
+          </div>
         </Field>
-        <Field label="Revenue share (%)" hint="Default payout of client CPI">
+        <Field label="Revenue share (%)" hint="Default payout percentage of client CPI">
           <Input type="number" min={1} max={100} value={v.share} onChange={set("share")} />
         </Field>
         <Field label="Email">
-          <Input type="email" value={v.email} onChange={set("email")} />
+          <Input type="email" value={v.email} onChange={set("email")} placeholder="partner@domain.com" />
         </Field>
         <Field label="Phone">
-          <Input value={v.phone} onChange={set("phone")} />
+          <Input value={v.phone} onChange={set("phone")} placeholder="+1 555-0100" />
         </Field>
       </div>
     </Modal>
