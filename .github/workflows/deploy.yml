@@ -1,0 +1,59 @@
+name: Build and Deploy to Hostinger
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://ggpuufujpameiielimpw.supabase.co' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdncHV1ZnVqcGFtZWlpZWxpbXB3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2MDUwODcsImV4cCI6MjA3NTE4MTA4N30.qE34BAEDls62iYqQTWzegL7dVsOkoBdzZ94HhQHd1TM' }}
+          VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://api.vmhgroupsmr.com/api' }}
+
+      - name: Add .htaccess for SPA routing
+        run: |
+          cat << 'EOF' > dist/.htaccess
+          <IfModule mod_rewrite.c>
+            RewriteEngine On
+            RewriteBase /
+            RewriteRule ^index\.html$ - [L]
+            RewriteCond %{REQUEST_FILENAME} !-f
+            RewriteCond %{REQUEST_FILENAME} !-d
+            RewriteRule . /index.html [L]
+          </IfModule>
+          EOF
+
+      - name: Deploy to deploy branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: deploy
+          keep_files: false
+          force_orphan: true
+
+      - name: Trigger Hostinger Auto-Deployment Webhook
+        run: |
+          curl -X POST "https://webhooks.hostinger.com/deploy/ee0428abcd7a6520a44de449c96b008f"
