@@ -1,4 +1,5 @@
 import { api, type Vendor } from "./api";
+import { supabase } from "./supabase";
 import { num } from "./utils";
 
 export interface NSurvey {
@@ -58,6 +59,34 @@ const DUMMY_CODES = new Set([
 /** Vendors are spread over several tables — merge them all into a single picker list. */
 export async function fetchVendorOptions(): Promise<VendorOption[]> {
   const map = new Map<string, VendorOption>();
+
+  // 1. Direct Supabase Query (Real 25+ Hostinger/SMR Vendors)
+  try {
+    const { data: sv, error } = await supabase
+      .from("smr_vendors")
+      .select("*")
+      .order("vendor_name");
+    if (!error && sv && sv.length > 0) {
+      sv.forEach((v: any) => {
+        const code = v.vendor_code || v.vendor_id || String(v.id);
+        if (code && !DUMMY_CODES.has(code)) {
+          const rawShare = num(v.cpi_percentage ?? v.rev_share, 70);
+          map.set(code, {
+            code,
+            name: v.vendor_name || v.name || code,
+            sharePct: rawShare > 0 ? rawShare : 70,
+          });
+        }
+      });
+      if (map.size > 0) {
+        return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+      }
+    }
+  } catch (err) {
+    console.warn("Supabase smr_vendors query error:", err);
+  }
+
+  // 2. Gateway API Fallback
   const settle = async <T,>(p: Promise<T>) => {
     try {
       return await p;
@@ -90,7 +119,12 @@ export async function fetchVendorOptions(): Promise<VendorOption[]> {
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export const entryLink = (vendor: string, project: string) =>
-  `https://api.vmhgroupsmr.com/vendor/auth/${encodeURIComponent(vendor)}/project/${encodeURIComponent(project)}?uid=[RESPONDENT_ID]`;
+export const entryLink = (vendorOrProject: string, maybeProject?: string) => {
+  if (maybeProject) {
+    return `https://api.vmhgroupsmr.com/vendor/auth/${encodeURIComponent(vendorOrProject)}/project/${encodeURIComponent(maybeProject)}?uid=[RESPONDENT_ID]`;
+  }
+  // Single argument passed: project/study ID -> route via default inhouse vendor VI010032025
+  return `https://api.vmhgroupsmr.com/vendor/auth/VI010032025/project/${encodeURIComponent(vendorOrProject)}?uid=[RESPONDENT_ID]`;
+};
 
 export const UID_TAGS = ["[RESPONDENT_ID]", "[UID]", "[#UID#]", "[identifier]", "[RID]", "[TransactionId]", "{{UID}}"];

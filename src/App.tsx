@@ -19,6 +19,8 @@ import { Users } from "./pages/Users";
 import { Team } from "./pages/Team";
 import { Reference } from "./pages/Reference";
 import { Settings } from "./pages/Settings";
+import { Prescreener } from "./pages/Prescreener";
+import { SurveyCallback } from "./pages/SurveyCallback";
 
 const THEME_KEY = "smr_theme";
 
@@ -39,7 +41,9 @@ const ROUTE_PERM: Record<string, number | number[]> = {
 
 function useRoute() {
   const read = () => {
-    const h = window.location.hash.replace(/^#\/?/, "").split(/[/?]/)[0];
+    const raw = window.location.hash.replace(/^#\/?/, "");
+    const h = raw.split(/[/?]/)[0];
+    if (h === "prescreener" || h === "callback" || h === "survey") return h;
     return NAV.some((n) => n.id === h) ? h : "dashboard";
   };
   const [route, setRoute] = useState(read);
@@ -110,6 +114,14 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(() => (auth.token() ? auth.user() : null));
   const route = useRoute();
   const [dark, setDark] = useTheme();
+
+  // Public respondent flows (no login or dashboard chrome required)
+  if (route === "prescreener") {
+    return <Prescreener />;
+  }
+  if (route === "callback" || route === "survey") {
+    return <SurveyCallback />;
+  }
 
   // Refresh latest permissions from MySQL / server on mount
   useEffect(() => {

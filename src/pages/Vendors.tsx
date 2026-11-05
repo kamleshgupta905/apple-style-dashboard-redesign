@@ -39,6 +39,11 @@ interface VRow {
   registered: boolean;
 }
 
+const DUMMY_CODES = new Set([
+  "VND-DYN-01", "VND-CNT-01", "VND-LUC-01", "VND-PSP-01",
+  "VND-POLLFISH", "VND-BITLABS", "VND-CPX", "VND-INBRAIN"
+]);
+
 export function Vendors() {
   const { can } = usePermissions();
   const { toast, confirm } = useFeedback();
@@ -55,34 +60,53 @@ export function Vendors() {
     ]);
     const map = new Map<string, VRow>();
     const blank = (code: string, name: string): VRow => ({ code, name, share: 70, studies: 0, clicks: 0, completes: 0, terminates: 0, conv: 0, payout: 0, avgCpi: 0, registered: false });
+    
+    // Clean allotments: remove dummy vendor allotments
+    const realAllotments = (al.data || []).filter(
+      (a) => !DUMMY_CODES.has(a.vendor_id) && !a.vendor_id?.startsWith("VND-")
+    );
+
     (mv.data || []).forEach((v) => {
       const code = v.vendor_code || v.vendor_id || String(v.id);
-      map.set(code, {
-        ...blank(code, v.name || v.vendor_name || code),
-        email: v.email,
-        phone: v.phone,
-        share: num(v.cpi_percentage ?? v.rev_share, 70),
-        dbId: v.id ?? v._id ?? code,
-        registered: true,
-      });
+      if (code && !DUMMY_CODES.has(code) && !code.startsWith("VND-")) {
+        map.set(code, {
+          ...blank(code, v.name || v.vendor_name || code),
+          email: v.email,
+          phone: v.phone,
+          share: num(v.cpi_percentage ?? v.rev_share, 70),
+          dbId: v.id ?? v._id ?? code,
+          registered: true,
+        });
+      }
     });
+
     (uni.data?.vendors || []).forEach((v) => {
-      const cur = map.get(v.vendor_id) || blank(v.vendor_id, v.vendor_name || v.vendor_id);
-      map.set(v.vendor_id, {
-        ...cur,
-        studies: num(v.assigned_projects),
-        clicks: num(v.total_clicks),
-        completes: num(v.total_completes),
-        terminates: num(v.total_terminates),
-        conv: num(v.conversion_rate),
-        payout: num(v.total_payout),
-        avgCpi: num(v.avg_cpi),
-      });
+      if (v.vendor_id && !DUMMY_CODES.has(v.vendor_id) && !v.vendor_id.startsWith("VND-")) {
+        const cur = map.get(v.vendor_id) || blank(v.vendor_id, v.vendor_name || v.vendor_id);
+        map.set(v.vendor_id, {
+          ...cur,
+          studies: num(v.assigned_projects),
+          clicks: num(v.total_clicks),
+          completes: num(v.total_completes),
+          terminates: num(v.total_terminates),
+          conv: num(v.conversion_rate),
+          payout: num(v.total_payout),
+          avgCpi: num(v.avg_cpi),
+        });
+      }
     });
-    (al.data || []).forEach((a) => {
-      if (!map.has(a.vendor_id)) map.set(a.vendor_id, blank(a.vendor_id, a.vendor_name || a.vendor_id));
+
+    realAllotments.forEach((a) => {
+      if (!map.has(a.vendor_id)) {
+        map.set(a.vendor_id, blank(a.vendor_id, a.vendor_name || a.vendor_id));
+      }
+      const item = map.get(a.vendor_id);
+      if (item && item.studies === 0) {
+        item.studies = realAllotments.filter((x) => x.vendor_id === a.vendor_id).length;
+      }
     });
-    return { vendors: [...map.values()], allotments: al.data || [] };
+
+    return { vendors: [...map.values()], allotments: realAllotments };
   }, []);
 
   const rows = useMemo(() => {

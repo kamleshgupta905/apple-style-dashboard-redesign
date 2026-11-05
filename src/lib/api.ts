@@ -204,6 +204,22 @@ export const api = {
         console.warn("Supabase users read error:", e);
       }
     }
+    if (path === "/manage/vendors" || path === "/vendors") {
+      try {
+        const { data, error } = await supabase.from("smr_vendors").select("*").order("vendor_name");
+        if (!error && data && data.length > 0) return { data } as unknown as T;
+      } catch (e) {
+        console.warn("Supabase vendors read error:", e);
+      }
+    }
+    if (path === "/vendor/allotments") {
+      try {
+        const { data, error } = await supabase.from("smr_vendor_allotments").select("*").order("id", { ascending: false });
+        if (!error && data) return { data } as unknown as T;
+      } catch (e) {
+        console.warn("Supabase vendor allotments read error:", e);
+      }
+    }
 
     // 2. Try Live api.vmhgroupsmr.com Gateway
     try {
