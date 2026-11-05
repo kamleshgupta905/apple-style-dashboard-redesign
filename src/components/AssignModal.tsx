@@ -61,6 +61,7 @@ export function AssignModal({
         if (v[0].sharePct) setPct(String(v[0].sharePct));
       } else {
         setSelectedVendors([]);
+        setShowCustom(true);
       }
     });
   }, [open, presetVendor]);
@@ -307,7 +308,13 @@ export function AssignModal({
             {/* Checkbox List */}
             <div className="max-h-48 overflow-y-auto rounded-2xl border border-line bg-fill/20 p-1 divide-y divide-line/40">
               {filteredVendors.length === 0 ? (
-                <p className="py-4 text-center text-[12px] text-ink-3">No partners matching search</p>
+                <div className="py-4 text-center">
+                  <p className="text-[12px] text-ink-3">
+                    {vendors && vendors.length === 0
+                      ? "No supply partners registered yet. Enter a custom vendor code below."
+                      : `No partners matching "${search}"`}
+                  </p>
+                </div>
               ) : (
                 filteredVendors.map((v) => {
                   const isChecked = selectedVendors.includes(v.code);
