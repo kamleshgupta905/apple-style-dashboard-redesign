@@ -43,7 +43,8 @@ function useRoute() {
   const read = () => {
     const raw = window.location.hash.replace(/^#\/?/, "");
     const h = raw.split(/[/?]/)[0];
-    if (h === "prescreener" || h === "callback" || h === "survey") return h;
+    const PUBLIC_SURVEY_ROUTES = ["prescreener", "callback", "survey", "complete", "terminate", "overquota", "security"];
+    if (PUBLIC_SURVEY_ROUTES.includes(h)) return h;
     return NAV.some((n) => n.id === h) ? h : "dashboard";
   };
   const [route, setRoute] = useState(read);
@@ -119,7 +120,14 @@ export default function App() {
   if (route === "prescreener") {
     return <Prescreener />;
   }
-  if (route === "callback" || route === "survey") {
+  if (
+    route === "callback" ||
+    route === "survey" ||
+    route === "complete" ||
+    route === "terminate" ||
+    route === "overquota" ||
+    route === "security"
+  ) {
     return <SurveyCallback />;
   }
 

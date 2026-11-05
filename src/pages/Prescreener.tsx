@@ -10,17 +10,6 @@ interface Question {
 
 const QUESTIONS: Question[] = [
   {
-    id: "internet",
-    title: "Which type of internet connection do you primarily use at home?",
-    options: [
-      { id: "high_speed", label: "High-speed (fiber or cable)" },
-      { id: "dsl_satellite", label: "DSL or satellite" },
-      { id: "mobile_data", label: "Mobile data or hotspot" },
-      { id: "no_internet", label: "No home internet access" },
-      { id: "psychic_mind", label: "Psychic mind connection", disqualify: true }, // Attention trap check
-    ],
-  },
-  {
     id: "age",
     title: "What is your current age?",
     options: [
@@ -52,16 +41,28 @@ const QUESTIONS: Question[] = [
       { id: "student", label: "Student" },
       { id: "homemaker", label: "Homemaker / Caregiver" },
       { id: "retired", label: "Retired" },
-      { id: "not_employed", label: "Currently not employed" },
+      { id: "seeking", label: "Currently seeking employment" },
+    ],
+  },
+  {
+    id: "income",
+    title: "What is your approximate annual household income?",
+    options: [
+      { id: "under_25k", label: "Under $25,000" },
+      { id: "25k_49k", label: "$25,000 – $49,999" },
+      { id: "50k_74k", label: "$50,000 – $74,999" },
+      { id: "75k_99k", label: "$75,000 – $99,999" },
+      { id: "100k_plus", label: "$100,000 or more" },
+      { id: "prefer_not_income", label: "Prefer not to disclose" },
     ],
   },
   {
     id: "decision",
-    title: "Are you the primary decision maker for household purchases?",
+    title: "Are you the primary or joint decision maker for household purchases?",
     options: [
       { id: "primary", label: "Yes, primary decision maker" },
       { id: "shared", label: "Yes, share decisions equally" },
-      { id: "secondary", label: "No, secondary or not a decision maker" },
+      { id: "secondary", label: "No, secondary decision maker" },
     ],
   },
 ];
@@ -69,6 +70,7 @@ const QUESTIONS: Question[] = [
 export function Prescreener() {
   const [step, setStep] = useState<number>(0);
   const [selectedOption, setSelectedOption] = useState<string>("");
+  const [isAdvancing, setIsAdvancing] = useState<boolean>(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"checking" | "screening" | "connecting" | "disqualified" | "blocked">("checking");
   const [blockReason, setBlockReason] = useState<string>("");
@@ -89,9 +91,8 @@ export function Prescreener() {
     ? rawUid
     : `RESP_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
   const targetParam = params.get("target") || "";
-  const isTest = params.get("test") === "1" || uid.startsWith("TEST");
 
-  // Browser title
+  // Browser Tab Title
   useEffect(() => {
     const prevTitle = document.title;
     document.title = "CALIBR8";
@@ -121,7 +122,7 @@ export function Prescreener() {
       }
 
       setStatus("screening");
-    }, 600);
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [uid, pid]);
@@ -129,24 +130,28 @@ export function Prescreener() {
   const currentQ = QUESTIONS[step];
   const percent = Math.round(((step + 1) / QUESTIONS.length) * 100);
 
-  const handleNext = () => {
-    if (!selectedOption || !currentQ) return;
+  // Auto-advance on option click (No Next button required)
+  const handleSelect = (opt: { id: string; label: string; disqualify?: boolean }) => {
+    if (isAdvancing) return;
+    setSelectedOption(opt.id);
+    setIsAdvancing(true);
 
-    const opt = currentQ.options.find((o) => o.id === selectedOption);
-    setAnswers((prev) => ({ ...prev, [currentQ.id]: selectedOption }));
+    setAnswers((prev) => ({ ...prev, [currentQ.id]: opt.id }));
 
-    if (opt?.disqualify) {
-      setStatus("disqualified");
-      setBlockReason("Demographic qualification criteria were not met for this specific study.");
-      return;
-    }
+    setTimeout(() => {
+      if (opt.disqualify) {
+        window.location.hash = `#/callback?status=20&pid=${encodeURIComponent(pid)}&uid=${encodeURIComponent(uid)}&vid=${encodeURIComponent(vid)}&reason=demographic_criteria_not_met`;
+        return;
+      }
 
-    if (step < QUESTIONS.length - 1) {
-      setStep((prev) => prev + 1);
-      setSelectedOption("");
-    } else {
-      completeScreener();
-    }
+      if (step < QUESTIONS.length - 1) {
+        setStep((prev) => prev + 1);
+        setSelectedOption("");
+        setIsAdvancing(false);
+      } else {
+        completeScreener();
+      }
+    }, 220);
   };
 
   const completeScreener = () => {
@@ -172,23 +177,27 @@ export function Prescreener() {
 
     setFinalUrl(resolved);
 
-    let seconds = 3;
+    let seconds = 2;
     const interval = setInterval(() => {
       seconds -= 1;
       setRedirectCountdown(seconds);
       if (seconds <= 0) {
         clearInterval(interval);
-        window.location.href = resolved;
+        if (resolved.startsWith("#")) {
+          window.location.hash = resolved;
+        } else {
+          window.location.href = resolved;
+        }
       }
     }, 1000);
   };
 
   return (
     <div className="min-h-screen w-full bg-[#f8fafc] text-slate-800 flex flex-col items-center justify-center p-4 sm:p-6 font-[-apple-system,BlinkMacSystemFont,'Segoe_UI','Inter',sans-serif]">
-      {/* Centered White Card */}
+      {/* Centered White Card (Calibr8 Style) */}
       <div className="relative w-full max-w-[560px] bg-white rounded-[32px] p-7 sm:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.06)] border border-slate-100">
         
-        {/* State 1: Security Verification Check */}
+        {/* State 1: Verification Check */}
         {status === "checking" && (
           <div className="py-14 text-center flex flex-col items-center">
             <div className="w-10 h-10 rounded-full border-2 border-emerald-500/20 border-t-emerald-600 animate-spin mb-4" />
@@ -197,7 +206,7 @@ export function Prescreener() {
           </div>
         )}
 
-        {/* State 2: Active Screening Questions (Matches user screenshot) */}
+        {/* State 2: Active Screening Questions (Auto-advance on click) */}
         {status === "screening" && currentQ && (
           <div>
             {/* Top Progress bar and percentage */}
@@ -225,10 +234,10 @@ export function Prescreener() {
                 return (
                   <label
                     key={opt.id}
-                    onClick={() => setSelectedOption(opt.id)}
+                    onClick={() => handleSelect(opt)}
                     className={`flex items-center gap-3.5 px-4.5 py-3.5 rounded-2xl border transition-all cursor-pointer select-none ${
                       isSelected
-                        ? "border-indigo-400 bg-indigo-50/20 shadow-sm"
+                        ? "border-indigo-500 bg-indigo-50/30 shadow-sm"
                         : "border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/50 bg-white"
                     }`}
                   >
@@ -247,22 +256,6 @@ export function Prescreener() {
                   </label>
                 );
               })}
-            </div>
-
-            {/* Bottom Centered Next Button */}
-            <div className="mt-8 flex justify-center">
-              <button
-                type="button"
-                onClick={handleNext}
-                disabled={!selectedOption}
-                className={`px-12 py-3 rounded-full text-[14.5px] font-semibold text-white transition-all duration-150 ${
-                  selectedOption
-                    ? "bg-[#9cb6ff] hover:bg-[#86a4ff] shadow-sm shadow-indigo-200 cursor-pointer active:scale-95"
-                    : "bg-[#9cb6ff]/50 cursor-not-allowed opacity-60"
-                }`}
-              >
-                Next
-              </button>
             </div>
           </div>
         )}
@@ -309,10 +302,10 @@ export function Prescreener() {
             </p>
 
             <a
-              href={`https://api.vmhgroupsmr.com/survey/callback?status=20&uid=${encodeURIComponent(uid)}&vid=${encodeURIComponent(vid)}&pid=${encodeURIComponent(pid)}&reason=demographic_screenout`}
-              className="inline-flex items-center justify-center px-8 py-3 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium transition-all"
+              href={`#/callback?status=20&uid=${encodeURIComponent(uid)}&vid=${encodeURIComponent(vid)}&pid=${encodeURIComponent(pid)}&reason=demographic_screenout`}
+              className="inline-flex items-center justify-center px-8 py-3 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold shadow-sm transition-all"
             >
-              Return to Provider
+              View Screening Notice
             </a>
           </div>
         )}
@@ -329,45 +322,14 @@ export function Prescreener() {
             </p>
 
             <a
-              href={`https://api.vmhgroupsmr.com/survey/callback?status=40&uid=${encodeURIComponent(uid)}&vid=${encodeURIComponent(vid)}&pid=${encodeURIComponent(pid)}&reason=security_risk`}
-              className="inline-flex items-center justify-center px-8 py-3 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium transition-all"
+              href={`#/callback?status=40&uid=${encodeURIComponent(uid)}&vid=${encodeURIComponent(vid)}&pid=${encodeURIComponent(pid)}&reason=security_risk`}
+              className="inline-flex items-center justify-center px-8 py-3 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold shadow-sm transition-all"
             >
-              Close Window
+              View Security Notice
             </a>
           </div>
         )}
       </div>
-
-      {/* Floating Developer Test Simulation Bar (only visible when test=1 or uid starts with TEST) */}
-      {isTest && (
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-2 p-2.5 bg-white/90 backdrop-blur-md border border-slate-200 shadow-sm rounded-full text-xs max-w-md w-full">
-          <span className="font-semibold text-slate-600 text-[11px] px-2">Test Simulation:</span>
-          <button
-            onClick={completeScreener}
-            className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium"
-          >
-            Force Pass (10)
-          </button>
-          <button
-            onClick={() => {
-              setStatus("disqualified");
-              setBlockReason("Simulated screenout test");
-            }}
-            className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 hover:bg-amber-100 font-medium"
-          >
-            Term (20)
-          </button>
-          <button
-            onClick={() => {
-              setStatus("blocked");
-              setBlockReason("Simulated fraud risk test");
-            }}
-            className="px-3 py-1 rounded-full bg-red-50 text-red-700 hover:bg-red-100 font-medium"
-          >
-            Fraud (40)
-          </button>
-        </div>
-      )}
     </div>
   );
 }
