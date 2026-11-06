@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, ChevronDown, Copy, Download, ExternalLink, Link2, Plus, RefreshCw, Share2, Trash2 } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Copy, Download, ExternalLink, Link2, Pencil, Plus, RefreshCw, Share2, Trash2, Users } from "lucide-react";
 import { api, type Client, type Project } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { entryLink, normalizeSurvey, type NSurvey } from "../lib/data";
@@ -25,6 +25,7 @@ import {
 } from "../components/ui";
 import { useFeedback } from "../components/feedback";
 import { AssignModal } from "../components/AssignModal";
+import { EditAllotmentModal } from "../components/EditAllotmentModal";
 import { PERMS, usePermissions } from "../lib/permissions";
 
 export function Surveys() {
@@ -619,6 +620,11 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
   const [search, setSearch] = useState("");
   const [assign, setAssign] = useState<NSurvey[]>([]);
   const [cloneOf, setCloneOf] = useState<Project | null>(null);
+  const [editStudy, setEditStudy] = useState<Project | null>(null);
+  const [detailStudy, setDetailStudy] = useState<Project | null>(null);
+
+  // Load allotments count for each study
+  const allots = useQuery(async () => (await api.get<{ data: any[] }>("/vendor/allotments")).data || [], []);
 
   const rows = useMemo(() => {
     const t = search.toLowerCase();
@@ -649,18 +655,24 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
       await api.del(`/manage/projects/${p.id}`);
       toast("Study deleted");
       q.reload();
+      allots.reload();
     } catch (e: any) {
       toast(e.message, "error");
     }
   };
 
   const cols: Column<Project>[] = [
-    { key: "project_name", header: "Study", primary: true, render: (p) => (
+    {
+      key: "project_name",
+      header: "Study",
+      primary: true,
+      render: (p) => (
         <div className="min-w-0">
           <p className="max-w-[260px] truncate font-semibold">{p.project_name}</p>
           <p className="font-mono text-[12px] text-ink-3">{p.project_id}</p>
         </div>
-      ) },
+      ),
+    },
     { key: "client_name", header: "Client" },
     { key: "cpi", header: "CPI", align: "right", sortValue: (p) => num(p.cpi), render: (p) => <span className="font-semibold">{money(p.cpi)}</span> },
     { key: "loi", header: "LOI", align: "right", render: (p) => `${p.loi} min` },
@@ -668,21 +680,70 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
     { key: "target_completes", header: "Target", align: "right", render: (p) => num(p.target_completes).toLocaleString() },
     { key: "status", header: "Status", render: (p) => <StatusBadge status={p.status} /> },
     {
+      key: "allotments",
+      header: "Partners",
+      render: (p) => {
+        const count = (allots.data || []).filter((a: any) => a.project_id === p.project_id).length;
+        return (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDetailStudy(p);
+            }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-fill hover:bg-fill-hover text-ink-2 transition cursor-pointer"
+            title="View & manage assigned supply partners"
+          >
+            <Users size={12} className="text-ink-3" />
+            <span>{count > 0 ? `${count} partner${count > 1 ? "s" : ""}` : "Assign"}</span>
+          </button>
+        );
+      },
+    },
+    {
       key: "act",
       header: "",
       align: "right",
       render: (p) => (
-        <div className="flex justify-end gap-1.5">
+        <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
           {can(PERMS.SURVEYS_ASSIGN) && (
-            <Button size="sm" variant="tinted" icon={<Link2 size={14} />} onClick={(e) => { e.stopPropagation(); setAssign([asSurvey(p)]); }}>
-              Link
+            <Button
+              size="sm"
+              variant="tinted"
+              icon={<Share2 size={13} />}
+              onClick={() => setAssign([asSurvey(p)])}
+              title="Assign to supply partners"
+            >
+              Assign
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Pencil size={13} />}
+            onClick={() => setEditStudy(p)}
+            aria-label="Edit study"
+            title="Edit study"
+          />
           {can(PERMS.SURVEYS_CLONE) && (
-            <Button size="sm" variant="secondary" icon={<Copy size={14} />} onClick={(e) => { e.stopPropagation(); setCloneOf(p); }} aria-label="Duplicate" />
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<Copy size={13} />}
+              onClick={() => setCloneOf(p)}
+              aria-label="Duplicate"
+              title="Duplicate study"
+            />
           )}
           {can(PERMS.SURVEYS_CREATE) && (
-            <Button size="sm" variant="dangerSoft" icon={<Trash2 size={14} />} onClick={(e) => { e.stopPropagation(); remove(p); }} aria-label="Delete" />
+            <Button
+              size="sm"
+              variant="dangerSoft"
+              icon={<Trash2 size={13} />}
+              onClick={() => remove(p)}
+              aria-label="Delete"
+              title="Delete study"
+            />
           )}
         </div>
       ),
@@ -696,32 +757,323 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
         rows={rows}
         rowKey={(p) => p.id}
         loading={q.loading}
+        onRowClick={(p) => setDetailStudy(p)}
         toolbar={<SearchInput value={search} onChange={setSearch} placeholder="Search your studies" className="sm:max-w-sm" />}
-        empty={<EmptyState title="No studies yet" message="Create a study or duplicate one from the marketplace." action={can(PERMS.SURVEYS_CREATE) ? <Button onClick={onNew}>New study</Button> : undefined} />}
+        empty={
+          <EmptyState
+            title="No studies yet"
+            message="Create a study or duplicate one from the marketplace."
+            action={can(PERMS.SURVEYS_CREATE) ? <Button onClick={onNew}>New study</Button> : undefined}
+          />
+        }
       />
-      <AssignModal surveys={assign} onClose={() => setAssign([])} />
-      <StudyForm open={!!cloneOf} base={cloneOf || undefined} duplicate onClose={() => setCloneOf(null)} onSaved={q.reload} />
+
+      {/* Assign Modal */}
+      <AssignModal
+        surveys={assign}
+        onClose={() => setAssign([])}
+        onDone={() => {
+          allots.reload();
+          q.reload();
+        }}
+      />
+
+      {/* Duplicate Study Modal */}
+      <StudyForm
+        open={!!cloneOf}
+        base={cloneOf || undefined}
+        duplicate
+        onClose={() => setCloneOf(null)}
+        onSaved={() => {
+          q.reload();
+          allots.reload();
+        }}
+      />
+
+      {/* Edit Study Modal */}
+      <StudyForm
+        open={!!editStudy}
+        base={editStudy || undefined}
+        edit
+        onClose={() => setEditStudy(null)}
+        onSaved={() => {
+          q.reload();
+          allots.reload();
+        }}
+      />
+
+      {/* Study Details & Allotted Supply Partners Drawer */}
+      <StudyDetailDrawer
+        study={detailStudy}
+        onClose={() => setDetailStudy(null)}
+        onAssign={(p) => setAssign([asSurvey(p)])}
+        onEdit={(p) => setEditStudy(p)}
+        onReload={() => {
+          q.reload();
+          allots.reload();
+        }}
+      />
     </>
   );
 }
 
-/* ───────────── Create / duplicate form ───────────── */
+/* ───────────── Study Detail & Allotments Drawer ───────────── */
+function StudyDetailDrawer({
+  study,
+  onClose,
+  onAssign,
+  onEdit,
+  onReload,
+}: {
+  study: Project | null;
+  onClose: () => void;
+  onAssign: (p: Project) => void;
+  onEdit: (p: Project) => void;
+  onReload: () => void;
+}) {
+  const { toast, confirm } = useFeedback();
+  const [editAllot, setEditAllot] = useState<any | null>(null);
+
+  const allotmentsQuery = useQuery(async () => {
+    if (!study) return [];
+    const res = await api.get<{ data: any[] }>("/vendor/allotments");
+    const all = res.data || [];
+    return all.filter((a) => a.project_id === study.project_id);
+  }, [study?.project_id]);
+
+  if (!study) return null;
+
+  const removeAllot = async (a: any) => {
+    if (
+      !(await confirm({
+        title: "Remove vendor allotment?",
+        message: `${a.vendor_id} will lose access to study #${study.project_id}.`,
+        confirmLabel: "Remove",
+        danger: true,
+      }))
+    )
+      return;
+    try {
+      await api.del("/vendor/allot", { project_id: study.project_id, vendor_id: a.vendor_id });
+      toast("Vendor allotment removed");
+      allotmentsQuery.reload();
+      onReload();
+    } catch (e: any) {
+      toast(e.message, "error");
+    }
+  };
+
+  const allotted = allotmentsQuery.data || [];
+
+  return (
+    <>
+      <Modal
+        open={!!study}
+        onClose={onClose}
+        drawer
+        title={study.project_name}
+        subtitle={`#${study.project_id} · ${study.client_name}`}
+        footer={
+          <div className="flex w-full items-center justify-between gap-2">
+            <Button
+              variant="secondary"
+              icon={<Pencil size={15} />}
+              onClick={() => {
+                onEdit(study);
+                onClose();
+              }}
+            >
+              Edit study
+            </Button>
+            <Button
+              variant="primary"
+              icon={<Share2 size={15} />}
+              onClick={() => {
+                onAssign(study);
+                onClose();
+              }}
+            >
+              Assign to vendor
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-6">
+          {/* Key study metrics */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-2xl bg-fill p-3.5">
+              <p className="text-[11px] font-medium text-ink-3">CPI</p>
+              <p className="mt-0.5 text-[18px] font-bold text-accent tabular">{money(study.cpi)}</p>
+            </div>
+            <div className="rounded-2xl bg-fill p-3.5">
+              <p className="text-[11px] font-medium text-ink-3">LOI</p>
+              <p className="mt-0.5 text-[18px] font-bold tabular">{study.loi} min</p>
+            </div>
+            <div className="rounded-2xl bg-fill p-3.5">
+              <p className="text-[11px] font-medium text-ink-3">IR</p>
+              <p className="mt-0.5 text-[18px] font-bold tabular">{study.ir}%</p>
+            </div>
+            <div className="rounded-2xl bg-fill p-3.5">
+              <p className="text-[11px] font-medium text-ink-3">Target</p>
+              <p className="mt-0.5 text-[18px] font-bold tabular">{num(study.target_completes).toLocaleString()}</p>
+            </div>
+          </div>
+
+          {/* Status and Client info */}
+          <div className="rounded-2xl border border-line p-4 space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-ink-3">Client</span>
+              <span className="font-semibold text-ink">{study.client_name}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-ink-3">Status</span>
+              <StatusBadge status={study.status} />
+            </div>
+            {study.live_url && (
+              <div className="pt-2 border-t border-line/60">
+                <span className="text-ink-3 block mb-1">Live Survey URL</span>
+                <p className="font-mono text-[11px] text-ink-2 break-all bg-fill p-2 rounded-lg">
+                  {study.live_url}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Assigned Supply Partners / Vendors */}
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-[15px] font-semibold text-ink">Assigned Supply Partners</h3>
+                <p className="text-[12px] text-ink-3">Vendors with live tracking access to this study</p>
+              </div>
+              <Button
+                size="sm"
+                variant="tinted"
+                icon={<Plus size={13} />}
+                onClick={() => {
+                  onAssign(study);
+                  onClose();
+                }}
+              >
+                Assign vendor
+              </Button>
+            </div>
+
+            {allotmentsQuery.loading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-16 w-full rounded-2xl" />
+                <Skeleton className="h-16 w-full rounded-2xl" />
+              </div>
+            ) : allotted.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-line p-6 text-center">
+                <Users className="mx-auto h-8 w-8 text-ink-4 mb-2" />
+                <p className="text-sm font-semibold text-ink">No vendors assigned yet</p>
+                <p className="mt-1 text-xs text-ink-3 max-w-xs mx-auto">
+                  Assign this study to supply partners to generate unique tracking entry links.
+                </p>
+                <Button
+                  size="sm"
+                  className="mt-4"
+                  icon={<Share2 size={14} />}
+                  onClick={() => {
+                    onAssign(study);
+                    onClose();
+                  }}
+                >
+                  Assign first vendor
+                </Button>
+              </div>
+            ) : (
+              <ul className="space-y-2.5">
+                {allotted.map((a: any) => (
+                  <li key={a.id || a.vendor_id} className="rounded-2xl border border-line bg-surface p-3.5 shadow-xs">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="min-w-0">
+                        <span className="font-mono text-[13px] font-semibold text-ink">{a.vendor_id}</span>
+                        {a.vendor_name && a.vendor_name !== a.vendor_id && (
+                          <span className="ml-2 text-xs text-ink-3 truncate">({a.vendor_name})</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Badge tone={a.status === "Active" ? "green" : "gray"}>{a.status || "Active"}</Badge>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={<Pencil size={12} />}
+                          onClick={() => setEditAllot(a)}
+                          title="Edit vendor CPI / quota"
+                        />
+                        <Button
+                          size="sm"
+                          variant="dangerSoft"
+                          icon={<Trash2 size={12} />}
+                          onClick={() => removeAllot(a)}
+                          title="Remove vendor"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-ink-3 mb-2 tabular">
+                      <span>Vendor CPI: <strong className="text-ink font-semibold">{money(a.vendor_cpi)}</strong></span>
+                      <span>Quota: <strong className="text-ink font-semibold">{a.complete_count || 0}/{a.quota_limit}</strong></span>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2 border-t border-line/60">
+                      <p className="flex-1 truncate font-mono text-[11px] text-ink-3 bg-fill px-2 py-1 rounded">
+                        {a.entry_link}
+                      </p>
+                      <CopyButton text={a.entry_link} label="Copy link" />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      <EditAllotmentModal
+        allotment={editAllot}
+        onClose={() => setEditAllot(null)}
+        onSaved={() => {
+          allotmentsQuery.reload();
+          onReload();
+        }}
+      />
+    </>
+  );
+}
+
+/* ───────────── Create / duplicate / edit form ───────────── */
 function StudyForm({
   open,
   onClose,
   onSaved,
   base,
   duplicate,
+  edit,
 }: {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
   base?: Project | NSurvey;
   duplicate?: boolean;
+  edit?: boolean;
 }) {
   const { toast } = useFeedback();
   const clients = useQuery(async () => (await api.get<{ data: Client[] }>("/clients")).data || [], []);
-  const blank = { name: "", client_id: "", cpi: "1.50", loi: "10", ir: "70", target: "500", live_url: "", auto_pause: "50", country: "United States" };
+  const blank = {
+    name: "",
+    client_id: "",
+    cpi: "1.50",
+    loi: "10",
+    ir: "70",
+    target: "500",
+    live_url: "",
+    auto_pause: "50",
+    country: "United States",
+    status: "Live",
+  };
   const [f, setF] = useState(blank);
   const [busy, setBusy] = useState(false);
 
@@ -743,8 +1095,10 @@ function StudyForm({
         const clientId = isProject
           ? String((base as Project).client_id || "")
           : String((base as NSurvey).clientId || "");
+        const status = isProject ? (base as Project).status || "Live" : (base as NSurvey).status || "Live";
+
         setF({
-          name: `${name} (Clone)`,
+          name: edit ? name : duplicate ? `${name} (Clone)` : name,
           client_id: clientId,
           cpi,
           loi,
@@ -753,15 +1107,16 @@ function StudyForm({
           live_url: liveUrl,
           auto_pause: isProject ? String((base as Project).auto_pause_clicks || 50) : "50",
           country: "United States",
+          status,
         });
       } else {
         setF(blank);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, edit, duplicate]);
 
-  const set = (k: keyof typeof blank) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF((p) => ({ ...p, [k]: e.target.value }));
+  const set = (k: keyof typeof blank) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setF((p) => ({ ...p, [k]: e.target.value }));
 
   const save = async () => {
     if (!f.name.trim()) return toast("Give the study a name.", "error");
@@ -770,7 +1125,8 @@ function StudyForm({
     const isProject = base && "project_name" in base;
     const baseId = isProject ? (base as Project).id : undefined;
     const baseProjectId = isProject ? (base as Project).project_id : (base as NSurvey)?.id;
-    const body = {
+
+    const body: any = {
       project_name: f.name.trim(),
       target_name: f.name.trim(),
       client_id: client?.id ?? (f.client_id ? Number(f.client_id) : undefined),
@@ -784,13 +1140,20 @@ function StudyForm({
       live_url: f.live_url.trim(),
       auto_pause_clicks: num(f.auto_pause),
       country: f.country,
-      status: "Live",
-      ...(base ? { source_project_id: baseProjectId, id: baseId } : {}),
+      status: f.status || "Live",
     };
+
+    if (edit && baseId) {
+      body.id = baseId;
+      body.project_id = baseProjectId;
+    } else if (duplicate) {
+      body.source_project_id = baseProjectId;
+    }
+
     setBusy(true);
     try {
       await api.post(duplicate ? "/manage/projects/duplicate" : "/manage/projects", body);
-      toast(duplicate ? "Study duplicated" : "Study created");
+      toast(edit ? "Study updated successfully" : duplicate ? "Study duplicated" : "Study created");
       onSaved();
       onClose();
     } catch (e: any) {
@@ -804,8 +1167,12 @@ function StudyForm({
     <Modal
       open={open}
       onClose={onClose}
-      title={duplicate ? "Duplicate study" : "New study"}
-      subtitle="Set commercial terms and the client's live survey URL."
+      title={edit ? "Edit study" : duplicate ? "Duplicate study" : "New study"}
+      subtitle={
+        edit
+          ? `Update parameters and client live survey URL for #${(base as any)?.project_id || ""}`
+          : "Set commercial terms and the client's live survey URL."
+      }
       size="lg"
       footer={
         <>
@@ -813,7 +1180,7 @@ function StudyForm({
             Cancel
           </Button>
           <Button loading={busy} onClick={save}>
-            {duplicate ? "Duplicate" : "Create study"}
+            {edit ? "Save changes" : duplicate ? "Duplicate" : "Create study"}
           </Button>
         </>
       }
@@ -830,6 +1197,14 @@ function StudyForm({
                 {c.client_name}
               </option>
             ))}
+          </Select>
+        </Field>
+        <Field label="Status">
+          <Select value={f.status} onChange={set("status")}>
+            <option value="Live">Live</option>
+            <option value="Pause">Pause</option>
+            <option value="Draft">Draft</option>
+            <option value="Closed">Closed</option>
           </Select>
         </Field>
         <Field label="Country">

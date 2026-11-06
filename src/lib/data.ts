@@ -51,16 +51,11 @@ export interface VendorOption {
   sharePct: number;
 }
 
-const DUMMY_CODES = new Set([
-  "VND-DYN-01", "VND-CNT-01", "VND-LUC-01", "VND-PSP-01",
-  "VND-POLLFISH", "VND-BITLABS", "VND-CPX", "VND-INBRAIN"
-]);
-
 /** Vendors are spread over several tables — merge them all into a single picker list. */
 export async function fetchVendorOptions(): Promise<VendorOption[]> {
   const map = new Map<string, VendorOption>();
 
-  // 1. Direct Supabase Query (Real 25+ Hostinger/SMR Vendors)
+  // 1. Direct Supabase Query (Real SMR / Hostinger Vendors)
   try {
     const { data: sv, error } = await supabase
       .from("smr_vendors")
@@ -69,7 +64,7 @@ export async function fetchVendorOptions(): Promise<VendorOption[]> {
     if (!error && sv && sv.length > 0) {
       sv.forEach((v: any) => {
         const code = v.vendor_code || v.vendor_id || String(v.id);
-        if (code && !DUMMY_CODES.has(code)) {
+        if (code) {
           const rawShare = num(v.cpi_percentage ?? v.rev_share, 70);
           map.set(code, {
             code,
@@ -101,18 +96,18 @@ export async function fetchVendorOptions(): Promise<VendorOption[]> {
   ]);
   (mv?.data || []).forEach((v) => {
     const code = v.vendor_code || v.vendor_id;
-    if (code && !DUMMY_CODES.has(code)) {
+    if (code) {
       const rawShare = num(v.cpi_percentage ?? v.rev_share, 70);
       map.set(code, { code, name: v.name || v.vendor_name || code, sharePct: rawShare > 0 ? rawShare : 70 });
     }
   });
   (uni?.data?.vendors || []).forEach((v) => {
-    if (v.vendor_id && !DUMMY_CODES.has(v.vendor_id) && !map.has(v.vendor_id)) {
+    if (v.vendor_id && !map.has(v.vendor_id)) {
       map.set(v.vendor_id, { code: v.vendor_id, name: v.vendor_name || v.vendor_id, sharePct: 70 });
     }
   });
   (al?.data || []).forEach((a) => {
-    if (a.vendor_id && !DUMMY_CODES.has(a.vendor_id) && !map.has(a.vendor_id)) {
+    if (a.vendor_id && !map.has(a.vendor_id)) {
       map.set(a.vendor_id, { code: a.vendor_id, name: a.vendor_name || a.vendor_id, sharePct: 70 });
     }
   });

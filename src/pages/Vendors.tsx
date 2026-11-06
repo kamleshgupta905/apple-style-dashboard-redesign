@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
-import { Download, Pencil, Plus, Trash2 } from "lucide-react";
-import { api, type Allotment, type Vendor } from "../lib/api";
+import { useMemo, useState, useEffect } from "react";
+import { Download, Pencil, Plus, Share2, Trash2, Users } from "lucide-react";
+import { api, type Allotment, type Vendor, type Project } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { exportCSV, formatDate, initials, money, num } from "../lib/utils";
 import {
@@ -16,10 +16,12 @@ import {
   PageHeader,
   SearchInput,
   Segmented,
+  Select,
   StatusBadge,
   type Column,
 } from "../components/ui";
 import { useFeedback } from "../components/feedback";
+import { EditAllotmentModal } from "../components/EditAllotmentModal";
 import { PERMS, usePermissions } from "../lib/permissions";
 
 interface VRow {
@@ -39,10 +41,7 @@ interface VRow {
   registered: boolean;
 }
 
-const DUMMY_CODES = new Set([
-  "VND-DYN-01", "VND-CNT-01", "VND-LUC-01", "VND-PSP-01",
-  "VND-POLLFISH", "VND-BITLABS", "VND-CPX", "VND-INBRAIN"
-]);
+const DUMMY_CODES = new Set<string>();
 
 export function Vendors() {
   const { can } = usePermissions();
@@ -51,6 +50,8 @@ export function Vendors() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<VRow | null>(null);
   const [form, setForm] = useState<null | { vendor?: VRow }>(null);
+  const [editAllot, setEditAllot] = useState<Allotment | null>(null);
+  const [assignVendor, setAssignVendor] = useState<VRow | null>(null);
 
   const q = useQuery(async () => {
     const [mv, uni, al] = await Promise.all([
@@ -172,6 +173,15 @@ export function Vendors() {
       align: "right",
       render: (v) => (
         <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <Button
+            size="sm"
+            variant="tinted"
+            icon={<Share2 size={13} />}
+            onClick={() => setAssignVendor(v)}
+            title="Assign study to partner"
+          >
+            Assign
+          </Button>
           <button
             type="button"
             title="Edit partner"
@@ -224,6 +234,14 @@ export function Vendors() {
       render: (a) => (
         <div className="flex justify-end gap-1.5">
           <CopyButton text={a.entry_link} label="Link" />
+          <Button
+            size="sm"
+            variant="secondary"
+            aria-label="Edit allotment"
+            title="Edit allotment"
+            icon={<Pencil size={13} />}
+            onClick={() => setEditAllot(a)}
+          />
           {can(PERMS.VENDORS_DELETE) && (
             <Button size="sm" variant="dangerSoft" aria-label="Remove allotment" icon={<Trash2 size={14} />} onClick={() => removeAllot(a)} />
           )}
@@ -306,6 +324,16 @@ export function Vendors() {
                   Edit
                 </Button>
               )}
+              <Button
+                variant="primary"
+                icon={<Share2 size={15} />}
+                onClick={() => {
+                  setAssignVendor(open);
+                  setOpen(null);
+                }}
+              >
+                Assign study
+              </Button>
             </>
           )
         }
@@ -363,7 +391,156 @@ export function Vendors() {
           q.reload();
         }}
       />
+
+      <EditAllotmentModal
+        allotment={editAllot}
+        onClose={() => setEditAllot(null)}
+        onSaved={q.reload}
+      />
+
+      <AssignStudyToVendorModal
+        vendor={assignVendor}
+        onClose={() => setAssignVendor(null)}
+        onSaved={q.reload}
+      />
     </div>
+  );
+}
+
+function AssignStudyToVendorModal({
+  vendor,
+  onClose,
+  onSaved,
+}: {
+  vendor: VRow | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useFeedback();
+  const studiesQuery = useQuery(async () => {
+    const res = await api.get<{ data: Project[] }>("/manage/projects");
+    return res.data || [];
+  }, []);
+
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [sharePct, setSharePct] = useState("70");
+  const [quota, setQuota] = useState("100");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (vendor) {
+      setSharePct(String(vendor.share || 70));
+      setQuota("100");
+      setSelectedProjectId("");
+    }
+  }, [vendor]);
+
+  if (!vendor) return null;
+
+  const studies = studiesQuery.data || [];
+  const selectedStudy = studies.find(
+    (p) => String(p.project_id) === selectedProjectId || String(p.id) === selectedProjectId
+  );
+  const clientCpi = selectedStudy ? num(selectedStudy.cpi) : 0;
+  const vendorCpi = Number(((clientCpi * num(sharePct, 70)) / 100).toFixed(2));
+  const margin = Number((clientCpi - vendorCpi).toFixed(2));
+
+  const save = async () => {
+    if (!selectedProjectId) return toast("Select a study to assign.", "error");
+    if (num(quota) <= 0) return toast("Quota must be greater than zero.", "error");
+    const pId = selectedStudy?.project_id || selectedProjectId;
+
+    setBusy(true);
+    try {
+      const res = await api.post<any>("/vendor/allot", {
+        project_id: pId,
+        vendor_id: vendor.code,
+        vendor_name: vendor.name,
+        vendor_cpi: vendorCpi,
+        quota_limit: num(quota),
+        status: "Active",
+      });
+      const link =
+        res?.entry_link ||
+        `https://api.vmhgroupsmr.com/vendor/auth/${encodeURIComponent(vendor.code)}/project/${encodeURIComponent(pId)}?uid=[RESPONDENT_ID]`;
+      navigator.clipboard?.writeText?.(link);
+      toast(`Assigned ${vendor.name} to study #${pId}! Link copied to clipboard.`);
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      toast(e.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={!!vendor}
+      onClose={onClose}
+      title="Assign study to supply partner"
+      subtitle={`Partner: ${vendor.name} (${vendor.code})`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button loading={busy} onClick={save} disabled={!selectedProjectId}>
+            Assign & Generate link
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label="Choose study to allocate">
+          <Select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)}>
+            <option value="">Select an active study</option>
+            {studies.map((p) => (
+              <option key={p.id || p.project_id} value={p.project_id}>
+                #{p.project_id} · {p.project_name} ({money(p.cpi)} CPI)
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Partner share (%)">
+            <Input
+              type="number"
+              min="1"
+              max="100"
+              value={sharePct}
+              onChange={(e) => setSharePct(e.target.value)}
+            />
+          </Field>
+          <Field label="Quota limit (completes)">
+            <Input
+              type="number"
+              min="1"
+              value={quota}
+              onChange={(e) => setQuota(e.target.value)}
+            />
+          </Field>
+        </div>
+
+        {selectedStudy && (
+          <div className="rounded-2xl bg-fill p-4 space-y-1.5 text-xs">
+            <div className="flex justify-between text-ink-3">
+              <span>Client CPI</span>
+              <span className="font-semibold text-ink">{money(clientCpi)}</span>
+            </div>
+            <div className="flex justify-between text-ink-3">
+              <span>Vendor CPI ({sharePct}%)</span>
+              <span className="font-semibold text-accent">{money(vendorCpi)}</span>
+            </div>
+            <div className="flex justify-between text-ink-3 pt-1 border-t border-line">
+              <span>Platform Margin</span>
+              <span className="font-semibold text-green">{money(margin)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
