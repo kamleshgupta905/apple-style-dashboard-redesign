@@ -42,7 +42,16 @@ export function Reference() {
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:order-2">
           <Card className="anim-fade-up p-5 sm:p-6">
-            <SectionTitle title="Entry link anatomy" hint="What vendors receive" />
+            <SectionTitle title="Universal Router Link" hint="Single integration link for vendor dashboard" />
+            <p className="break-all rounded-2xl bg-fill p-3.5 font-mono text-[12px] leading-relaxed text-ink-2">
+              https://api.vmhgroupsmr.com/#/router?vid=<b className="text-accent">VND-CODE</b>&uid=<b className="text-green">[RESPONDENT_ID]</b>
+            </p>
+            <p className="mt-2.5 text-[13px] text-ink-3 leading-relaxed">
+              Vendors configure this <b>one time</b> in their dashboard. When you assign any survey to that vendor in SMR, the router automatically serves it to their panelists.
+            </p>
+          </Card>
+          <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "40ms" }}>
+            <SectionTitle title="Direct study link anatomy" hint="Per-campaign entry link" />
             <p className="break-all rounded-2xl bg-fill p-3.5 font-mono text-[12px] leading-relaxed text-ink-2">
               https://api.vmhgroupsmr.com/vendor/auth/<b className="text-accent">VND-CODE</b>/project/<b className="text-purple">STUDY_ID</b>?uid=<b className="text-green">[RESPONDENT_ID]</b>
             </p>

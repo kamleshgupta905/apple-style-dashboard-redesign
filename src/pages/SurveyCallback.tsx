@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   CheckCircle2,
   XCircle,
@@ -12,7 +12,9 @@ import {
   Calendar,
   Hash,
   AlertTriangle,
+  ArrowRight,
 } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 export function SurveyCallback() {
   const [copied, setCopied] = useState(false);
@@ -45,6 +47,54 @@ export function SurveyCallback() {
   const isTerm = status === "20";
   const isOverquota = status === "30";
   const isSecurity = status === "40";
+
+  const [vendorCallbackUrl, setVendorCallbackUrl] = useState<string>("");
+  const [vendorName, setVendorName] = useState<string>("");
+  const [countdown, setCountdown] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!vid) return;
+    supabase
+      .from("smr_vendors")
+      .select("vendor_name, callback_complete, callback_terminate, callback_overquota, callback_security")
+      .eq("vendor_code", vid)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return;
+        setVendorName(data.vendor_name || vid);
+        let target = "";
+        if (isComplete) target = data.callback_complete;
+        else if (isTerm) target = data.callback_terminate;
+        else if (isOverquota) target = data.callback_overquota;
+        else if (isSecurity) target = data.callback_security;
+
+        if (target) {
+          const finalUrl = target
+            .replace(/\[UID\]/gi, uid)
+            .replace(/\[RESPONDENT_ID\]/gi, uid)
+            .replace(/\[ID\]/gi, uid)
+            .replace(/\[PID\]/gi, pid)
+            .replace(/\[STUDY_ID\]/gi, pid);
+          setVendorCallbackUrl(finalUrl);
+          setCountdown(5);
+        }
+      });
+  }, [vid, isComplete, isTerm, isOverquota, isSecurity, uid, pid]);
+
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      const dest = returnUrl || vendorCallbackUrl;
+      if (dest) {
+        window.location.href = dest;
+      }
+      return;
+    }
+    const t = setTimeout(() => setCountdown((c) => (c !== null ? c - 1 : null)), 1000);
+    return () => clearTimeout(t);
+  }, [countdown, returnUrl, vendorCallbackUrl]);
+
+  const effectiveReturnUrl = returnUrl || vendorCallbackUrl;
 
   // Deterministic verification token
   const verificationCode = useMemo(() => {
@@ -251,14 +301,21 @@ export function SurveyCallback() {
 
         {/* Action Buttons */}
         <div className="w-full space-y-2.5">
-          {returnUrl ? (
-            <a
-              href={returnUrl}
-              className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-md shadow-indigo-100 transition-all cursor-pointer"
-            >
-              Return to Provider
-              <ExternalLink className="w-4 h-4" />
-            </a>
+          {effectiveReturnUrl ? (
+            <div className="space-y-2">
+              <a
+                href={effectiveReturnUrl}
+                className="w-full inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-md shadow-indigo-100 transition-all cursor-pointer"
+              >
+                Return to {vendorName || "Partner"}
+                <ExternalLink className="w-4 h-4" />
+              </a>
+              {countdown !== null && countdown > 0 && (
+                <p className="text-[12px] text-slate-400">
+                  Redirecting automatically in <span className="font-semibold text-indigo-600">{countdown}s</span>...
+                </p>
+              )}
+            </div>
           ) : (
             <button
               type="button"

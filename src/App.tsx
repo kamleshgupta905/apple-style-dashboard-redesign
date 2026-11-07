@@ -21,6 +21,8 @@ import { Reference } from "./pages/Reference";
 import { Settings } from "./pages/Settings";
 import { Prescreener } from "./pages/Prescreener";
 import { SurveyCallback } from "./pages/SurveyCallback";
+import { VendorRouter } from "./pages/VendorRouter";
+import { VendorFeed } from "./pages/VendorFeed";
 
 const THEME_KEY = "smr_theme";
 
@@ -43,7 +45,17 @@ function useRoute() {
   const read = () => {
     const raw = window.location.hash.replace(/^#\/?/, "");
     const h = raw.split(/[/?]/)[0];
-    const PUBLIC_SURVEY_ROUTES = ["prescreener", "callback", "survey", "complete", "terminate", "overquota", "security"];
+    const PUBLIC_SURVEY_ROUTES = [
+      "prescreener",
+      "callback",
+      "survey",
+      "complete",
+      "terminate",
+      "overquota",
+      "security",
+      "router",
+      "feed",
+    ];
     if (PUBLIC_SURVEY_ROUTES.includes(h)) return h;
     return NAV.some((n) => n.id === h) ? h : "dashboard";
   };
@@ -117,6 +129,12 @@ export default function App() {
   const [dark, setDark] = useTheme();
 
   // Public respondent flows (no login or dashboard chrome required)
+  if (route === "router") {
+    return <VendorRouter />;
+  }
+  if (route === "feed") {
+    return <VendorFeed />;
+  }
   if (route === "prescreener") {
     return <Prescreener />;
   }

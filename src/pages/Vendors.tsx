@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { Download, Pencil, Plus, Share2, Trash2, Users } from "lucide-react";
+import { Cable, Download, Pencil, Plus, Share2, Trash2, Users } from "lucide-react";
 import { api, type Allotment, type Vendor, type Project } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { exportCSV, formatDate, initials, money, num } from "../lib/utils";
@@ -22,6 +22,7 @@ import {
 } from "../components/ui";
 import { useFeedback } from "../components/feedback";
 import { EditAllotmentModal } from "../components/EditAllotmentModal";
+import { VendorIntegrationModal } from "../components/VendorIntegrationModal";
 import { PERMS, usePermissions } from "../lib/permissions";
 
 interface VRow {
@@ -52,6 +53,7 @@ export function Vendors() {
   const [form, setForm] = useState<null | { vendor?: VRow }>(null);
   const [editAllot, setEditAllot] = useState<Allotment | null>(null);
   const [assignVendor, setAssignVendor] = useState<VRow | null>(null);
+  const [integrationVendor, setIntegrationVendor] = useState<VRow | null>(null);
 
   const q = useQuery(async () => {
     const [mv, uni, al] = await Promise.all([
@@ -173,6 +175,15 @@ export function Vendors() {
       align: "right",
       render: (v) => (
         <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Cable size={13} />}
+            onClick={() => setIntegrationVendor(v)}
+            title="Partner Integration & Universal Router Link"
+          >
+            Integrate
+          </Button>
           <Button
             size="sm"
             variant="tinted"
@@ -325,6 +336,16 @@ export function Vendors() {
                 </Button>
               )}
               <Button
+                variant="secondary"
+                icon={<Cable size={15} />}
+                onClick={() => {
+                  setIntegrationVendor(open);
+                  setOpen(null);
+                }}
+              >
+                Integration
+              </Button>
+              <Button
                 variant="primary"
                 icon={<Share2 size={15} />}
                 onClick={() => {
@@ -401,6 +422,12 @@ export function Vendors() {
       <AssignStudyToVendorModal
         vendor={assignVendor}
         onClose={() => setAssignVendor(null)}
+        onSaved={q.reload}
+      />
+
+      <VendorIntegrationModal
+        vendor={integrationVendor}
+        onClose={() => setIntegrationVendor(null)}
         onSaved={q.reload}
       />
     </div>
