@@ -42,6 +42,26 @@ export function Reference() {
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:order-2">
           <Card className="anim-fade-up p-5 sm:p-6">
+            <SectionTitle title="Suppliers API Specification (Swagger UI)" hint="Public API documentation for vendor tech teams" />
+            <p className="break-all rounded-2xl bg-fill p-3.5 font-mono text-[12px] leading-relaxed text-ink-2">
+              https://api.vmhgroupsmr.com/api-docs/#/
+            </p>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[12px] text-ink-3">Survey Sherpa standard</span>
+              <div className="flex gap-2">
+                <CopyButton text="https://api.vmhgroupsmr.com/api-docs/#/" label="Copy Doc Link" />
+                <a
+                  href="/api-docs/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-2.5 py-1 rounded-lg bg-surface border border-line text-xs font-medium hover:bg-fill transition"
+                >
+                  Open
+                </a>
+              </div>
+            </div>
+          </Card>
+          <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "40ms" }}>
             <SectionTitle title="Universal Router Link" hint="Single integration link for vendor dashboard" />
             <p className="break-all rounded-2xl bg-fill p-3.5 font-mono text-[12px] leading-relaxed text-ink-2">
               https://api.vmhgroupsmr.com/#/router?vid=<b className="text-accent">VND-CODE</b>&uid=<b className="text-green">[RESPONDENT_ID]</b>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Copy, Check, ExternalLink, Link2, Layers, Code2, ShieldCheck, CheckCircle2, ArrowRight } from "lucide-react";
+import { Copy, Check, ExternalLink, Link2, Layers, Code2, ShieldCheck, CheckCircle2, ArrowRight, Sparkles, BookOpen, ArrowUpRight } from "lucide-react";
 import { api } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { UID_TAGS } from "../lib/data";
@@ -16,7 +16,7 @@ export function VendorIntegrationModal({
   onSaved?: () => void;
 }) {
   const { toast } = useFeedback();
-  const [tab, setTab] = useState<"router" | "campaign" | "feed" | "callbacks">("router");
+  const [tab, setTab] = useState<"router" | "specs" | "callbacks" | "campaign" | "feed">("router");
   const [busy, setBusy] = useState(false);
 
   // Callbacks state
@@ -58,6 +58,10 @@ export function VendorIntegrationModal({
 
   // Live Inventory Feed URL
   const feedUrl = `https://api.vmhgroupsmr.com/#/feed?vid=${encodeURIComponent(vCode)}`;
+
+  // Public Swagger UI and OpenAPI Spec URLs
+  const apiDocsUrl = `https://api.vmhgroupsmr.com/api-docs/#/`;
+  const openApiSpecUrl = `https://api.vmhgroupsmr.com/api-docs/openapi.json`;
 
   const saveCallbacks = async () => {
     setBusy(true);
@@ -105,6 +109,7 @@ export function VendorIntegrationModal({
           onChange={setTab as any}
           options={[
             { value: "router", label: "Universal Router" },
+            { value: "specs", label: "API Docs (Swagger)" },
             { value: "callbacks", label: "S2S Callbacks" },
             { value: "campaign", label: "Per-Study Link" },
             { value: "feed", label: "API Feed" },
@@ -171,6 +176,116 @@ export function VendorIntegrationModal({
                   <strong>Zero link updates:</strong> You never have to send new links to the vendor for new surveys!
                 </li>
               </ol>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: API Documentation & Swagger Specs */}
+        {tab === "specs" && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-sky-500/20 bg-sky-50/30 dark:bg-sky-950/20 p-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={14} className="text-sky-600" />
+                  <h4 className="text-sm font-semibold text-sky-900 dark:text-sky-200">
+                    Suppliers API Specification (Survey Sherpa Standard)
+                  </h4>
+                </div>
+                <a
+                  href={apiDocsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-sm transition"
+                >
+                  Open Swagger UI
+                  <ArrowUpRight size={11} />
+                </a>
+              </div>
+              <p className="text-xs text-sky-700/80 dark:text-sky-300/80 leading-relaxed">
+                Provide this documentation URL to <strong>{vName}'s developers</strong>. They can connect their dashboard directly to our REST API to automate study polling, quota syncing, and respondent routing.
+              </p>
+            </div>
+
+            {/* Shareable Documentation URL */}
+            <div>
+              <label className="text-xs font-semibold text-ink block mb-1.5">
+                Public API Documentation URL (Share with Vendor)
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={apiDocsUrl}
+                  className="flex-1 rounded-xl border border-line bg-fill px-3 py-2.5 font-mono text-[12px] text-ink select-all focus:outline-none"
+                />
+                <CopyButton text={apiDocsUrl} label="Copy URL" />
+                <a
+                  href={openApiSpecUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 px-3 py-2.5 rounded-xl border border-line bg-surface hover:bg-fill text-ink text-xs font-medium transition"
+                  title="Open Raw OpenAPI 3.0 JSON specification"
+                >
+                  <Code2 size={12} />
+                  Raw Spec
+                </a>
+              </div>
+            </div>
+
+            {/* Quick Test cURL Command */}
+            <div>
+              <label className="text-xs font-semibold text-ink block mb-1.5">
+                cURL Example for {vName} (Fetch Assigned Studies)
+              </label>
+              <div className="relative rounded-xl border border-line bg-fill p-3 font-mono text-[11px] text-ink-2 overflow-x-auto">
+                <div className="flex items-center justify-between mb-1 pb-1 border-b border-line/60">
+                  <span className="text-[10px] text-ink-3 uppercase font-semibold">Terminal / Postman</span>
+                  <CopyButton
+                    text={`curl -X GET "https://api.vmhgroupsmr.com/api/supplier/getAllSurveys?vendor_id=${vCode}"`}
+                    label="Copy cURL"
+                  />
+                </div>
+                <code>
+                  curl -X GET "https://api.vmhgroupsmr.com/api/supplier/getAllSurveys?vendor_id={vCode}"
+                </code>
+              </div>
+            </div>
+
+            {/* Core Supplier Endpoints List */}
+            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2.5 text-xs">
+              <h5 className="font-semibold text-ink flex items-center gap-1.5">
+                <Code2 size={14} className="text-indigo-600" />
+                Supported Supplier Endpoints
+              </h5>
+              <div className="space-y-1.5 font-mono text-[11px]">
+                <div className="p-2 rounded-lg bg-fill border border-line/50 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-emerald-600 mr-2">GET</span>
+                    <span>/api/supplier/getAllSurveys</span>
+                  </div>
+                  <span className="font-sans text-[11px] text-ink-3">Returns all assigned surveys</span>
+                </div>
+                <div className="p-2 rounded-lg bg-fill border border-line/50 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-emerald-600 mr-2">GET</span>
+                    <span>/api/supplier/getSurveyDetails?survey_id=...</span>
+                  </div>
+                  <span className="font-sans text-[11px] text-ink-3">Targeting criteria &amp; qualifications</span>
+                </div>
+                <div className="p-2 rounded-lg bg-fill border border-line/50 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-emerald-600 mr-2">GET</span>
+                    <span>/api/supplier/getSurveyStats?survey_id=...</span>
+                  </div>
+                  <span className="font-sans text-[11px] text-ink-3">Entrances, completes &amp; conversion</span>
+                </div>
+                <div className="p-2 rounded-lg bg-fill border border-line/50 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-emerald-600 mr-2">GET</span>
+                    <span>/api/supplier/getDefinitions</span>
+                  </div>
+                  <span className="font-sans text-[11px] text-ink-3">Languages &amp; country ISOs</span>
+                </div>
+              </div>
             </div>
           </div>
         )}

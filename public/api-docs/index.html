@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VMH Group SMR - Suppliers API Documentation</title>
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui.min.css" />
+  <style>
+    html {
+      box-sizing: border-box;
+      overflow-y: scroll;
+    }
+    *, *:before, *:after {
+      box-sizing: inherit;
+    }
+    body {
+      margin: 0;
+      background: #fafafa;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    .custom-header {
+      background: #0f172a;
+      color: #ffffff;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #1e293b;
+    }
+    .custom-header .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .custom-header .brand-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .custom-header .brand-subtitle {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .custom-header a.back-link {
+      color: #38bdf8;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      transition: all 0.2s ease;
+    }
+    .custom-header a.back-link:hover {
+      background: rgba(56, 189, 248, 0.2);
+    }
+    .spec-notice {
+      max-width: 1460px;
+      margin: 20px auto 0;
+      padding: 16px 20px;
+      background: #ffffff;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .spec-notice h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .spec-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+      font-size: 12px;
+      color: #334155;
+      margin-top: 10px;
+    }
+    .spec-box {
+      background: #f8fafc;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+    .spec-box code {
+      background: #e2e8f0;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #0f172a;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-purple { background: #f3e8ff; color: #6b21a8; }
+    .badge-orange { background: #ffedd5; color: #9a3412; }
+    .swagger-ui .topbar { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <header class="custom-header">
+    <div class="logo-group">
+      <img src="/app-logo.png" alt="VMH Group SMR" style="height: 32px; width: auto; border-radius: 6px;" onerror="this.style.display='none'" />
+      <div>
+        <div class="brand-title">VMH GROUP · SMR PLATFORM</div>
+        <div class="brand-subtitle">Suppliers &amp; Supply Partner API Specification</div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <a href="./openapi.json" target="_blank" class="back-link">Raw OpenAPI JSON</a>
+      <a href="/#/vendors" class="back-link">Return to Dashboard</a>
+    </div>
+  </header>
+
+  <div class="spec-notice">
+    <h3>⚡ Integration Quick Reference</h3>
+    <div class="spec-grid">
+      <div class="spec-box">
+        <strong>1. S2S Postback Status Codes</strong>
+        <div style="margin-top: 6px; line-height: 1.8;">
+          <div><span class="badge badge-green">10</span> Complete</div>
+          <div><span class="badge badge-red">20</span> Terminate / Screenout</div>
+          <div><span class="badge badge-purple">30</span> Quota Full (Overquota)</div>
+          <div><span class="badge badge-orange">40</span> Security / Fraud Terminate</div>
+        </div>
+      </div>
+      <div class="spec-box">
+        <strong>2. Dynamic Entry Link Macros</strong>
+        <div style="margin-top: 6px; line-height: 1.6;">
+          Replace <code>[RESPONDENT_ID]</code> or <code>[UID]</code> with your panelist's unique identifier when dispatching traffic:
+          <div style="margin-top: 4px; word-break: break-all; font-family: monospace; font-size: 11px; color: #2563eb;">
+            .../project/[ID]?uid=<b>YOUR_PANELIST_ID</b>
+          </div>
+        </div>
+      </div>
+      <div class="spec-box">
+        <strong>3. Zero-Polling Router Option</strong>
+        <div style="margin-top: 6px; line-height: 1.6;">
+          If you prefer a single continuous link without polling APIs:
+          <div style="margin-top: 4px; word-break: break-all; font-family: monospace; font-size: 11px; color: #059669;">
+            https://api.vmhgroupsmr.com/#/router?vid=<b>YOUR_CODE</b>&amp;uid=[UID]
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="swagger-ui"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui-bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.11.0/swagger-ui-standalone-preset.min.js"></script>
+  <script>
+    window.onload = function() {
+      const ui = SwaggerUIBundle({
+        url: "./openapi.json",
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        layout: "StandaloneLayout",
+        defaultModelsExpandDepth: 1,
+        defaultModelExpandDepth: 1,
+        docExpansion: "list"
+      });
+      window.ui = ui;
+    };
+  </script>
+</body>
+</html>

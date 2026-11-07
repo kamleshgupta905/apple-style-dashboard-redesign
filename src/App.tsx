@@ -23,6 +23,7 @@ import { Prescreener } from "./pages/Prescreener";
 import { SurveyCallback } from "./pages/SurveyCallback";
 import { VendorRouter } from "./pages/VendorRouter";
 import { VendorFeed } from "./pages/VendorFeed";
+import { ApiDocs } from "./pages/ApiDocs";
 
 const THEME_KEY = "smr_theme";
 
@@ -55,6 +56,7 @@ function useRoute() {
       "security",
       "router",
       "feed",
+      "api-docs",
     ];
     if (PUBLIC_SURVEY_ROUTES.includes(h)) return h;
     return NAV.some((n) => n.id === h) ? h : "dashboard";
@@ -129,6 +131,9 @@ export default function App() {
   const [dark, setDark] = useTheme();
 
   // Public respondent flows (no login or dashboard chrome required)
+  if (route === "api-docs") {
+    return <ApiDocs />;
+  }
   if (route === "router") {
     return <VendorRouter />;
   }
