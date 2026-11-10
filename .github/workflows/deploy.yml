@@ -52,7 +52,7 @@ jobs:
           publish_dir: ./dist
           publish_branch: deploy
           keep_files: false
-          force_orphan: true
+          force_orphan: false
 
       - name: Trigger Hostinger Auto-Deployment Webhook
         run: |
