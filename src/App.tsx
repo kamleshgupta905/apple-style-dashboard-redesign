@@ -46,6 +46,16 @@ function useRoute() {
   const read = () => {
     const raw = window.location.hash.replace(/^#\/?/, "");
     const h = raw.split(/[/?]/)[0];
+    const query = raw.includes("?") ? raw.split("?")[1] : window.location.search.replace(/^\?/, "");
+    const params = new URLSearchParams(query);
+
+    // If route is "security", disambiguate:
+    // If it has respondent parameters (uid, status, vid, rid), treat as respondent callback
+    // Otherwise (e.g. #/security or clicked from sidebar), it is the Admin "Security & Fraud Gate" module
+    if (h === "security" && (params.has("uid") || params.has("status") || params.has("vid") || params.has("rid"))) {
+      return "security-callback";
+    }
+
     const PUBLIC_SURVEY_ROUTES = [
       "prescreener",
       "callback",
@@ -53,7 +63,9 @@ function useRoute() {
       "complete",
       "terminate",
       "overquota",
-      "security",
+      "security-notice",
+      "security-terminate",
+      "security-callback",
       "router",
       "feed",
       "api-docs",
@@ -125,34 +137,51 @@ class PageErrorBoundary extends Component<{ children: ReactNode; route: string }
   }
 }
 
+class RootErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: any) {
+    console.error("Root application error:", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center bg-[#000000] text-white font-[-apple-system,BlinkMacSystemFont,'Segoe_UI','Inter',sans-serif]">
+          <div className="w-full max-w-md rounded-[28px] border border-white/10 bg-[#1c1c1e] p-8 shadow-2xl">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-400">
+              <Lock size={26} />
+            </div>
+            <h2 className="text-xl font-bold tracking-tight text-white">VMH GROUP · SMR Platform</h2>
+            <p className="mt-2 text-sm text-slate-400">
+              {this.state.error?.message || "An unexpected error occurred while loading this view."}
+            </p>
+            <button
+              type="button"
+              className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-blue-500 transition-all cursor-pointer"
+              onClick={() => {
+                window.location.hash = "/dashboard";
+                window.location.reload();
+              }}
+            >
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(() => (auth.token() ? auth.user() : null));
   const route = useRoute();
   const [dark, setDark] = useTheme();
-
-  // Public respondent flows (no login or dashboard chrome required)
-  if (route === "api-docs") {
-    return <ApiDocs />;
-  }
-  if (route === "router") {
-    return <VendorRouter />;
-  }
-  if (route === "feed") {
-    return <VendorFeed />;
-  }
-  if (route === "prescreener") {
-    return <Prescreener />;
-  }
-  if (
-    route === "callback" ||
-    route === "survey" ||
-    route === "complete" ||
-    route === "terminate" ||
-    route === "overquota" ||
-    route === "security"
-  ) {
-    return <SurveyCallback />;
-  }
 
   // Refresh latest permissions from MySQL / server on mount
   useEffect(() => {
@@ -161,13 +190,60 @@ export default function App() {
         if (fresh) setUser(fresh);
       });
     }
-  }, []);
+  }, [user]);
 
   const logout = useCallback(() => {
     auth.clear();
     setUser(null);
     window.location.hash = "/dashboard";
   }, []);
+
+  // Public respondent flows (no login or dashboard chrome required)
+  // Evaluated AFTER all React hooks have run unconditionally
+  if (route === "api-docs") {
+    return (
+      <RootErrorBoundary>
+        <ApiDocs />
+      </RootErrorBoundary>
+    );
+  }
+  if (route === "router") {
+    return (
+      <RootErrorBoundary>
+        <VendorRouter />
+      </RootErrorBoundary>
+    );
+  }
+  if (route === "feed") {
+    return (
+      <RootErrorBoundary>
+        <VendorFeed />
+      </RootErrorBoundary>
+    );
+  }
+  if (route === "prescreener") {
+    return (
+      <RootErrorBoundary>
+        <Prescreener />
+      </RootErrorBoundary>
+    );
+  }
+  if (
+    route === "callback" ||
+    route === "survey" ||
+    route === "complete" ||
+    route === "terminate" ||
+    route === "overquota" ||
+    route === "security-notice" ||
+    route === "security-terminate" ||
+    route === "security-callback"
+  ) {
+    return (
+      <RootErrorBoundary>
+        <SurveyCallback />
+      </RootErrorBoundary>
+    );
+  }
 
   const page = () => {
     if (!user) return null;
@@ -228,16 +304,18 @@ export default function App() {
   };
 
   return (
-    <FeedbackProvider>
-      <PermissionsProvider user={user}>
-        {!user ? (
-          <Login onSuccess={setUser} />
-        ) : (
-          <Shell route={route} user={user} dark={dark} onToggleTheme={() => setDark((d) => !d)} onLogout={logout}>
-            <PageErrorBoundary route={route}>{page()}</PageErrorBoundary>
-          </Shell>
-        )}
-      </PermissionsProvider>
-    </FeedbackProvider>
+    <RootErrorBoundary>
+      <FeedbackProvider>
+        <PermissionsProvider user={user}>
+          {!user ? (
+            <Login onSuccess={setUser} />
+          ) : (
+            <Shell route={route} user={user} dark={dark} onToggleTheme={() => setDark((d) => !d)} onLogout={logout}>
+              <PageErrorBoundary route={route}>{page()}</PageErrorBoundary>
+            </Shell>
+          )}
+        </PermissionsProvider>
+      </FeedbackProvider>
+    </RootErrorBoundary>
   );
 }

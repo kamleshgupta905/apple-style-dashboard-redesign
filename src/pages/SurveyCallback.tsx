@@ -33,7 +33,12 @@ export function SurveyCallback() {
     if (hashRoute === "complete") status = "10";
     else if (hashRoute === "terminate") status = "20";
     else if (hashRoute === "overquota") status = "30";
-    else if (hashRoute === "security") status = "40";
+    else if (
+      hashRoute === "security" ||
+      hashRoute === "security-notice" ||
+      hashRoute === "security-terminate" ||
+      hashRoute === "security-callback"
+    ) status = "40";
     else status = "10"; // Default to complete
   }
 
