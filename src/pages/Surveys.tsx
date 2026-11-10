@@ -224,7 +224,8 @@ function Marketplace({
   q: ReturnType<typeof useQuery<NSurvey[]>>;
   onCloned?: () => void;
 }) {
-  const { can } = usePermissions();
+  const { can, user } = usePermissions();
+  const isVendor = user?.role_id === 3 || user?.role_name === "Vendor" || user?.role_name?.toLowerCase().includes("vendor");
   const { toast } = useFeedback();
   const [search, setSearch] = useState("");
   const [client, setClient] = useState("all");
@@ -287,8 +288,22 @@ function Marketplace({
         </div>
       ),
     },
-    { key: "client", header: "Client", render: (s) => <span className="text-ink-2">{s.client}</span> },
-    { key: "cpi", header: "CPI", align: "right", sortValue: (s) => s.cpi, render: (s) => <span className="font-semibold">{money(s.cpi)}</span> },
+    {
+      key: "client",
+      header: "Client",
+      render: (s) => (
+        <span className={cn("text-ink-2", isVendor && "font-semibold text-accent")}>
+          {isVendor ? "VMH GROUP" : s.client}
+        </span>
+      ),
+    },
+    {
+      key: "cpi",
+      header: isVendor ? "Payout" : "CPI",
+      align: "right",
+      sortValue: (s) => s.cpi,
+      render: (s) => <span className="font-semibold">{money(s.cpi)}</span>,
+    },
     { key: "loi", header: "LOI", align: "right", sortValue: (s) => s.loi, render: (s) => `${s.loi} min` },
     {
       key: "ir",
@@ -387,12 +402,14 @@ function Marketplace({
           <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
             <SearchInput value={search} onChange={setSearch} placeholder="Search by ID or name" className="lg:w-72" />
             <div className="grid flex-1 grid-cols-3 gap-2 lg:flex lg:flex-none">
-              <Select value={client} onChange={(e) => setClient(e.target.value)} className="!h-10 !text-[14px] lg:w-44" aria-label="Client">
-                <option value="all">All clients</option>
-                {clients.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </Select>
+              {!isVendor && (
+                <Select value={client} onChange={(e) => setClient(e.target.value)} className="!h-10 !text-[14px] lg:w-44" aria-label="Client">
+                  <option value="all">All clients</option>
+                  {clients.map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </Select>
+              )}
               <Select value={status} onChange={(e) => setStatus(e.target.value)} className="!h-10 !text-[14px] lg:w-32" aria-label="Status">
                 <option value="all">Any status</option>
                 <option>Live</option>
@@ -520,7 +537,8 @@ function Marketplace({
 }
 
 function SurveyDrawer({ survey, onClose, onAssign }: { survey: NSurvey | null; onClose: () => void; onAssign: (s: NSurvey) => void }) {
-  const { can } = usePermissions();
+  const { can, user } = usePermissions();
+  const isVendor = user?.role_id === 3 || user?.role_name === "Vendor" || user?.role_name?.toLowerCase().includes("vendor");
   const id = survey?.id;
   const d = useQuery(
     async () => {
@@ -536,8 +554,8 @@ function SurveyDrawer({ survey, onClose, onAssign }: { survey: NSurvey | null; o
   const s = survey;
   const rows: [string, string | number][] = s
     ? [
-        ["Client", s.client],
-        ["Client CPI", money(s.cpi)],
+        ["Client", isVendor ? "VMH GROUP" : s.client],
+        [isVendor ? "Payout Rate" : "Client CPI", money(s.cpi)],
         ["Length of interview", `${s.loi} min`],
         ["Incidence rate", `${s.ir}%`],
         ["Completes needed", num(s.target).toLocaleString()],
@@ -600,7 +618,7 @@ function SurveyDrawer({ survey, onClose, onAssign }: { survey: NSurvey | null; o
             </section>
           )}
 
-          {s.liveUrl && (
+          {!isVendor && s.liveUrl && (
             <section>
               <h3 className="mb-2 text-[15px] font-semibold">Client live URL</h3>
               <p className="mb-2 break-all rounded-xl bg-fill px-3 py-2 font-mono text-[12px] text-ink-2">{s.liveUrl}</p>
@@ -615,7 +633,8 @@ function SurveyDrawer({ survey, onClose, onAssign }: { survey: NSurvey | null; o
 
 /* ───────────── My studies ───────────── */
 function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; onNew: () => void }) {
-  const { can } = usePermissions();
+  const { can, user } = usePermissions();
+  const isVendor = user?.role_id === 3 || user?.role_name === "Vendor" || user?.role_name?.toLowerCase().includes("vendor");
   const { toast, confirm } = useFeedback();
   const [search, setSearch] = useState("");
   const [assign, setAssign] = useState<NSurvey[]>([]);
@@ -673,8 +692,22 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
         </div>
       ),
     },
-    { key: "client_name", header: "Client" },
-    { key: "cpi", header: "CPI", align: "right", sortValue: (p) => num(p.cpi), render: (p) => <span className="font-semibold">{money(p.cpi)}</span> },
+    {
+      key: "client_name",
+      header: "Client",
+      render: (p) => (
+        <span className={cn("text-ink-2", isVendor && "font-semibold text-accent")}>
+          {isVendor ? "VMH GROUP" : (p.client_name || "Direct")}
+        </span>
+      ),
+    },
+    {
+      key: "cpi",
+      header: isVendor ? "Payout" : "CPI",
+      align: "right",
+      sortValue: (p) => num(p.cpi),
+      render: (p) => <span className="font-semibold">{money(p.cpi)}</span>,
+    },
     { key: "loi", header: "LOI", align: "right", render: (p) => `${p.loi} min` },
     { key: "ir", header: "IR", align: "right", render: (p) => `${p.ir}%` },
     { key: "target_completes", header: "Target", align: "right", render: (p) => num(p.target_completes).toLocaleString() },
@@ -870,6 +903,8 @@ function StudyDetailDrawer({
   onEdit: (p: Project) => void;
   onReload: () => void;
 }) {
+  const { can, user } = usePermissions();
+  const isVendor = user?.role_id === 3 || user?.role_name === "Vendor" || user?.role_name?.toLowerCase().includes("vendor");
   const { toast, confirm } = useFeedback();
   const [editAllot, setEditAllot] = useState<any | null>(null);
 
@@ -911,30 +946,34 @@ function StudyDetailDrawer({
         onClose={onClose}
         drawer
         title={study.project_name}
-        subtitle={`#${study.project_id} · ${study.client_name}`}
+        subtitle={`#${study.project_id} · ${isVendor ? "VMH GROUP" : (study.client_name || "Direct")}`}
         footer={
-          <div className="flex w-full items-center justify-between gap-2">
-            <Button
-              variant="secondary"
-              icon={<Pencil size={15} />}
-              onClick={() => {
-                onEdit(study);
-                onClose();
-              }}
-            >
-              Edit study
-            </Button>
-            <Button
-              variant="primary"
-              icon={<Share2 size={15} />}
-              onClick={() => {
-                onAssign(study);
-                onClose();
-              }}
-            >
-              Assign to vendor
-            </Button>
-          </div>
+          !isVendor ? (
+            <div className="flex w-full items-center justify-between gap-2">
+              <Button
+                variant="secondary"
+                icon={<Pencil size={15} />}
+                onClick={() => {
+                  onEdit(study);
+                  onClose();
+                }}
+              >
+                Edit study
+              </Button>
+              {can(PERMS.SURVEYS_ASSIGN) && (
+                <Button
+                  variant="primary"
+                  icon={<Share2 size={15} />}
+                  onClick={() => {
+                    onAssign(study);
+                    onClose();
+                  }}
+                >
+                  Assign to vendor
+                </Button>
+              )}
+            </div>
+          ) : undefined
         }
       >
         <div className="space-y-6">
@@ -962,13 +1001,15 @@ function StudyDetailDrawer({
           <div className="rounded-2xl border border-line p-4 space-y-2 text-xs">
             <div className="flex items-center justify-between">
               <span className="text-ink-3">Client</span>
-              <span className="font-semibold text-ink">{study.client_name}</span>
+              <span className={cn("font-semibold text-ink", isVendor && "text-accent")}>
+                {isVendor ? "VMH GROUP" : (study.client_name || "Direct")}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-ink-3">Status</span>
               <StatusBadge status={study.status} />
             </div>
-            {study.live_url && (
+            {!isVendor && study.live_url && (
               <div className="pt-2 border-t border-line/60">
                 <span className="text-ink-3 block mb-1">Live Survey URL</span>
                 <p className="font-mono text-[11px] text-ink-2 break-all bg-fill p-2 rounded-lg">
@@ -978,25 +1019,64 @@ function StudyDetailDrawer({
             )}
           </div>
 
-          {/* Assigned Supply Partners / Vendors */}
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h3 className="text-[15px] font-semibold text-ink">Assigned Supply Partners</h3>
-                <p className="text-[12px] text-ink-3">Vendors with live tracking access to this study</p>
+          {/* Assigned Supply Partners / Vendors or Vendor Tracking Link */}
+          {isVendor ? (
+            <div>
+              <h3 className="text-[15px] font-semibold text-ink mb-1">Your Tracking Link</h3>
+              <p className="text-[12px] text-ink-3 mb-3">Share this link with your respondents</p>
+              <div className="rounded-2xl border border-line bg-surface p-4 space-y-3">
+                <p className="font-mono text-[11.5px] text-ink-2 break-all bg-fill p-2.5 rounded-xl select-all">
+                  {`https://api.vmhgroupsmr.com/#/prescreener?pid=${study.project_id}&vid=${user?.username || "VND"}&uid=[YOUR_UID]`}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Copy size={13} />}
+                    onClick={() => {
+                      navigator.clipboard?.writeText?.(
+                        `https://api.vmhgroupsmr.com/#/prescreener?pid=${study.project_id}&vid=${user?.username || "VND"}&uid=[YOUR_UID]`
+                      );
+                      toast("Tracking link copied!", "success");
+                    }}
+                  >
+                    Copy Link
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<ExternalLink size={13} />}
+                    onClick={() =>
+                      window.open(
+                        `https://api.vmhgroupsmr.com/#/prescreener?pid=${study.project_id}&vid=${user?.username || "VND"}&uid=TEST_${Date.now()}`,
+                        "_blank"
+                      )
+                    }
+                  >
+                    Test Link
+                  </Button>
+                </div>
               </div>
-              <Button
-                size="sm"
-                variant="tinted"
-                icon={<Plus size={13} />}
-                onClick={() => {
-                  onAssign(study);
-                  onClose();
-                }}
-              >
-                Assign vendor
-              </Button>
             </div>
+          ) : (
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-[15px] font-semibold text-ink">Assigned Supply Partners</h3>
+                  <p className="text-[12px] text-ink-3">Vendors with live tracking access to this study</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="tinted"
+                  icon={<Plus size={13} />}
+                  onClick={() => {
+                    onAssign(study);
+                    onClose();
+                  }}
+                >
+                  Assign vendor
+                </Button>
+              </div>
 
             {allotmentsQuery.loading ? (
               <div className="space-y-2">
@@ -1068,6 +1148,7 @@ function StudyDetailDrawer({
               </ul>
             )}
           </div>
+        )}
         </div>
       </Modal>
 

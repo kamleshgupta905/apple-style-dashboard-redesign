@@ -20,7 +20,7 @@ import {
   type Column,
 } from "../components/ui";
 import { useFeedback } from "../components/feedback";
-import { ALL_MENU_IDS, MENU_TREE, MenuItemNode, PERMS, usePermissions } from "../lib/permissions";
+import { ALL_MENU_IDS, MENU_TREE, MenuItemNode, PERMS, VENDOR_DEFAULT_PERMISSIONS, usePermissions } from "../lib/permissions";
 import { cn } from "../utils/cn";
 
 interface User {
@@ -326,11 +326,11 @@ function UserForm({
     });
 
     const initSet = new Set<number>();
-    if (u?.menu_permissions && Array.isArray(u.menu_permissions)) {
+    if (u?.menu_permissions && Array.isArray(u.menu_permissions) && u.menu_permissions.length > 0) {
       u.menu_permissions.forEach((id) => initSet.add(Number(id)));
     } else if (!u) {
-      // Default permissions for new users
-      [7, 701, 702].forEach((id) => initSet.add(id));
+      // Default permissions for new users (Default role is 3 = Vendor)
+      VENDOR_DEFAULT_PERMISSIONS.forEach((id) => initSet.add(id));
     }
     setCheckedIds(initSet);
   }
@@ -338,14 +338,14 @@ function UserForm({
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const val = e.target.value;
     setF((p) => ({ ...p, [k]: val }));
-    if (k === "role_id" && !u) {
+    if (k === "role_id") {
       const rid = Number(val);
       if (rid === 1 || rid === 2) {
         setCheckedIds(new Set(ALL_MENU_IDS));
-      } else if (rid === 8) {
-        setCheckedIds(new Set([1, 101, 7, 701, 9, 901, 10, 1001]));
+      } else if (rid === 3) {
+        setCheckedIds(new Set(VENDOR_DEFAULT_PERMISSIONS));
       } else {
-        setCheckedIds(new Set([7, 701, 702]));
+        setCheckedIds(new Set(VENDOR_DEFAULT_PERMISSIONS));
       }
     }
   };
@@ -586,14 +586,23 @@ function UserForm({
       ) : (
         <div className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="secondary" onClick={selectAll}>
                 Select all
               </Button>
               <Button size="sm" variant="ghost" onClick={deselectAll}>
                 Deselect all
               </Button>
-              <span className="text-[12px] font-semibold text-ink-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setCheckedIds(new Set(VENDOR_DEFAULT_PERMISSIONS))}
+                className="!text-orange hover:!bg-orange-soft"
+                title="Apply standard permissions for supply vendors"
+              >
+                Set Vendor defaults
+              </Button>
+              <span className="text-[12px] font-semibold text-ink-2 ml-1">
                 {checkedIds.size} of {ALL_MENU_IDS.length} enabled
               </span>
             </div>

@@ -222,6 +222,39 @@ export const PERMS = {
   API_KEYS: 1404,
 } as const;
 
+/**
+ * Standard Default Permissions for Supply Vendors (Role ID 3)
+ * Gives access only to:
+ * - Overview (KPIs & Traffic chart)
+ * - My Assigned Surveys (Directory view with client masking)
+ * - Traffic Leads Stream (Their panel's clicks)
+ * - Vendor Payments (Payouts & Ledger)
+ * - API Documentation & Callbacks
+ *
+ * Strictly EXCLUDES: Clients, Other Vendors, Fraud policies, User management, Team directory.
+ */
+export const VENDOR_DEFAULT_PERMISSIONS: number[] = [
+  PERMS.OVERVIEW, // 1
+  PERMS.OVERVIEW_KPIS, // 101
+  PERMS.OVERVIEW_CHARTS, // 102
+
+  PERMS.SURVEYS, // 7
+  PERMS.SURVEYS_VIEW, // 701
+
+  PERMS.LEADS, // 9
+  PERMS.LEADS_STREAM, // 901
+  PERMS.LEADS_SEARCH, // 902
+  PERMS.LEADS_EXPORT, // 904
+
+  PERMS.PAYMENTS, // 10
+  PERMS.PAYMENTS_LEDGER, // 1001
+  PERMS.PAYMENTS_EXPORT, // 1004
+
+  PERMS.API, // 14
+  PERMS.API_DOCS, // 1401
+  PERMS.API_WEBHOOKS, // 1403
+];
+
 export function getUserPermissionSet(user: AuthUser | null | undefined): Set<number> {
   if (!user) return new Set();
   const rawList = [
