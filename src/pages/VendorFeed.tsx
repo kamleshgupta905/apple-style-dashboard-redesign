@@ -46,7 +46,7 @@ export function VendorFeed() {
             return {
               survey_id: a.project_id,
               survey_name: p.project_name,
-              client: p.client_name,
+              client: "VMH GROUP",
               cpi: Number(num(a.vendor_cpi).toFixed(2)),
               quota_limit: num(a.quota_limit, 100),
               completes_recorded: num(a.complete_count, 0),

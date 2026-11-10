@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
+import { CheckCircle2, AlertTriangle, RefreshCw, ShieldCheck } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 interface Question {
@@ -76,6 +76,7 @@ export function Prescreener() {
   const [blockReason, setBlockReason] = useState<string>("");
   const [redirectCountdown, setRedirectCountdown] = useState<number>(3);
   const [finalUrl, setFinalUrl] = useState<string>("");
+  const [dbLiveUrl, setDbLiveUrl] = useState<string>("");
 
   // Parse URL Parameters
   const params = new URLSearchParams(
@@ -92,14 +93,30 @@ export function Prescreener() {
     : `RESP_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
   const targetParam = params.get("target") || "";
 
-  // Browser Tab Title
+  // Browser Tab Title - Always VMH GROUP Branding
   useEffect(() => {
     const prevTitle = document.title;
-    document.title = "CALIBR8";
+    document.title = "VMH GROUP • Research Study Screener";
     return () => {
       document.title = prevTitle;
     };
   }, []);
+
+  // Fetch real study live_url from database if target is not passed in query
+  useEffect(() => {
+    if (pid && !targetParam) {
+      supabase
+        .from("smr_projects")
+        .select("live_url")
+        .eq("project_id", pid)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.live_url) {
+            setDbLiveUrl(data.live_url);
+          }
+        });
+    }
+  }, [pid, targetParam]);
 
   // Initial Security & Duplicate Check
   useEffect(() => {
@@ -158,21 +175,26 @@ export function Prescreener() {
     setStatus("connecting");
 
     // Resolve Final Target Survey URL
-    let resolved = targetParam;
-    if (!resolved) {
-      resolved = `https://res.zamplia.com/?vid=2138&isMap=1&sid=${encodeURIComponent(pid)}&username=${encodeURIComponent(vid)}&cid=42&transaction_id=${encodeURIComponent(uid)}&rid=${encodeURIComponent(uid)}`;
-    } else {
-      resolved = resolved
-        .replace(/\[#UID#\]/g, uid)
-        .replace(/\[identifier\]/g, uid)
-        .replace(/\[RESPONDENT_ID\]/g, uid)
-        .replace(/\[UID\]/g, uid)
-        .replace(/\[uid\]/g, uid)
-        .replace(/vmhgroupss/g, uid);
+    const rawTarget = targetParam || dbLiveUrl;
+    let resolved = "";
+    if (rawTarget) {
+      resolved = rawTarget
+        .replace(/\[#UID#\]/gi, uid)
+        .replace(/\[identifier\]/gi, uid)
+        .replace(/\[RESPONDENT_ID\]/gi, uid)
+        .replace(/\[TransactionId\]/gi, uid)
+        .replace(/\{\{UID\}\}/gi, uid)
+        .replace(/\[UID\]/gi, uid)
+        .replace(/\[uid\]/gi, uid)
+        .replace(/\[rid\]/gi, uid)
+        .replace(/\[RID\]/gi, uid)
+        .replace(/vmhgroupss/gi, uid);
       const sep = resolved.includes("?") ? "&" : "?";
       if (!resolved.includes("transaction_id") && !resolved.includes("rid") && !resolved.includes("uid=")) {
         resolved = `${resolved}${sep}transaction_id=${encodeURIComponent(uid)}&rid=${encodeURIComponent(uid)}`;
       }
+    } else {
+      resolved = `https://res.zamplia.com/?vid=2138&isMap=1&sid=${encodeURIComponent(pid)}&username=${encodeURIComponent(vid)}&cid=42&transaction_id=${encodeURIComponent(uid)}&rid=${encodeURIComponent(uid)}`;
     }
 
     setFinalUrl(resolved);
@@ -194,8 +216,34 @@ export function Prescreener() {
 
   return (
     <div className="min-h-screen w-full bg-[#f8fafc] text-slate-800 flex flex-col items-center justify-center p-4 sm:p-6 font-[-apple-system,BlinkMacSystemFont,'Segoe_UI','Inter',sans-serif]">
-      {/* Centered White Card (Calibr8 Style) */}
+      {/* Centered White Card (VMH Group Research Screener) */}
       <div className="relative w-full max-w-[560px] bg-white rounded-[32px] p-7 sm:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.06)] border border-slate-100">
+        
+        {/* VMH GROUP Top Branding Header */}
+        <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/vmh-logo.png"
+              alt="VMH GROUP"
+              className="h-7 w-auto object-contain rounded"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = "none";
+              }}
+            />
+            <div>
+              <div className="text-[13px] font-bold tracking-tight text-slate-900 uppercase">
+                VMH GROUP
+              </div>
+              <div className="text-[10px] text-slate-400 font-medium">
+                Research Pre-Screener Gate
+              </div>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+            Verified Session
+          </span>
+        </div>
         
         {/* State 1: Verification Check */}
         {status === "checking" && (
@@ -329,6 +377,12 @@ export function Prescreener() {
             </a>
           </div>
         )}
+
+        {/* VMH GROUP Encrypted Footer */}
+        <div className="mt-7 pt-4 border-t border-slate-100 flex items-center justify-center text-[11px] text-slate-400 gap-1.5">
+          <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+          <span>VMH GROUP SMR • 256-bit Encrypted Research Verification</span>
+        </div>
       </div>
     </div>
   );

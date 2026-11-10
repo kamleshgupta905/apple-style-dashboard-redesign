@@ -23,7 +23,7 @@ export function VendorRouter() {
 
   useEffect(() => {
     const prevTitle = document.title;
-    document.title = "SMR Partner Router";
+    document.title = "VMH GROUP • Survey Router Gateway";
     return () => {
       document.title = prevTitle;
     };
@@ -98,7 +98,8 @@ export function VendorRouter() {
 
         // Smooth transition to prescreener after brief delay
         setTimeout(() => {
-          window.location.hash = `#/prescreener?vid=${encodeURIComponent(vid)}&pid=${encodeURIComponent(chosen.project_id)}&uid=${encodeURIComponent(uid)}`;
+          const targetQuery = proj.live_url ? `&target=${encodeURIComponent(proj.live_url)}` : "";
+          window.location.hash = `#/prescreener?vid=${encodeURIComponent(vid)}&pid=${encodeURIComponent(chosen.project_id)}&uid=${encodeURIComponent(uid)}${targetQuery}`;
         }, 700);
 
       } catch (e) {
@@ -113,6 +114,32 @@ export function VendorRouter() {
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0] text-slate-800 flex flex-col items-center justify-center p-4 sm:p-6 font-[-apple-system,BlinkMacSystemFont,'Segoe_UI','Inter',sans-serif]">
       <div className="relative w-full max-w-[540px] bg-white rounded-[32px] p-8 sm:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.06)] border border-slate-100 flex flex-col items-center text-center">
+        
+        {/* VMH GROUP Top Header */}
+        <div className="w-full flex items-center justify-between pb-4 mb-4 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/vmh-logo.png"
+              alt="VMH GROUP"
+              className="h-7 w-auto object-contain rounded"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = "none";
+              }}
+            />
+            <div className="text-left">
+              <div className="text-[13px] font-bold tracking-tight text-slate-900 uppercase">
+                VMH GROUP
+              </div>
+              <div className="text-[10px] text-slate-400 font-medium">
+                Survey Router Gateway
+              </div>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+            <ShieldCheck className="w-3 h-3 text-indigo-600" />
+            Router Active
+          </span>
+        </div>
         
         {/* State 1: Connecting / Routing */}
         {(status === "loading" || status === "routing") && (

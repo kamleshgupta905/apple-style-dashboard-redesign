@@ -70,16 +70,38 @@ export function SurveyCallback() {
 
         if (target) {
           const finalUrl = target
-            .replace(/\[UID\]/gi, uid)
+            .replace(/\[#UID#\]/gi, uid)
+            .replace(/\[identifier\]/gi, uid)
             .replace(/\[RESPONDENT_ID\]/gi, uid)
+            .replace(/\[TransactionId\]/gi, uid)
+            .replace(/\{\{UID\}\}/gi, uid)
+            .replace(/\[UID\]/gi, uid)
+            .replace(/\[uid\]/gi, uid)
+            .replace(/\[rid\]/gi, uid)
+            .replace(/\[RID\]/gi, uid)
             .replace(/\[ID\]/gi, uid)
             .replace(/\[PID\]/gi, pid)
+            .replace(/\[pid\]/gi, pid)
             .replace(/\[STUDY_ID\]/gi, pid);
           setVendorCallbackUrl(finalUrl);
           setCountdown(5);
         }
       });
   }, [vid, isComplete, isTerm, isOverquota, isSecurity, uid, pid]);
+
+  useEffect(() => {
+    const prevTitle = document.title;
+    document.title = isComplete
+      ? "VMH GROUP • Survey Completed"
+      : isTerm
+      ? "VMH GROUP • Survey Terminated"
+      : isOverquota
+      ? "VMH GROUP • Survey Quota Full"
+      : "VMH GROUP • Verification Notice";
+    return () => {
+      document.title = prevTitle;
+    };
+  }, [isComplete, isTerm, isOverquota]);
 
   useEffect(() => {
     if (countdown === null) return;
@@ -137,6 +159,32 @@ export function SurveyCallback() {
     <div className="min-h-screen w-full bg-gradient-to-b from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0] text-slate-800 flex flex-col items-center justify-center p-4 sm:p-6 font-[-apple-system,BlinkMacSystemFont,'Segoe_UI','Inter',sans-serif]">
       {/* Main Card */}
       <div className="relative w-full max-w-[560px] bg-white rounded-[32px] p-7 sm:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.06)] border border-slate-100 flex flex-col items-center text-center">
+        
+        {/* VMH GROUP Top Branding Header */}
+        <div className="w-full flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/vmh-logo.png"
+              alt="VMH GROUP"
+              className="h-7 w-auto object-contain rounded"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = "none";
+              }}
+            />
+            <div className="text-left">
+              <div className="text-[13px] font-bold tracking-tight text-slate-900 uppercase">
+                VMH GROUP
+              </div>
+              <div className="text-[10px] text-slate-400 font-medium">
+                Research Gateway • SMR Verification
+              </div>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
+            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+            Verified Outcome
+          </span>
+        </div>
         
         {/* Top Outcome Icon & Status Badge */}
         {isComplete && (
@@ -340,7 +388,7 @@ export function SurveyCallback() {
         {/* Footer */}
         <div className="mt-8 pt-4 border-t border-slate-100 w-full flex items-center justify-center text-[11px] text-slate-400 gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
-          <span>SMR Research Gate • 256-bit Encrypted Verification</span>
+          <span>VMH GROUP SMR • 256-bit Encrypted Research Verification</span>
         </div>
       </div>
     </div>
