@@ -32,16 +32,22 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdncHV1ZnVqcGFtZWlpZWxpbXB3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2MDUwODcsImV4cCI6MjA3NTE4MTA4N30.qE34BAEDls62iYqQTWzegL7dVsOkoBdzZ94HhQHd1TM' }}
           VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://api.vmhgroupsmr.com/api' }}
 
-      - name: Add .htaccess for SPA routing
+      - name: Add .htaccess for SMR Gateway & SPA routing
         run: |
           cat << 'EOF' > dist/.htaccess
           <IfModule mod_rewrite.c>
-            RewriteEngine On
-            RewriteBase /
-            RewriteRule ^index\.html$ - [L]
-            RewriteCond %{REQUEST_FILENAME} !-f
-            RewriteCond %{REQUEST_FILENAME} !-d
-            RewriteRule . /index.html [L]
+          <IfModule mod_negotiation.c>
+              Options -MultiViews
+          </IfModule>
+          RewriteEngine On
+          RewriteCond %{REQUEST_FILENAME} -d [OR]
+          RewriteCond %{REQUEST_FILENAME} -f
+          RewriteRule ^ ^$1 [N]
+          RewriteCond %{REQUEST_URI} (\.\w+$) [NC]
+          RewriteRule ^(.*)$ public/$1 
+          RewriteCond %{REQUEST_FILENAME} !-d
+          RewriteCond %{REQUEST_FILENAME} !-f
+          RewriteRule ^ index.php
           </IfModule>
           EOF
 
