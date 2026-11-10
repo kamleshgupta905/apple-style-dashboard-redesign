@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Loader2, AlertCircle, ArrowRight, ShieldCheck, CheckCircle2, Layers } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { num } from "../lib/utils";
+import { findNextAvailableStudy } from "../lib/waterfall";
 
 export function VendorRouter() {
   const [status, setStatus] = useState<"loading" | "routing" | "no_studies" | "invalid_vendor">("loading");
@@ -46,61 +47,21 @@ export function VendorRouter() {
 
         setVendorName(vendorData?.vendor_name || vid);
 
-        // 2. Fetch Active Allotments for this Vendor
-        const { data: allotments, error: allotErr } = await supabase
-          .from("smr_vendor_allotments")
-          .select("*")
-          .eq("vendor_id", vid)
-          .eq("status", "Active");
-
-        if (allotErr || !allotments || allotments.length === 0) {
+        // 2. Find Best Available Live Study via Smart Waterfall (Auto-Pause checks included)
+        const candidate = await findNextAvailableStudy("", vid, uid);
+        if (!candidate) {
           setStatus("no_studies");
           return;
         }
 
-        // Filter out over-quota allotments
-        const availableAllotments = allotments.filter((a) => {
-          const completes = num(a.complete_count, 0);
-          const limit = num(a.quota_limit, 100);
-          return limit <= 0 || completes < limit;
-        });
-
-        if (availableAllotments.length === 0) {
-          setStatus("no_studies");
-          return;
-        }
-
-        // 3. Verify Associated Projects are Live
-        const projectIds = availableAllotments.map((a) => a.project_id);
-        const { data: liveProjects } = await supabase
-          .from("smr_projects")
-          .select("project_id, project_name, status, live_url, cpi")
-          .in("project_id", projectIds)
-          .eq("status", "Live");
-
-        const liveProjectMap = new Map((liveProjects || []).map((p) => [p.project_id, p]));
-
-        // Match available allotments with live projects
-        const validCandidates = availableAllotments
-          .filter((a) => liveProjectMap.has(a.project_id))
-          .sort((a, b) => num(b.vendor_cpi) - num(a.vendor_cpi)); // prioritize highest CPI
-
-        if (validCandidates.length === 0) {
-          setStatus("no_studies");
-          return;
-        }
-
-        // Pick top available candidate
-        const chosen = validCandidates[0];
-        const proj = liveProjectMap.get(chosen.project_id)!;
-        setMatchedStudy({ id: chosen.project_id, name: proj.project_name });
+        setMatchedStudy({ id: candidate.project_id, name: candidate.project_name });
         setStatus("routing");
 
         // Smooth transition to prescreener after brief delay
         setTimeout(() => {
-          const targetQuery = proj.live_url ? `&target=${encodeURIComponent(proj.live_url)}` : "";
-          window.location.hash = `#/prescreener?vid=${encodeURIComponent(vid)}&pid=${encodeURIComponent(chosen.project_id)}&uid=${encodeURIComponent(uid)}${targetQuery}`;
-        }, 700);
+          const targetQuery = candidate.live_url ? `&target=${encodeURIComponent(candidate.live_url)}` : "";
+          window.location.hash = `#/prescreener?vid=${encodeURIComponent(vid)}&pid=${encodeURIComponent(candidate.project_id)}&uid=${encodeURIComponent(uid)}${targetQuery}`;
+        }, 600);
 
       } catch (e) {
         console.warn("Routing check error:", e);

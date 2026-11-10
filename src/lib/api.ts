@@ -499,6 +499,10 @@ export const api = {
       if (path === "/manage/projects" || path === "/manage/projects/save" || path === "/manage/projects/duplicate") {
         const p = body;
         const isDuplicate = path.includes("duplicate");
+        const autoPause = p.auto_pause_clicks !== undefined && p.auto_pause_clicks !== null
+          ? Number(p.auto_pause_clicks)
+          : (p.auto_pause !== undefined ? Number(p.auto_pause) : 50);
+
         const payload: any = {
           project_id: p.project_id || `PRJ-${Date.now().toString().slice(-6)}`,
           project_name: isDuplicate ? `${p.name || p.project_name} (Clone)` : p.name || p.project_name,
@@ -509,6 +513,7 @@ export const api = {
           ir: Number(p.ir) || 0,
           loi: Number(p.loi) || 0,
           live_url: p.live_url || p.liveUrl || null,
+          auto_pause_clicks: autoPause,
           status: p.status || "Live",
           is_cloned: isDuplicate || !!p.is_cloned,
           updated_at: new Date().toISOString(),

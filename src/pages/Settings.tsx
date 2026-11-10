@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyRound, LogOut, Moon, Sun } from "lucide-react";
+import { KeyRound, LogOut, Moon, Sun, Layers, ShieldCheck, Zap } from "lucide-react";
 import { api, type AuthUser } from "../lib/api";
 import { Button, Card, Field, Input, PageHeader, SectionTitle, Segmented } from "../components/ui";
 import { useFeedback } from "../components/feedback";
@@ -71,6 +71,50 @@ export function Settings({ user, dark, onSetDark, onLogout }: { user: AuthUser; 
           <p className="mt-3 flex items-center gap-2 text-[13px] text-ink-3">
             {dark ? <Moon size={14} /> : <Sun size={14} />} Currently using the {dark ? "dark" : "light"} theme.
           </p>
+        </Card>
+
+        <Card className="p-5 sm:p-6">
+          <SectionTitle
+            title="Survey Automation & Smart Routing"
+            hint="Global rules applied to incoming respondents & study conversions"
+          />
+          <div className="space-y-4 pt-1">
+            <div className="rounded-2xl border border-line p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500">
+                  <Zap size={18} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-semibold text-ink">Auto-Pause Inactive Studies</p>
+                  <p className="text-[12px] text-ink-3">
+                    If a study receives 50 clicks (or your customized click limit) without delivering a single complete (0 completes), SMR automatically pauses routing to prevent traffic loss.
+                  </p>
+                </div>
+              </div>
+              <p className="text-[11px] text-ink-3 font-mono bg-fill px-3 py-2 rounded-xl">
+                Configurable per study in Surveys → Edit Study (e.g. 10, 30, 50 clicks).
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-line p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-500">
+                  <Layers size={18} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-semibold text-ink">Smart Waterfall Auto-Reroute</p>
+                  <p className="text-[12px] text-ink-3">
+                    • <strong>Screenout / Quota / Security:</strong> Instantly connects respondent to another live survey without showing any negative terminate screen.<br />
+                    • <strong>Complete:</strong> Verified Complete page is shown for exactly 5 seconds, then auto-redirects respondent to another available paid study.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-[11px] font-mono text-emerald-600 bg-emerald-500/10 px-3 py-2 rounded-xl">
+                <span>Waterfall Router: Active</span>
+                <span className="font-semibold">Seamless Transition Enabled</span>
+              </div>
+            </div>
+          </div>
         </Card>
 
         {can(PERMS.USERS_PASSWORDS) && (

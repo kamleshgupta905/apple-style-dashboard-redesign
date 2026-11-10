@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, AlertTriangle, RefreshCw, ShieldCheck } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import {
+  recordStudyClickAndCheckAutoPause,
+  findNextAvailableStudy,
+  markStudyAttempted,
+} from "../lib/waterfall";
 
 interface Question {
   id: string;
@@ -66,25 +71,14 @@ export function Prescreener() {
     };
   }, []);
 
-  // Fetch real study live_url from database if target is not passed in query
+  // Entrance Click tracking, Auto-pause check, and Security duplicate validation
   useEffect(() => {
-    if (pid && !targetParam) {
-      supabase
-        .from("smr_projects")
-        .select("live_url")
-        .eq("project_id", pid)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data?.live_url) {
-            setDbLiveUrl(data.live_url);
-          }
-        });
-    }
-  }, [pid, targetParam]);
+    if (!pid) return;
 
-  // Initial Security & Duplicate Check
-  useEffect(() => {
-    const timer = setTimeout(async () => {
+    markStudyAttempted(uid, pid);
+
+    const initSession = async () => {
+      // 1. Check duplicate session in fraud logs
       try {
         const { data: dup } = await supabase
           .from("smr_fraud_logs")
@@ -102,11 +96,33 @@ export function Prescreener() {
         console.warn("Security check bypass:", e);
       }
 
-      setStatus("screening");
-    }, 500);
+      // 2. Track click entrance and automatically evaluate 50-clicks auto-pause condition
+      try {
+        const result = await recordStudyClickAndCheckAutoPause(pid, vid, uid);
+        if (result.liveUrl && !targetParam) {
+          setDbLiveUrl(result.liveUrl);
+        }
 
+        // If the study was auto-paused (e.g. 50 clicks with 0 completes) or is paused:
+        if (result.autoPaused || !result.isLive) {
+          console.warn(`[Prescreener Waterfall] Study #${pid} is paused. Rerouting respondent to next available study.`);
+          const next = await findNextAvailableStudy(pid, vid, uid);
+          if (next) {
+            const nextTarget = next.live_url ? `&target=${encodeURIComponent(next.live_url)}` : "";
+            window.location.hash = `#/prescreener?vid=${encodeURIComponent(vid)}&pid=${encodeURIComponent(next.project_id)}&uid=${encodeURIComponent(uid)}${nextTarget}&rerouted=1`;
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("Entrance check error:", e);
+      }
+
+      setStatus("screening");
+    };
+
+    const timer = setTimeout(initSession, 300);
     return () => clearTimeout(timer);
-  }, [uid, pid]);
+  }, [uid, pid, vid, targetParam]);
 
   const currentQ = QUESTIONS[step];
   const percent = Math.round(((step + 1) / QUESTIONS.length) * 100);

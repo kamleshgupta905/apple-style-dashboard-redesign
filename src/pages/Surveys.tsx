@@ -678,6 +678,45 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
     { key: "loi", header: "LOI", align: "right", render: (p) => `${p.loi} min` },
     { key: "ir", header: "IR", align: "right", render: (p) => `${p.ir}%` },
     { key: "target_completes", header: "Target", align: "right", render: (p) => num(p.target_completes).toLocaleString() },
+    {
+      key: "clicks_completes",
+      header: "Clicks / Comp",
+      align: "right",
+      sortValue: (p) => num(p.total_clicks),
+      render: (p) => (
+        <div className="text-right">
+          <span className="tabular font-medium text-[13px] text-ink">{num(p.total_clicks)}</span>
+          <span className="text-ink-3 text-[12px]"> / </span>
+          <span className={num(p.total_completes) > 0 ? "font-semibold text-green tabular text-[13px]" : "text-ink-3 tabular text-[13px]"}>
+            {num(p.total_completes)}
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: "auto_pause_clicks",
+      header: "Auto-Pause",
+      align: "right",
+      render: (p) => {
+        const limit = num(p.auto_pause_clicks, 50);
+        const clicks = num(p.total_clicks);
+        const comp = num(p.total_completes);
+        const isPausedByCap = p.status === "Pause" && limit > 0 && clicks >= limit && comp === 0;
+
+        return (
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-mono ${
+              isPausedByCap
+                ? "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-semibold border border-amber-200 dark:border-amber-800/60"
+                : "bg-fill text-ink-2"
+            }`}
+            title={isPausedByCap ? `Auto-paused: reached ${clicks} clicks without a complete (limit: ${limit})` : `Auto-pauses at ${limit} clicks if 0 completes`}
+          >
+            {isPausedByCap ? "Auto-Paused" : `${limit} clk limit`}
+          </span>
+        );
+      },
+    },
     { key: "status", header: "Status", render: (p) => <StatusBadge status={p.status} /> },
     {
       key: "allotments",
@@ -1222,8 +1261,11 @@ function StudyForm({
         <Field label="IR (%)">
           <Input type="number" min="1" max="100" value={f.ir} onChange={set("ir")} />
         </Field>
-        <Field label="Auto-pause after clicks" hint="Pause routing once this many clicks arrive without a complete">
-          <Input type="number" min="0" value={f.auto_pause} onChange={set("auto_pause")} />
+        <Field
+          label="Auto-pause click threshold"
+          hint="Automatically pauses study if this many clicks arrive with 0 completes (e.g. 50, 30, 10). Set 0 to disable."
+        >
+          <Input type="number" min="0" value={f.auto_pause} onChange={set("auto_pause")} placeholder="50" />
         </Field>
         <Field label="Client live URL" className="sm:col-span-2" hint="Use [RESPONDENT_ID] where the vendor UID should be injected">
           <Input value={f.live_url} onChange={set("live_url")} placeholder="https://client.com/start?uid=[RESPONDENT_ID]" />
