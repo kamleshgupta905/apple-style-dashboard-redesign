@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   BadgeDollarSign,
   BarChart3,
   Building2,
+  ChevronDown,
   Command,
   Database,
   FileBarChart2,
@@ -223,7 +224,21 @@ export function Shell({
   const [drawer, setDrawer] = useState(false);
   const [palette, setPalette] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const current = NAV.find((n) => n.id === route);
+
+  useEffect(() => {
+    const closeOnOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    if (userMenuOpen) {
+      document.addEventListener("mousedown", closeOnOutside);
+    }
+    return () => document.removeEventListener("mousedown", closeOnOutside);
+  }, [userMenuOpen]);
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
@@ -326,15 +341,92 @@ export function Shell({
           <IconButton label={dark ? "Switch to light mode" : "Switch to dark mode"} onClick={onToggleTheme}>
             {dark ? <Sun size={18} /> : <Moon size={18} />}
           </IconButton>
-          {/* User pill in top bar matching api.vmhgroupsmr.com */}
-          <div className="ml-1 flex items-center gap-2 border-l border-line pl-2">
-            <div className="hidden text-right leading-tight sm:block">
-              <p className="text-[13px] font-semibold text-ink">{user.name}</p>
-              <p className="text-[11px] font-medium text-ink-3">{user.role_name || "Admin"}</p>
-            </div>
-            <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-line bg-white p-0.5 shadow-sm">
-              <img src="/vmh-logo.png" alt="VMH User" className="h-full w-full object-contain" />
-            </div>
+          {/* Sign out shortcut button in top bar header */}
+          <IconButton
+            label="Sign out"
+            onClick={onLogout}
+            className="text-ink-3 hover:text-red hover:bg-red-soft transition-colors"
+          >
+            <LogOut size={17} />
+          </IconButton>
+
+          {/* User profile dropdown in top bar */}
+          <div ref={userMenuRef} className="relative ml-1">
+            <button
+              type="button"
+              onClick={() => setUserMenuOpen((v) => !v)}
+              className="press flex items-center gap-2 rounded-full border border-line bg-surface/80 py-1 pl-2.5 pr-1.5 shadow-sm hover:border-line-strong hover:bg-surface transition-all cursor-pointer"
+              title="User profile & options"
+            >
+              <div className="hidden text-right leading-tight sm:block pr-1">
+                <p className="text-[13px] font-semibold text-ink leading-none">{user.name}</p>
+                <p className="text-[11px] font-medium text-ink-3 mt-0.5">{user.role_name || "Admin"}</p>
+              </div>
+              <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-line bg-white p-0.5 shadow-sm">
+                <img src="/vmh-logo.png" alt="VMH User" className="h-full w-full object-contain" />
+              </div>
+              <ChevronDown size={14} className={cn("text-ink-3 transition-transform duration-200", userMenuOpen && "rotate-180")} />
+            </button>
+
+            {userMenuOpen && (
+              <div className="anim-fade-up absolute right-0 top-full mt-2 w-64 rounded-2xl border border-line bg-surface p-2 shadow-2xl z-50 backdrop-blur-xl">
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-fill/50">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-white p-1 shadow-sm">
+                    <img src="/vmh-logo.png" alt="VMH User" className="h-full w-full object-contain" />
+                  </div>
+                  <div className="min-w-0 flex-1 leading-tight">
+                    <p className="truncate text-[13.5px] font-semibold text-ink">{user.name}</p>
+                    <p className="truncate text-[11px] text-ink-3">@{user.username || "user"}</p>
+                    <span className="mt-1 inline-block rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                      {user.role_name || "Admin"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="my-1.5 border-t border-line" />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    window.location.hash = "/settings";
+                  }}
+                  className="press flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium text-ink hover:bg-fill transition-colors cursor-pointer text-left"
+                >
+                  <Settings size={16} className="text-ink-3" />
+                  <span>Account Settings</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    onToggleTheme();
+                  }}
+                  className="press flex w-full items-center justify-between rounded-xl px-3 py-2 text-[13px] font-medium text-ink hover:bg-fill transition-colors cursor-pointer text-left"
+                >
+                  <span className="flex items-center gap-2.5">
+                    {dark ? <Sun size={16} className="text-orange" /> : <Moon size={16} className="text-ink-3" />}
+                    <span>{dark ? "Light Mode" : "Dark Mode"}</span>
+                  </span>
+                  <span className="text-[11px] text-ink-3 capitalize">{dark ? "Dark" : "Light"}</span>
+                </button>
+
+                <div className="my-1.5 border-t border-line" />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    onLogout();
+                  }}
+                  className="press flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-red hover:bg-red-soft transition-colors cursor-pointer text-left"
+                >
+                  <LogOut size={16} />
+                  <span>Sign out</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>

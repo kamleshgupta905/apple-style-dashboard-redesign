@@ -193,9 +193,17 @@ export default function App() {
   }, [user]);
 
   const logout = useCallback(() => {
-    auth.clear();
+    try {
+      auth.clear();
+      sessionStorage.clear();
+      localStorage.removeItem("smr_auth_token");
+      localStorage.removeItem("smr_auth_user");
+    } catch (e) {
+      console.warn("Storage clear error:", e);
+    }
     setUser(null);
-    window.location.hash = "/dashboard";
+    window.location.hash = "/";
+    window.location.reload();
   }, []);
 
   // Public respondent flows (no login or dashboard chrome required)
