@@ -120,7 +120,7 @@ export async function login(username: string, password: string) {
         name: user.name,
         username: user.username,
         email: user.email,
-        role_name: user.role_name || (user.role_id === 1 ? "Admin" : "Employee"),
+        role_name: user.role_name === "Employee" ? "Vendor" : (user.role_name || (user.role_id === 1 ? "Admin" : user.role_id === 2 ? "Manager" : "Vendor")),
         role_id: user.role_id || 3,
         permissions: Array.isArray(user.menu_permissions) ? user.menu_permissions : [],
         menu_permissions: Array.isArray(user.menu_permissions) ? user.menu_permissions : [],
@@ -242,7 +242,7 @@ export const api = {
           data: [
             { id: 1, name: "Admin" },
             { id: 2, name: "Manager" },
-            { id: 3, name: "Employee" },
+            { id: 3, name: "Vendor" },
           ],
         } as unknown as T;
       }
@@ -474,7 +474,7 @@ export const api = {
           email: u.email || null,
           mobile_no: u.mobile_no || null,
           role_id: Number(u.role_id) || 3,
-          role_name: Number(u.role_id) === 1 ? "Admin" : Number(u.role_id) === 2 ? "Manager" : "Employee",
+          role_name: Number(u.role_id) === 1 ? "Admin" : Number(u.role_id) === 2 ? "Manager" : "Vendor",
           menu_permissions: u.menu_permissions || [],
           granular_permissions: u.granular_permissions || {},
           status: u.status || "active",

@@ -68,7 +68,7 @@ export function Team() {
           </div>
         </div>
       ) },
-    { key: "role", header: "Role", render: (m) => <Badge tone="blue">{m.role_name || ({ 1: "Admin", 2: "Manager", 3: "Employee" } as Record<number, string>)[m.role_id || 0] || "Member"}</Badge> },
+    { key: "role", header: "Role", render: (m) => <Badge tone={m.role_id === 1 ? "purple" : m.role_id === 2 ? "blue" : "orange"}>{m.role_name === "Employee" ? "Vendor" : (m.role_name || ({ 1: "Admin", 2: "Manager", 3: "Vendor" } as Record<number, string>)[m.role_id || 0] || "Vendor")}</Badge> },
     { key: "mobile_no", header: "Phone", render: (m) => m.mobile_no || "—" },
     { key: "active", header: "Active", render: (m) => <Toggle checked={active(m)} onChange={(v) => toggle(m, v)} label="Active" /> },
     { key: "act", header: "", align: "right", render: (m) => <Button size="sm" variant="dangerSoft" aria-label="Remove member" icon={<Trash2 size={14} />} onClick={() => remove(m)} /> },
@@ -128,7 +128,7 @@ function MemberForm({ open, onClose, onSaved }: { open: boolean; onClose: () => 
           <Select value={f.role_id} onChange={set("role_id")}>
             <option value="1">Admin</option>
             <option value="2">Manager</option>
-            <option value="3">Employee</option>
+            <option value="3">Vendor</option>
           </Select>
         </Field>
       </div>

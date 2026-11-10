@@ -159,7 +159,9 @@ export function Users() {
       key: "role",
       header: "Role",
       render: (u) => (
-        <Badge tone={u.role_id === 1 ? "purple" : u.role_id === 2 ? "blue" : "gray"}>{u.role_name}</Badge>
+        <Badge tone={u.role_id === 1 ? "purple" : u.role_id === 2 ? "blue" : "orange"}>
+          {u.role_name === "Employee" ? "Vendor" : (u.role_name || (u.role_id === 3 ? "Vendor" : "Member"))}
+        </Badge>
       ),
     },
     ...(isAdmin
@@ -499,11 +501,11 @@ function UserForm({
           <Field label="Role">
             <Select value={f.role_id} onChange={set("role_id")}>
               {(roles.length
-                ? roles
+                ? roles.map((r) => (r.name === "Employee" ? { ...r, name: "Vendor" } : r))
                 : [
                     { id: 1, name: "Admin" },
                     { id: 2, name: "Manager" },
-                    { id: 3, name: "Employee" },
+                    { id: 3, name: "Vendor" },
                   ]
               ).map((r) => (
                 <option key={r.id} value={r.id}>
