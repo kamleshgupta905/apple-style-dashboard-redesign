@@ -31,8 +31,24 @@ interface Summary {
 }
 
 export function Leads() {
-  const { can } = usePermissions();
+  const { can, user } = usePermissions();
+  const isVendor = user?.role_id === 3 || user?.role_name === "Vendor" || user?.role_name?.toLowerCase().includes("vendor");
   const [live, setLive] = useState(true);
+
+  const vendorsQuery = useQuery(async () => (await api.get<{ data: any[] }>("/vendors")).data || [], []);
+  const uName = (user?.username || "").toLowerCase().trim();
+  const rName = (user?.name || "").toLowerCase().trim();
+
+  const activeVendorCode = useMemo(() => {
+    if (!isVendor) return "";
+    const found = (vendorsQuery.data || []).find((v: any) => {
+      const vc = (v.vendor_code || "").toLowerCase().trim();
+      const vn = (v.vendor_name || "").toLowerCase().trim();
+      return vc === uName || vc === rName || vn === uName || vn === rName;
+    });
+    return found?.vendor_code || user?.username || "VND";
+  }, [isVendor, vendorsQuery.data, uName, rName, user]);
+
   const q = useQuery(
     async () => {
       const r = await api.get<{ data: Lead[]; summary: Summary }>("/leads", { limit: 500 });
@@ -46,19 +62,39 @@ export function Leads() {
   const [vendor, setVendor] = useState("all");
   const [open, setOpen] = useState<Lead | null>(null);
 
-  const leads = q.data?.leads || [];
-  const vendors = useMemo(() => [...new Set(leads.map((l) => l.vendor_code))], [leads]);
-  const statuses = useMemo(() => [...new Set(leads.map((l) => l.status))], [leads]);
+  // Filter leads specifically for this vendor if isVendor is true
+  const filteredLeads = useMemo(() => {
+    const raw = q.data?.leads || [];
+    if (!isVendor) return raw;
+    const vc = activeVendorCode.toLowerCase();
+    const un = uName;
+    const rn = rName;
+    return raw.filter((l) => {
+      const lvc = (l.vendor_code || "").toLowerCase().trim();
+      const lvn = (l.vendor_name || "").toLowerCase().trim();
+      return (
+        lvc === vc ||
+        lvn === vc ||
+        lvc === un ||
+        lvn === rn ||
+        (vc && lvc.includes(vc)) ||
+        (rn && lvn.includes(rn))
+      );
+    });
+  }, [q.data?.leads, isVendor, activeVendorCode, uName, rName]);
+
+  const vendors = useMemo(() => [...new Set(q.data?.leads?.map((l) => l.vendor_code) || [])], [q.data?.leads]);
+  const statuses = useMemo(() => [...new Set(filteredLeads.map((l) => l.status))], [filteredLeads]);
 
   const rows = useMemo(() => {
     const t = search.trim().toLowerCase();
-    return leads.filter(
+    return filteredLeads.filter(
       (l) =>
         (status === "all" || l.status === status) &&
-        (vendor === "all" || l.vendor_code === vendor) &&
+        (isVendor || vendor === "all" || l.vendor_code === vendor) &&
         (!t || [l.uid, l.ip_address, l.project_id, l.project_name, l.country].some((x) => (x || "").toLowerCase().includes(t))),
     );
-  }, [leads, search, status, vendor]);
+  }, [filteredLeads, search, status, vendor, isVendor]);
 
   if (q.error && !q.data) return <ErrorState message={q.error} onRetry={q.reset} />;
 
@@ -72,26 +108,46 @@ export function Leads() {
       ) },
     { key: "uid", header: "Respondent", primary: true, render: (l) => <span className="font-mono text-[13px] font-semibold">{l.uid}</span> },
     { key: "project_name", header: "Study", render: (l) => <span className="block max-w-[200px] truncate">{l.project_name}</span> },
-    { key: "vendor_code", header: "Vendor", render: (l) => <span className="font-mono text-[12.5px]">{l.vendor_code}</span> },
+    ...(!isVendor
+      ? [{ key: "vendor_code", header: "Vendor", render: (l: Lead) => <span className="font-mono text-[12.5px]">{l.vendor_code}</span> }]
+      : []),
     { key: "country", header: "Country", sortValue: (l) => l.country || "" },
     { key: "ip", header: "IP", hideMobile: true, render: (l) => <span className="block max-w-[140px] truncate font-mono text-[12px] text-ink-3">{l.ip_address}</span> },
     { key: "status", header: "Status", sortValue: (l) => l.status, render: (l) => <StatusBadge status={l.status} /> },
   ];
 
-  const tiles = [
-    { label: "Clicks", value: num(s?.total_clicks) },
-    { label: "Completes", value: num(s?.total_completes), tone: "text-green" },
-    { label: "Terminates", value: num(s?.total_terminates), tone: "text-red" },
-    { label: "Conversion", value: num(s?.conversion_rate), suffix: "%", tone: "text-accent" },
-  ];
+  const tiles = useMemo(() => {
+    if (!isVendor && s) {
+      return [
+        { label: "Clicks", value: num(s?.total_clicks) },
+        { label: "Completes", value: num(s?.total_completes), tone: "text-green" },
+        { label: "Terminates", value: num(s?.total_terminates), tone: "text-red" },
+        { label: "Conversion", value: num(s?.conversion_rate), suffix: "%", tone: "text-accent" },
+      ];
+    }
+    const clicks = filteredLeads.length;
+    const completes = filteredLeads.filter((l) => l.status === "Complete" || String(l.status) === "10").length;
+    const terminates = filteredLeads.filter((l) => l.status === "Terminate" || l.status === "Quota Full" || String(l.status) === "20" || String(l.status) === "30" || String(l.status) === "40").length;
+    const conv = clicks > 0 ? Number(((completes / clicks) * 100).toFixed(1)) : 0;
+    return [
+      { label: "My Inbound Clicks", value: clicks },
+      { label: "My Completes", value: completes, tone: "text-green" },
+      { label: "Terminates / Screenouts", value: terminates, tone: "text-red" },
+      { label: "Conversion (IR)", value: conv, suffix: "%", tone: "text-accent" },
+    ];
+  }, [isVendor, s, filteredLeads]);
 
-  const counts = (st: string) => leads.filter((l) => l.status === st).length;
+  const counts = (st: string) => filteredLeads.filter((l) => l.status === st).length;
 
   return (
     <div>
       <PageHeader
-        title="Traffic stream"
-        subtitle="Every respondent routed through the gateway, in real time."
+        title={isVendor ? "My Traffic Stream" : "Traffic stream"}
+        subtitle={
+          isVendor
+            ? `Every respondent from your panel (${activeVendorCode}) routed through the gateway, in real time.`
+            : "Every respondent routed through the gateway, in real time."
+        }
         actions={
           <>
             <Button variant="secondary" icon={live ? <Pause size={15} /> : <Play size={15} />} onClick={() => setLive((v) => !v)}>
@@ -183,12 +239,14 @@ export function Leads() {
                   <option key={x}>{x}</option>
                 ))}
               </Select>
-              <Select value={vendor} onChange={(e) => setVendor(e.target.value)} className="!h-10 !text-[14px] sm:w-44" aria-label="Vendor">
-                <option value="all">All vendors</option>
-                {vendors.map((x) => (
-                  <option key={x}>{x}</option>
-                ))}
-              </Select>
+              {!isVendor && (
+                <Select value={vendor} onChange={(e) => setVendor(e.target.value)} className="!h-10 !text-[14px] sm:w-44" aria-label="Vendor">
+                  <option value="all">All vendors</option>
+                  {vendors.map((x) => (
+                    <option key={x}>{x}</option>
+                  ))}
+                </Select>
+              )}
             </div>
             <p className="text-[13px] text-ink-3 sm:ml-auto">{rows.length} sessions</p>
           </div>
@@ -203,7 +261,7 @@ export function Leads() {
               {[
                 ["Study", `${open.project_name}`],
                 ["Study ID", open.project_id],
-                ["Vendor", `${open.vendor_name || ""} (${open.vendor_code})`],
+                ...(!isVendor ? [["Vendor", `${open.vendor_name || ""} (${open.vendor_code})`]] : []),
                 ["Country", open.country],
                 ["IP address", open.ip_address],
                 ["Reason", open.reason],

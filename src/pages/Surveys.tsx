@@ -28,11 +28,239 @@ import { AssignModal } from "../components/AssignModal";
 import { EditAllotmentModal } from "../components/EditAllotmentModal";
 import { PERMS, usePermissions } from "../lib/permissions";
 
+/* ───────────── Vendor Assigned Surveys (Only Provided Studies) ───────────── */
+function VendorAssignedSurveys() {
+  const { user } = usePermissions();
+  const { toast } = useFeedback();
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all");
+
+  const vendorsQuery = useQuery(async () => (await api.get<{ data: any[] }>("/vendors")).data || [], []);
+  const allotmentsQuery = useQuery(async () => (await api.get<{ data: any[] }>("/vendor/allotments")).data || [], []);
+  const projectsQuery = useQuery(async () => (await api.get<{ data: Project[] }>("/manage/projects")).data || [], []);
+
+  const uName = (user?.username || "").toLowerCase().trim();
+  const rName = (user?.name || "").toLowerCase().trim();
+  const email = (user?.email || "").toLowerCase().trim();
+
+  // Find vendor code
+  const matchedVendor = useMemo(() => {
+    return (vendorsQuery.data || []).find((v: any) => {
+      const vc = (v.vendor_code || "").toLowerCase().trim();
+      const vn = (v.vendor_name || "").toLowerCase().trim();
+      const ve = (v.email || "").toLowerCase().trim();
+      return (
+        (vc && (vc === uName || vc === rName)) ||
+        (vn && (vn === uName || vn === rName)) ||
+        (ve && email && ve === email)
+      );
+    });
+  }, [vendorsQuery.data, uName, rName, email]);
+
+  const activeVendorCode = matchedVendor?.vendor_code || user?.username || "VND";
+
+  // Filter allotments specifically provided to this vendor
+  const myAllotments = useMemo(() => {
+    const vc = activeVendorCode.toLowerCase();
+    const vn = (matchedVendor?.vendor_name || user?.name || "").toLowerCase();
+    return (allotmentsQuery.data || []).filter((a: any) => {
+      const vid = (a.vendor_id || "").toLowerCase().trim();
+      const vname = (a.vendor_name || "").toLowerCase().trim();
+      return (
+        vid === vc ||
+        vname === vc ||
+        vid === uName ||
+        vname === uName ||
+        (vn && (vname === vn || vid === vn))
+      );
+    });
+  }, [allotmentsQuery.data, activeVendorCode, matchedVendor, user, uName]);
+
+  // Combine allotment info with project details
+  const rows = useMemo(() => {
+    const projs = projectsQuery.data || [];
+    const t = search.trim().toLowerCase();
+
+    return myAllotments
+      .map((allot: any) => {
+        const p = projs.find((x) => String(x.project_id) === String(allot.project_id));
+        const pId = String(allot.project_id);
+        const name = p?.project_name || `Study #${pId}`;
+        const st = allot.status || p?.status || "Live";
+        const cpi = num(allot.vendor_cpi) || (p ? num(p.cpi) : 2.5);
+        const target = num(allot.quota_limit) || (p ? num(p.target_completes) : 100);
+        const completes = num(allot.complete_count) || (p ? num(p.total_completes) : 0);
+        const loi = p?.loi || 15;
+        const ir = p?.ir || 75;
+        const link =
+          allot.entry_link ||
+          `https://api.vmhgroupsmr.com/#/prescreener?pid=${encodeURIComponent(pId)}&vid=${encodeURIComponent(activeVendorCode)}&uid=[YOUR_UID]`;
+
+        return {
+          id: pId,
+          name,
+          cpi,
+          target,
+          completes,
+          loi,
+          ir,
+          status: st,
+          entryLink: link,
+        };
+      })
+      .filter((s) => {
+        if (status !== "all" && s.status !== status) return false;
+        if (t && !s.id.toLowerCase().includes(t) && !s.name.toLowerCase().includes(t)) return false;
+        return true;
+      });
+  }, [myAllotments, projectsQuery.data, search, status, activeVendorCode]);
+
+  const cols: Column<any>[] = [
+    {
+      key: "id",
+      header: "Survey",
+      primary: true,
+      render: (s) => (
+        <div className="min-w-0">
+          <p className="font-mono text-[13px] font-semibold text-ink">#{s.id}</p>
+          <p className="max-w-[240px] truncate text-[12px] text-ink-3">{s.name}</p>
+        </div>
+      ),
+    },
+    {
+      key: "client",
+      header: "Client",
+      render: () => <span className="font-semibold text-accent">VMH GROUP</span>,
+    },
+    {
+      key: "cpi",
+      header: "Payout",
+      align: "right",
+      sortValue: (s) => s.cpi,
+      render: (s) => <span className="font-semibold text-green tabular">{money(s.cpi)}</span>,
+    },
+    {
+      key: "loi",
+      header: "LOI",
+      align: "right",
+      sortValue: (s) => s.loi,
+      render: (s) => `${s.loi} min`,
+    },
+    {
+      key: "ir",
+      header: "IR",
+      align: "right",
+      sortValue: (s) => s.ir,
+      render: (s) => <Badge tone={s.ir >= 60 ? "green" : s.ir >= 30 ? "orange" : "red"}>{s.ir}%</Badge>,
+    },
+    {
+      key: "quota",
+      header: "Quota / Comp",
+      align: "right",
+      sortValue: (s) => s.completes,
+      render: (s) => (
+        <div className="text-right tabular">
+          <span className="font-semibold text-ink">{s.completes}</span>
+          <span className="text-ink-3 text-[12px]"> / {s.target}</span>
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (s) => <StatusBadge status={s.status} />,
+    },
+    {
+      key: "action",
+      header: "Tracking Link",
+      align: "right",
+      render: (s) => (
+        <div className="flex items-center justify-end gap-1.5">
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Copy size={12} />}
+            onClick={() => {
+              navigator.clipboard?.writeText?.(s.entryLink);
+              toast("Tracking link copied to clipboard!", "success");
+            }}
+            title="Copy your live tracking link"
+          >
+            Copy Link
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<ExternalLink size={12} />}
+            onClick={() =>
+              window.open(
+                `https://api.vmhgroupsmr.com/#/prescreener?pid=${encodeURIComponent(s.id)}&vid=${encodeURIComponent(activeVendorCode)}&uid=TEST_${Date.now()}`,
+                "_blank"
+              )
+            }
+            title="Test link in new tab"
+          >
+            Test
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div>
+      <PageHeader
+        title="Assigned Surveys"
+        subtitle={`Live studies provided to your panel (${activeVendorCode}) with active tracking links.`}
+      />
+
+      <DataTable
+        columns={cols}
+        rows={rows}
+        rowKey={(s) => s.id}
+        loading={allotmentsQuery.loading || projectsQuery.loading}
+        pageSize={12}
+        toolbar={
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search your assigned studies..."
+              className="sm:w-72"
+            />
+            <Select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="!h-10 !text-[14px] sm:w-36"
+            >
+              <option value="all">Any status</option>
+              <option value="Live">Live</option>
+              <option value="Pause">Pause</option>
+              <option value="Closed">Closed</option>
+            </Select>
+          </div>
+        }
+        empty={
+          <EmptyState
+            title="No surveys assigned yet"
+            message="You currently have no active survey allotments. When the VMH team provides studies to your account, they will appear here with your tracking links."
+          />
+        }
+      />
+    </div>
+  );
+}
+
 export function Surveys() {
-  const { can } = usePermissions();
+  const { can, user } = usePermissions();
+  const isVendor = user?.role_id === 3 || user?.role_name === "Vendor" || user?.role_name?.toLowerCase().includes("vendor");
   const [tab, setTab] = useState<"market" | "mine">("market");
   const { toast } = useFeedback();
   const [syncing, setSyncing] = useState(false);
+
+  if (isVendor) {
+    return <VendorAssignedSurveys />;
+  }
 
   const market = useQuery(async () => {
     const [surveysRes, clientsRes] = await Promise.all([

@@ -1,11 +1,12 @@
 import { useMemo } from "react";
-import { ArrowUpRight, CircleDollarSign, MousePointerClick, Radio, RefreshCw, Target, TrendingUp } from "lucide-react";
+import { ArrowUpRight, CircleDollarSign, Copy, ExternalLink, MousePointerClick, Radio, RefreshCw, Target, TrendingUp } from "lucide-react";
 import { api, type Lead } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { compact, money, num, timeAgo } from "../lib/utils";
 import { BarList, Donut, Legend } from "../components/charts";
 import { Button, Card, CountUp, ErrorState, PageHeader, SectionTitle, Skeleton, StatusBadge, Badge } from "../components/ui";
 import { PERMS, usePermissions } from "../lib/permissions";
+import { useFeedback } from "../components/feedback";
 import { cn } from "../utils/cn";
 
 interface Analytics {
@@ -23,13 +24,32 @@ interface Unified {
 }
 
 export function Dashboard({ userName }: { userName: string }) {
-  const { can } = usePermissions();
+  const { can, user } = usePermissions();
+  const { toast } = useFeedback();
+  const isVendor = user?.role_id === 3 || user?.role_name === "Vendor" || user?.role_name?.toLowerCase().includes("vendor");
+
+  const vendorsQuery = useQuery(async () => (await api.get<{ data: any[] }>("/vendors")).data || [], []);
+  const allotmentsQuery = useQuery(async () => (await api.get<{ data: any[] }>("/vendor/allotments")).data || [], []);
+
+  const uName = (user?.username || "").toLowerCase().trim();
+  const rName = (user?.name || "").toLowerCase().trim();
+
+  const activeVendorCode = useMemo(() => {
+    if (!isVendor) return "";
+    const found = (vendorsQuery.data || []).find((v: any) => {
+      const vc = (v.vendor_code || "").toLowerCase().trim();
+      const vn = (v.vendor_name || "").toLowerCase().trim();
+      return vc === uName || vc === rName || vn === uName || vn === rName;
+    });
+    return found?.vendor_code || user?.username || "VND";
+  }, [isVendor, vendorsQuery.data, uName, rName, user]);
+
   const q = useQuery(
     async () => {
       const [a, u, l] = await Promise.all([
         api.get<Analytics>("/dashboard/analytics"),
         api.get<{ data: Unified }>("/reports/unified"),
-        api.get<{ data: Lead[] }>("/leads", { limit: 12 }),
+        api.get<{ data: Lead[] }>("/leads", { limit: 25 }),
       ]);
       return { a, u: u.data, leads: l.data || [] };
     },
@@ -38,8 +58,47 @@ export function Dashboard({ userName }: { userName: string }) {
   );
 
   const d = q.data;
+
+  // Filter leads for this vendor if role is vendor
+  const vendorLeads = useMemo(() => {
+    const raw = d?.leads || [];
+    if (!isVendor) return raw;
+    const vc = activeVendorCode.toLowerCase();
+    return raw.filter((l) => {
+      const lvc = (l.vendor_code || "").toLowerCase().trim();
+      const lvn = (l.vendor_name || "").toLowerCase().trim();
+      return lvc === vc || lvn === vc || lvc === uName || lvn === rName;
+    });
+  }, [d?.leads, isVendor, activeVendorCode, uName, rName]);
+
+  // Vendor's assigned allotments
+  const myAllots = useMemo(() => {
+    if (!isVendor) return [];
+    const vc = activeVendorCode.toLowerCase();
+    return (allotmentsQuery.data || []).filter((a: any) => {
+      const vid = (a.vendor_id || "").toLowerCase().trim();
+      const vname = (a.vendor_name || "").toLowerCase().trim();
+      return vid === vc || vname === vc || vid === uName || vname === uName || vname === rName;
+    });
+  }, [isVendor, allotmentsQuery.data, activeVendorCode, uName, rName]);
+
   const stats = useMemo(() => {
     if (!d) return null;
+    if (isVendor) {
+      const clicks = vendorLeads.length;
+      const completes = vendorLeads.filter((l) => l.status === "Complete" || String(l.status) === "10").length;
+      const payout = myAllots.reduce((acc, a) => acc + (num(a.complete_count) * num(a.vendor_cpi)), 0) || (completes * 2.50);
+      const rate = clicks > 0 ? Number(((completes / clicks) * 100).toFixed(1)) : 0;
+      return {
+        revenue: 0,
+        payout,
+        margin: 0,
+        clicks,
+        completes,
+        rate,
+      };
+    }
+
     const projectsList = d.u?.projects || [];
     const vendorsList = d.u?.vendors || [];
     let revenue = projectsList.reduce((s, p) => s + num(p.total_revenue), 0);
@@ -57,19 +116,24 @@ export function Dashboard({ userName }: { userName: string }) {
       completes,
       rate: clicks ? Number(((completes / clicks) * 100).toFixed(1)) : 10.8,
     };
-  }, [d]);
+  }, [d, isVendor, vendorLeads, myAllots]);
 
   const hour = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   if (q.error && !d) return <ErrorState message={q.error} onRetry={q.reset} />;
 
-  const kpis = stats && [
+  const kpis = stats && (isVendor ? [
+    { label: "My Inbound Clicks", value: stats.clicks, icon: MousePointerClick, tone: "text-purple bg-purple-soft", sub: "Panel traffic" },
+    { label: "Delivered Completes", value: stats.completes, icon: Target, tone: "text-green bg-green-soft", sub: "Qualified completes" },
+    { label: "Total Earnings", value: stats.payout, prefix: "$", decimals: 2, icon: CircleDollarSign, tone: "text-accent bg-accent-soft", sub: "Approved payout" },
+    { label: "Conversion (IR)", value: stats.rate, suffix: "%", decimals: 1, icon: TrendingUp, tone: "text-orange bg-orange-soft", sub: "Incidence rate" },
+  ] : [
     { label: "Gross revenue", value: stats.revenue, prefix: "$", decimals: 2, icon: CircleDollarSign, tone: "text-green bg-green-soft", sub: "From delivered completes" },
     { label: "Net margin", value: stats.margin, prefix: "$", decimals: 2, icon: TrendingUp, tone: "text-accent bg-accent-soft", sub: `Vendor payout ${money(stats.payout)}` },
     { label: "Routed clicks", value: stats.clicks, icon: MousePointerClick, tone: "text-purple bg-purple-soft", sub: `${num(d?.a?.pendingLeads) || 59} pending` },
     { label: "Conversion", value: stats.rate, suffix: "%", decimals: 1, icon: Target, tone: "text-orange bg-orange-soft", sub: `${stats.completes} completes` },
-  ];
+  ]);
 
   const devices = useMemo(() => {
     const raw = d?.a?.deviceStats;
@@ -188,11 +252,13 @@ export function Dashboard({ userName }: { userName: string }) {
                     <Skeleton key={i} className="h-10" />
                   ))}
                 </div>
-              ) : d.leads.length === 0 ? (
-                <p className="py-10 text-center text-[14px] text-ink-3">Waiting for the first respondent…</p>
+              ) : (isVendor ? vendorLeads : d.leads).length === 0 ? (
+                <p className="py-10 text-center text-[14px] text-ink-3">
+                  {isVendor ? "Waiting for your first respondent click…" : "Waiting for the first respondent…"}
+                </p>
               ) : (
                 <ul>
-                  {d.leads.slice(0, 7).map((l, i) => (
+                  {(isVendor ? vendorLeads : d.leads).slice(0, 7).map((l, i) => (
                     <li
                       key={l.id}
                       style={{ animationDelay: `${i * 40}ms` }}
@@ -204,7 +270,7 @@ export function Dashboard({ userName }: { userName: string }) {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[14px] font-medium text-ink">{l.project_name}</p>
                         <p className="truncate text-[12px] text-ink-3">
-                          {l.vendor_name || l.vendor_code} · {l.country} · {timeAgo(l.created_at)}
+                          {isVendor ? `${l.country} · ${timeAgo(l.created_at)}` : `${l.vendor_name || l.vendor_code} · ${l.country} · ${timeAgo(l.created_at)}`}
                         </p>
                       </div>
                       <StatusBadge status={l.status} />
@@ -215,36 +281,95 @@ export function Dashboard({ userName }: { userName: string }) {
             </div>
           </Card>
 
-          {/* Top vendors + outcomes */}
+          {/* Top vendors or Vendor Assigned Studies + outcomes */}
           <div className="space-y-4 lg:col-span-2 lg:space-y-5">
-            <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "260ms" }}>
-              <SectionTitle title="Top vendors" hint="By completes delivered" />
-              {!d ? (
-                <Skeleton className="h-28" />
-              ) : (d?.u?.vendors || []).length === 0 ? (
-                <p className="py-6 text-center text-[14px] text-ink-3">No vendor activity yet.</p>
-              ) : (
-                <ul className="space-y-4">
-                  {[...(d?.u?.vendors || [])]
-                    .sort((a, b) => num(b.total_completes) - num(a.total_completes))
-                    .slice(0, 4)
-                    .map((v) => (
-                      <li key={v.vendor_id} className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-[14px] font-medium text-ink">{v.vendor_name}</p>
-                          <p className="text-[12px] text-ink-3">
-                            {num(v.assigned_projects)} studies · {num(v.conversion_rate)}% conv.
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[15px] font-semibold text-ink tabular">{num(v.total_completes)}</p>
-                          <p className="text-[12px] text-ink-3 tabular">{money(v.total_payout)}</p>
-                        </div>
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </Card>
+            {isVendor ? (
+              <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "260ms" }}>
+                <SectionTitle title="My assigned studies" hint="Active tracking entry links" />
+                {myAllots.length === 0 ? (
+                  <p className="py-6 text-center text-[13px] text-ink-3">
+                    No studies assigned yet. Contact your VMH account manager.
+                  </p>
+                ) : (
+                  <ul className="space-y-3">
+                    {myAllots.slice(0, 4).map((a: any) => {
+                      const link =
+                        a.entry_link ||
+                        `https://api.vmhgroupsmr.com/#/prescreener?pid=${encodeURIComponent(a.project_id)}&vid=${encodeURIComponent(activeVendorCode)}&uid=[YOUR_UID]`;
+                      return (
+                        <li key={a.id || a.project_id} className="rounded-xl border border-line p-3 bg-fill/30">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-mono text-[12px] font-semibold text-ink">#{a.project_id}</span>
+                            <span className="font-semibold text-green text-[12.5px] tabular">{money(a.vendor_cpi)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-ink-3 mb-2 tabular">
+                            <span>Quota: {a.complete_count || 0}/{a.quota_limit}</span>
+                            <StatusBadge status={a.status || "Live"} />
+                          </div>
+                          <div className="flex gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="!h-7 !text-[11px] flex-1"
+                              icon={<Copy size={11} />}
+                              onClick={() => {
+                                navigator.clipboard?.writeText?.(link);
+                                toast("Tracking link copied!", "success");
+                              }}
+                            >
+                              Copy Link
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="!h-7 !text-[11px]"
+                              icon={<ExternalLink size={11} />}
+                              onClick={() =>
+                                window.open(
+                                  `https://api.vmhgroupsmr.com/#/prescreener?pid=${encodeURIComponent(a.project_id)}&vid=${encodeURIComponent(activeVendorCode)}&uid=TEST_${Date.now()}`,
+                                  "_blank"
+                                )
+                              }
+                            >
+                              Test
+                            </Button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </Card>
+            ) : (
+              <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "260ms" }}>
+                <SectionTitle title="Top vendors" hint="By completes delivered" />
+                {!d ? (
+                  <Skeleton className="h-28" />
+                ) : (d?.u?.vendors || []).length === 0 ? (
+                  <p className="py-6 text-center text-[14px] text-ink-3">No vendor activity yet.</p>
+                ) : (
+                  <ul className="space-y-4">
+                    {[...(d?.u?.vendors || [])]
+                      .sort((a, b) => num(b.total_completes) - num(a.total_completes))
+                      .slice(0, 4)
+                      .map((v) => (
+                        <li key={v.vendor_id} className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[14px] font-medium text-ink">{v.vendor_name}</p>
+                            <p className="text-[12px] text-ink-3">
+                              {num(v.assigned_projects)} studies · {num(v.conversion_rate)}% conv.
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[15px] font-semibold text-ink tabular">{num(v.total_completes)}</p>
+                            <p className="text-[12px] text-ink-3 tabular">{money(v.total_payout)}</p>
+                          </div>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </Card>
+            )}
 
             <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "300ms" }}>
               <SectionTitle title="Recent outcomes" hint="Last 12 sessions" />
