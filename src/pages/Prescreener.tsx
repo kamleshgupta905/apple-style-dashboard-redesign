@@ -54,8 +54,8 @@ export function Prescreener() {
       : window.location.search
   );
 
-  const vid = params.get("vid") || "VI010032025";
-  const pid = params.get("pid") || "2178484718";
+  const vid = params.get("vid") || "VND-AFC01";
+  const pid = params.get("pid") || "VMHPI000142026";
   const rawUid = params.get("uid") || "";
   const uid = rawUid && rawUid !== "[RESPONDENT_ID]" && rawUid !== "%5BRESPONDENT_ID%5D"
     ? rawUid
@@ -103,9 +103,9 @@ export function Prescreener() {
           setDbLiveUrl(result.liveUrl);
         }
 
-        // If the study was auto-paused (e.g. 50 clicks with 0 completes) or is paused:
-        if (result.autoPaused || !result.isLive) {
-          console.warn(`[Prescreener Waterfall] Study #${pid} is paused. Rerouting respondent to next available study.`);
+        // If the study was auto-paused, is not live, or is missing a liveUrl (and pid is not a direct numeric exchange ID):
+        if (result.autoPaused || !result.isLive || (!result.liveUrl && !targetParam && !/^\d{8,12}$/.test(pid.trim()))) {
+          console.warn(`[Prescreener Waterfall] Study #${pid} is paused or lacks destination. Rerouting respondent to next available study.`);
           const next = await findNextAvailableStudy(pid, vid, uid);
           if (next) {
             const nextTarget = next.live_url ? `&target=${encodeURIComponent(next.live_url)}` : "";
@@ -173,8 +173,12 @@ export function Prescreener() {
       if (!resolved.includes("transaction_id") && !resolved.includes("rid") && !resolved.includes("uid=")) {
         resolved = `${resolved}${sep}transaction_id=${encodeURIComponent(uid)}&rid=${encodeURIComponent(uid)}`;
       }
-    } else {
+    } else if (/^\d{8,12}$/.test(pid.trim())) {
+      // Valid numeric Zamplia / PureSpectrum exchange study ID
       resolved = `https://res.zamplia.com/?vid=2138&isMap=1&sid=${encodeURIComponent(pid)}&username=${encodeURIComponent(vid)}&cid=42&transaction_id=${encodeURIComponent(uid)}&rid=${encodeURIComponent(uid)}`;
+    } else {
+      // Study has no destination URL or is closed: gracefully show SMR Quota Full / Complete callback instead of Calibr8 404
+      resolved = `#/callback?status=30&pid=${encodeURIComponent(pid)}&uid=${encodeURIComponent(uid)}&vid=${encodeURIComponent(vid)}&reason=study_closed_or_quota_reached`;
     }
 
     setFinalUrl(resolved);
