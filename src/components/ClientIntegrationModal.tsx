@@ -5,9 +5,7 @@ import {
   Link2,
   Code2,
   ShieldCheck,
-  CheckCircle2,
   ExternalLink,
-  Sparkles,
   ArrowRight,
   Globe,
   Key,
@@ -56,18 +54,18 @@ export function ClientIntegrationModal({
 
   const copyAllRedirects = () => {
     const text =
-      `🎯 *SMR Platform Inbound Return Redirects for ${cName} (Code: ${cCode})*\n` +
+      `*SMR Platform Inbound Return Redirects for ${cName} (Code: ${cCode})*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `Please configure your survey software to redirect respondents to the matching URL upon survey exit:\n\n` +
-      `1. ✅ COMPLETE / SUCCESS (Status 10):\n${cbComplete}\n` +
+      `1. COMPLETE / SUCCESS (Status 10):\n${cbComplete}\n` +
       `   (Server REST: ${srvComplete})\n\n` +
-      `2. ❌ TERMINATE / SCREENOUT (Status 20):\n${cbTerm}\n` +
+      `2. TERMINATE / SCREENOUT (Status 20):\n${cbTerm}\n` +
       `   (Server REST: ${srvTerm})\n\n` +
-      `3. ⚠️ OVERQUOTA / QUOTA FULL (Status 30):\n${cbOverquota}\n` +
+      `3. OVERQUOTA / QUOTA FULL (Status 30):\n${cbOverquota}\n` +
       `   (Server REST: ${srvOverquota})\n\n` +
-      `4. 🚫 SECURITY / QUALITY SCREENOUT (Status 40):\n${cbSecurity}\n` +
+      `4. SECURITY / QUALITY SCREENOUT (Status 40):\n${cbSecurity}\n` +
       `   (Server REST: ${srvSecurity})\n\n` +
-      `🔐 Anti-Tamper Security: ${client.hash_algorithm || "SHA-256"} Verification Enabled\n` +
+      `Anti-Tamper Security: ${client.hash_algorithm || "SHA-256"} Verification Enabled\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `Note: Replace [UID] with the respondent identifier and [PID] with your assigned study ID.`;
 
@@ -123,100 +121,173 @@ export function ClientIntegrationModal({
         value={tab}
         onChange={(t) => setTab(t as any)}
         options={[
-          { value: "inbound", label: "Inbound Return Redirects (Give to Client)" },
-          { value: "s2s", label: "S2S API & Webhooks" },
-          { value: "outbound", label: "Client Outbound URLs" },
+          { value: "inbound", label: "Inbound Redirects" },
+          { value: "s2s", label: "S2S API & Keys" },
+          { value: "outbound", label: "Outbound URLs" },
         ]}
-        className="mb-5"
+        className="w-full mb-5"
       />
 
       {/* ──────────────── TAB 1: INBOUND REDIRECTS (Give to Client) ──────────────── */}
       {tab === "inbound" && (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h4 className="text-[14px] font-semibold text-ink flex items-center gap-1.5">
-                <Sparkles size={16} className="text-blue-500" />
-                Client Onboarding Redirect Package
-              </h4>
-              <p className="mt-0.5 text-[12px] text-ink-3">
-                Send these 4 links to <strong className="text-ink">{cName}</strong> so their questionnaire redirects respondents back to your SMR platform.
+          {/* Dashboard UI styled Onboarding Card */}
+          <div className="rounded-2xl border border-line bg-fill/50 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-accent-soft text-accent">
+                  <Link2 size={15} />
+                </span>
+                <h4 className="text-[14px] font-semibold text-ink">
+                  Client Onboarding Redirect Package
+                </h4>
+              </div>
+              <p className="text-[12px] text-ink-3 leading-relaxed">
+                Send these 4 links to <strong className="font-semibold text-ink">{cName}</strong> so their questionnaire redirects respondents back to your SMR platform.
               </p>
             </div>
             <Button
               variant="primary"
               size="sm"
-              icon={copiedAll ? <Check size={14} /> : <Copy size={14} />}
+              icon={copiedAll ? <Check size={14} className="text-white" /> : <Copy size={14} />}
               onClick={copyAllRedirects}
-              className="shrink-0"
+              className="shrink-0 font-medium"
             >
-              {copiedAll ? "All Copied!" : "Copy All 4 Redirects"}
+              {copiedAll ? "All 4 Copied!" : "Copy All 4 Redirects"}
             </Button>
           </div>
 
           <div className="space-y-3">
-            {/* Complete */}
-            <div className="rounded-2xl border border-line bg-surface p-3.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-[13px] font-semibold text-green">
-                  <CheckCircle2 size={16} /> 1. Complete Redirect (Status 10)
-                </span>
+            {/* 1. Complete */}
+            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2.5 transition-colors hover:border-line-hover">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] shrink-0" />
+                  <span className="text-[13px] font-semibold text-ink truncate">
+                    1. Complete Redirect
+                  </span>
+                  <Badge tone="green">Status 10</Badge>
+                </div>
                 <CopyButton text={cbComplete} />
               </div>
-              <div className="rounded-xl bg-fill p-2.5 font-mono text-[12px] text-ink break-all select-all">
+              <div className="rounded-xl border border-line/50 bg-fill p-2.5 font-mono text-[12px] text-ink break-all select-all">
                 {cbComplete}
               </div>
-              <p className="text-[11px] text-ink-3">
-                Server REST alternative: <span className="font-mono text-ink-2">{srvComplete}</span>
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pt-0.5 text-[11px] text-ink-3">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="shrink-0 text-ink-3">Server REST S2S:</span>
+                  <span className="font-mono text-ink-2 truncate">{srvComplete}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(srvComplete);
+                    toast("Server REST Complete URL copied!");
+                  }}
+                  className="shrink-0 text-[11px] font-medium text-accent hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Copy size={11} /> Copy S2S
+                </button>
+              </div>
             </div>
 
-            {/* Terminate */}
-            <div className="rounded-2xl border border-line bg-surface p-3.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-[13px] font-semibold text-red">
-                  <ArrowRight size={16} /> 2. Terminate / Screenout (Status 20)
-                </span>
+            {/* 2. Terminate */}
+            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2.5 transition-colors hover:border-line-hover">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)] shrink-0" />
+                  <span className="text-[13px] font-semibold text-ink truncate">
+                    2. Terminate / Screenout
+                  </span>
+                  <Badge tone="red">Status 20</Badge>
+                </div>
                 <CopyButton text={cbTerm} />
               </div>
-              <div className="rounded-xl bg-fill p-2.5 font-mono text-[12px] text-ink break-all select-all">
+              <div className="rounded-xl border border-line/50 bg-fill p-2.5 font-mono text-[12px] text-ink break-all select-all">
                 {cbTerm}
               </div>
-              <p className="text-[11px] text-ink-3">
-                Server REST alternative: <span className="font-mono text-ink-2">{srvTerm}</span>
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pt-0.5 text-[11px] text-ink-3">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="shrink-0 text-ink-3">Server REST S2S:</span>
+                  <span className="font-mono text-ink-2 truncate">{srvTerm}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(srvTerm);
+                    toast("Server REST Terminate URL copied!");
+                  }}
+                  className="shrink-0 text-[11px] font-medium text-accent hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Copy size={11} /> Copy S2S
+                </button>
+              </div>
             </div>
 
-            {/* Overquota */}
-            <div className="rounded-2xl border border-line bg-surface p-3.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-[13px] font-semibold text-amber-500">
-                  <ArrowRight size={16} /> 3. Overquota / Quota Full (Status 30)
-                </span>
+            {/* 3. Overquota */}
+            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2.5 transition-colors hover:border-line-hover">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="h-2 w-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)] shrink-0" />
+                  <span className="text-[13px] font-semibold text-ink truncate">
+                    3. Overquota / Quota Full
+                  </span>
+                  <Badge tone="amber">Status 30</Badge>
+                </div>
                 <CopyButton text={cbOverquota} />
               </div>
-              <div className="rounded-xl bg-fill p-2.5 font-mono text-[12px] text-ink break-all select-all">
+              <div className="rounded-xl border border-line/50 bg-fill p-2.5 font-mono text-[12px] text-ink break-all select-all">
                 {cbOverquota}
               </div>
-              <p className="text-[11px] text-ink-3">
-                Server REST alternative: <span className="font-mono text-ink-2">{srvOverquota}</span>
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pt-0.5 text-[11px] text-ink-3">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="shrink-0 text-ink-3">Server REST S2S:</span>
+                  <span className="font-mono text-ink-2 truncate">{srvOverquota}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(srvOverquota);
+                    toast("Server REST Overquota URL copied!");
+                  }}
+                  className="shrink-0 text-[11px] font-medium text-accent hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Copy size={11} /> Copy S2S
+                </button>
+              </div>
             </div>
 
-            {/* Security */}
-            <div className="rounded-2xl border border-line bg-surface p-3.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-[13px] font-semibold text-purple-500">
-                  <ShieldCheck size={16} /> 4. Security / Quality Screenout (Status 40)
-                </span>
+            {/* 4. Security */}
+            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2.5 transition-colors hover:border-line-hover">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="h-2 w-2 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)] shrink-0" />
+                  <span className="text-[13px] font-semibold text-ink truncate">
+                    4. Security / Fraud Screenout
+                  </span>
+                  <Badge tone="purple">Status 40</Badge>
+                </div>
                 <CopyButton text={cbSecurity} />
               </div>
-              <div className="rounded-xl bg-fill p-2.5 font-mono text-[12px] text-ink break-all select-all">
+              <div className="rounded-xl border border-line/50 bg-fill p-2.5 font-mono text-[12px] text-ink break-all select-all">
                 {cbSecurity}
               </div>
-              <p className="text-[11px] text-ink-3">
-                Server REST alternative: <span className="font-mono text-ink-2">{srvSecurity}</span>
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pt-0.5 text-[11px] text-ink-3">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="shrink-0 text-ink-3">Server REST S2S:</span>
+                  <span className="font-mono text-ink-2 truncate">{srvSecurity}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(srvSecurity);
+                    toast("Server REST Security Screenout URL copied!");
+                  }}
+                  className="shrink-0 text-[11px] font-medium text-accent hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Copy size={11} /> Copy S2S
+                </button>
+              </div>
             </div>
           </div>
         </div>

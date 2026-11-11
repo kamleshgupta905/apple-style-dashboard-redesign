@@ -317,7 +317,7 @@ export function Segmented<T extends string>({
           type="button"
           onClick={() => onChange(o.value)}
           className={cn(
-            "relative z-10 cursor-pointer whitespace-nowrap rounded-[9px] px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-300",
+            "relative z-10 min-w-0 cursor-pointer truncate rounded-[9px] px-3 py-1.5 text-center text-[13px] font-medium transition-colors duration-300",
             value === o.value ? "text-ink" : "text-ink-3 hover:text-ink-2",
           )}
         >
