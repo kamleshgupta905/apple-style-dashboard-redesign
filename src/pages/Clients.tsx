@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { Building2, Eye, EyeOff, Pencil, Plug, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Building2, Eye, EyeOff, Pencil, Plug, Plus, ShieldCheck, Trash2, Link2, Copy, Check, Sparkles } from "lucide-react";
 import { api, type Client } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { initials, mask } from "../lib/utils";
 import { cn } from "../utils/cn";
+import { ClientIntegrationModal } from "../components/ClientIntegrationModal";
+import { useRealtime } from "../lib/useRealtime";
 import {
   Badge,
   Button,
@@ -60,6 +62,30 @@ export function Clients() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<Client | null>(null);
   const [form, setForm] = useState<null | { id?: number; values: typeof blank }>(null);
+  const [integrationClient, setIntegrationClient] = useState<Client | null>(null);
+  const [copiedAllHeader, setCopiedAllHeader] = useState(false);
+
+  // Live Supabase Realtime Subscription: auto-sync any database changes immediately
+  useRealtime("smr_clients", () => q.reload());
+
+  const copyUniversalRedirects = () => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
+    const text =
+      `🎯 *SMR Platform Standard Inbound Return Redirects*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Configure your survey platform to redirect respondents upon survey exit:\n\n` +
+      `1. ✅ COMPLETE / SUCCESS (Status 10):\n${origin}/#/callback?status=10&pid=[PID]&uid=[UID]\n\n` +
+      `2. ❌ TERMINATE / SCREENOUT (Status 20):\n${origin}/#/callback?status=20&pid=[PID]&uid=[UID]\n\n` +
+      `3. ⚠️ OVERQUOTA / QUOTA FULL (Status 30):\n${origin}/#/callback?status=30&pid=[PID]&uid=[UID]\n\n` +
+      `4. 🚫 SECURITY / FRAUD BLOCK (Status 40):\n${origin}/#/callback?status=40&pid=[PID]&uid=[UID]\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Note: Replace [UID] with the respondent identifier and [PID] with your assigned study ID.`;
+
+    navigator.clipboard.writeText(text);
+    setCopiedAllHeader(true);
+    toast("Universal SMR Client Redirects copied to clipboard!", "success");
+    setTimeout(() => setCopiedAllHeader(false), 2200);
+  };
 
   const rows = useMemo(() => {
     const t = search.toLowerCase();
@@ -144,11 +170,21 @@ export function Clients() {
         title="Clients"
         subtitle="Demand partners, their APIs and outbound redirect endpoints."
         actions={
-          canCreate ? (
-            <Button icon={<Plus size={16} />} onClick={() => setForm({ values: blank })}>
-              Add client
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              icon={copiedAllHeader ? <Check size={14} className="text-green" /> : <Copy size={14} />}
+              onClick={copyUniversalRedirects}
+              title="Copy universal SMR 4 Inbound Return Redirect URLs for clients"
+            >
+              {copiedAllHeader ? "Redirects Copied!" : "Copy SMR Redirects"}
             </Button>
-          ) : undefined
+            {canCreate && (
+              <Button icon={<Plus size={16} />} onClick={() => setForm({ values: blank })}>
+                Add client
+              </Button>
+            )}
+          </div>
         }
       />
       <SearchInput value={search} onChange={setSearch} placeholder="Search clients" className="mb-5 sm:max-w-sm" />
@@ -219,31 +255,43 @@ export function Clients() {
                   <Toggle checked={!!Number(c.security_enabled)} onChange={(v) => toggleSecurity(c, v)} label="Toggle security gate" />
                 </div>
 
-                {/* Direct Action Buttons: Edit and Delete */}
+                {/* Direct Action Buttons: Integration / Redirects, Edit and Delete */}
                 <div
-                  className="flex items-center justify-end gap-2 pt-2 border-t border-line/60"
+                  className="flex items-center justify-between gap-2 pt-2 border-t border-line/60"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {canEdit && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      icon={<Pencil size={13} />}
-                      onClick={() => edit(c)}
-                    >
-                      Edit
-                    </Button>
-                  )}
-                  {canDelete && (
-                    <Button
-                      size="sm"
-                      variant="dangerSoft"
-                      icon={<Trash2 size={13} />}
-                      onClick={() => remove(c)}
-                    >
-                      Delete
-                    </Button>
-                  )}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Link2 size={13} className="text-accent" />}
+                    onClick={() => setIntegrationClient(c)}
+                    title="View & copy SMR Return Redirects and API keys for this client"
+                  >
+                    Redirects & API
+                  </Button>
+
+                  <div className="flex items-center gap-1.5">
+                    {canEdit && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        icon={<Pencil size={13} />}
+                        onClick={() => edit(c)}
+                      >
+                        Edit
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button
+                        size="sm"
+                        variant="dangerSoft"
+                        icon={<Trash2 size={13} />}
+                        onClick={() => remove(c)}
+                      >
+                        Delete
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </Card>
@@ -256,6 +304,10 @@ export function Clients() {
         canEdit={canEdit}
         canDelete={canDelete}
         onClose={() => setOpen(null)}
+        onOpenIntegration={(c) => {
+          setOpen(null);
+          setIntegrationClient(c);
+        }}
         onEdit={(c) => {
           setOpen(null);
           edit(c);
@@ -271,6 +323,13 @@ export function Clients() {
           setForm(null);
         }}
       />
+      {integrationClient && (
+        <ClientIntegrationModal
+          client={integrationClient}
+          onClose={() => setIntegrationClient(null)}
+          onSaved={() => q.reload()}
+        />
+      )}
     </div>
   );
 }
@@ -283,6 +342,7 @@ function ClientDrawer({
   onEdit,
   onDelete,
   onToggleStatus,
+  onOpenIntegration,
 }: {
   client: Client | null;
   canEdit?: boolean;
@@ -291,6 +351,7 @@ function ClientDrawer({
   onEdit: (c: Client) => void;
   onDelete: (c: Client) => void;
   onToggleStatus?: (c: Client, on: boolean) => void;
+  onOpenIntegration?: (c: Client) => void;
 }) {
   const { can } = usePermissions();
   const { toast } = useFeedback();
@@ -443,6 +504,25 @@ function ClientDrawer({
               </ul>
             </section>
           )}
+
+          <div className="rounded-2xl border border-accent/20 bg-accent-soft/30 p-4">
+            <h4 className="text-[14px] font-semibold text-ink flex items-center gap-1.5 mb-1">
+              <Link2 size={16} className="text-accent" />
+              SMR Return Redirects (For Client Onboarding)
+            </h4>
+            <p className="text-[12px] text-ink-3 mb-3">
+              Generate & copy the 4 formatted inbound return redirect URLs or S2S API credentials to send to {c.client_name}.
+            </p>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Copy size={14} />}
+              onClick={() => onOpenIntegration?.(c)}
+              className="w-full"
+            >
+              Open Integration & Copy 4 Redirects
+            </Button>
+          </div>
 
           <section>
             <h3 className="mb-2 text-[15px] font-semibold">Redirect URLs</h3>

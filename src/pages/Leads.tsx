@@ -3,6 +3,7 @@ import { Download, Pause, Play } from "lucide-react";
 import { api, type Lead } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { exportCSV, formatDate, num, timeAgo } from "../lib/utils";
+import { useRealtime } from "../lib/useRealtime";
 import {
   Button,
   Card,
@@ -57,6 +58,10 @@ export function Leads() {
     [],
     { poll: live ? 10000 : undefined },
   );
+
+  // Live Supabase Realtime Stream: auto-refresh immediately when any lead or entrance is recorded
+  useRealtime("smr_leads", () => q.reload(), live);
+
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [vendor, setVendor] = useState("all");

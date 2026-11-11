@@ -24,6 +24,7 @@ import { useFeedback } from "../components/feedback";
 import { EditAllotmentModal } from "../components/EditAllotmentModal";
 import { VendorIntegrationModal } from "../components/VendorIntegrationModal";
 import { PERMS, usePermissions } from "../lib/permissions";
+import { useRealtime } from "../lib/useRealtime";
 
 interface VRow {
   code: string;
@@ -54,6 +55,9 @@ export function Vendors() {
   const [editAllot, setEditAllot] = useState<Allotment | null>(null);
   const [assignVendor, setAssignVendor] = useState<VRow | null>(null);
   const [integrationVendor, setIntegrationVendor] = useState<VRow | null>(null);
+
+  // Live Supabase Realtime for Vendors & Allotments
+  useRealtime(["smr_vendors", "smr_vendor_allotments"], () => q.reload());
 
   const q = useQuery(async () => {
     const [mv, uni, al] = await Promise.all([

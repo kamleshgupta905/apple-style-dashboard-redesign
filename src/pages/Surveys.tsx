@@ -5,6 +5,7 @@ import { useQuery } from "../lib/useQuery";
 import { entryLink, normalizeSurvey, type NSurvey } from "../lib/data";
 import { exportCSV, formatDate, money, num } from "../lib/utils";
 import { cn } from "../utils/cn";
+import { useRealtime } from "../lib/useRealtime";
 import {
   Badge,
   Button,
@@ -38,6 +39,12 @@ function VendorAssignedSurveys() {
   const vendorsQuery = useQuery(async () => (await api.get<{ data: any[] }>("/vendors")).data || [], []);
   const allotmentsQuery = useQuery(async () => (await api.get<{ data: any[] }>("/vendor/allotments")).data || [], []);
   const projectsQuery = useQuery(async () => (await api.get<{ data: Project[] }>("/manage/projects")).data || [], []);
+
+  // Live Supabase Realtime for Vendor allotments & projects
+  useRealtime(["smr_projects", "smr_vendor_allotments"], () => {
+    allotmentsQuery.reload();
+    projectsQuery.reload();
+  });
 
   const uName = (user?.username || "").toLowerCase().trim();
   const rName = (user?.name || "").toLowerCase().trim();
@@ -298,6 +305,11 @@ export function Surveys() {
     });
   }, []);
   const mine = useQuery(async () => (await api.get<{ data: Project[] }>("/manage/projects")).data || [], []);
+
+  // Live Supabase Realtime for Projects & Allotments
+  useRealtime(["smr_projects", "smr_vendor_allotments"], () => {
+    mine.reload();
+  });
 
   const sync = async () => {
     setSyncing(true);
