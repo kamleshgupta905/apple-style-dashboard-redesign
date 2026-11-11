@@ -183,7 +183,7 @@ export function Leads() {
         ))}
       </div>
 
-      {leads.length > 0 && (
+      {filteredLeads.length > 0 && (
         <Card className="anim-fade-up mb-5 p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-[14px] font-semibold">Outcome mix</p>
