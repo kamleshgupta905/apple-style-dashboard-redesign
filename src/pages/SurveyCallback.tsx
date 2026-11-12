@@ -79,18 +79,43 @@ export function SurveyCallback() {
       : "VMH GROUP • Connecting to Next Survey";
 
     const processOutcomeAndWaterfall = async () => {
-      // 1A. Fetch Vendor details & Callback target
+      // 1A. Recover Vendor & Project from smr_leads if not in URL (supports 100% static redirects)
+      let resolvedVid = vid;
+      let resolvedPid = pid;
+
+      if (!resolvedVid && uid && uid !== "RESP-ONLINE") {
+        try {
+          const { data: lead } = await supabase
+            .from("smr_leads")
+            .select("project_id, vendor_code, vendor_id")
+            .or(`lead_id.eq.${uid},respondent_id.eq.${uid}`)
+            .order("id", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (lead) {
+            resolvedVid = lead.vendor_code || lead.vendor_id || "";
+            if (!resolvedPid || resolvedPid === "SMR-STUDY-LIVE") {
+              resolvedPid = lead.project_id || "";
+            }
+          }
+        } catch (e) {
+          console.warn("Lead recovery error in SurveyCallback:", e);
+        }
+      }
+
+      // 1B. Fetch Vendor details & Callback target
       let targetCallback = "";
-      if (vid) {
+      if (resolvedVid) {
         try {
           const { data: vData } = await supabase
             .from("smr_vendors")
             .select("vendor_name, callback_complete, callback_terminate, callback_overquota, callback_security")
-            .eq("vendor_code", vid)
+            .eq("vendor_code", resolvedVid)
             .maybeSingle();
 
           if (vData) {
-            setVendorName(vData.vendor_name || vid);
+            setVendorName(vData.vendor_name || resolvedVid);
             let rawTarget = "";
             if (isComplete) rawTarget = vData.callback_complete;
             else if (isTerm) rawTarget = vData.callback_terminate;
@@ -109,9 +134,9 @@ export function SurveyCallback() {
                 .replace(/\[rid\]/gi, uid)
                 .replace(/\[RID\]/gi, uid)
                 .replace(/\[ID\]/gi, uid)
-                .replace(/\[PID\]/gi, pid)
-                .replace(/\[pid\]/gi, pid)
-                .replace(/\[STUDY_ID\]/gi, pid);
+                .replace(/\[PID\]/gi, resolvedPid)
+                .replace(/\[pid\]/gi, resolvedPid)
+                .replace(/\[STUDY_ID\]/gi, resolvedPid);
               setVendorCallbackUrl(targetCallback);
             }
           }
@@ -120,34 +145,33 @@ export function SurveyCallback() {
         }
       }
 
-      // 1B. Record Lead and Study Outcome in DB
+      // 1C. Record Lead and Study Outcome in DB
       if (isComplete) {
-        await recordStudyComplete(pid, vid, uid);
+        await recordStudyComplete(resolvedPid, resolvedVid, uid);
       } else {
         await recordStudyDisqualify(
-          pid,
-          vid,
+          resolvedPid,
+          resolvedVid,
           uid,
           isTerm ? "20" : isOverquota ? "30" : "40",
           customReason,
         );
       }
 
-      // 1C. Smart Waterfall: Find the next live available survey for this respondent
-      const candidate = await findNextAvailableStudy(pid, vid, uid);
+      // 1D. Smart Waterfall: Find the next live available survey for this respondent
+      const candidate = await findNextAvailableStudy(resolvedPid, resolvedVid, uid);
       if (candidate) {
         setNextCandidate(candidate);
       }
 
-      // 1D. If this was a Terminate / Quota / Security outcome:
-      // The user explicitly requested: DO NOT show terminate/quotafull page!
+      // 1E. If this was a Terminate / Quota / Security outcome:
       // Immediately redirect respondent to the next survey without showing terminate page!
       if (!isComplete) {
         if (candidate) {
           // Found next study: redirect seamlessly to the next prescreener!
           const targetQuery = candidate.live_url ? `&target=${encodeURIComponent(candidate.live_url)}` : "";
           setTimeout(() => {
-            window.location.hash = `#/prescreener?vid=${encodeURIComponent(vid)}&pid=${encodeURIComponent(candidate.project_id)}&uid=${encodeURIComponent(uid)}${targetQuery}&rerouted=1`;
+            window.location.hash = `#/prescreener?vid=${encodeURIComponent(resolvedVid)}&pid=${encodeURIComponent(candidate.project_id)}&uid=${encodeURIComponent(uid)}${targetQuery}&rerouted=1`;
           }, 350);
         } else {
           // No more live studies available: redirect to vendor callback if exists

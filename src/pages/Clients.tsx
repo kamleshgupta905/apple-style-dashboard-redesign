@@ -71,19 +71,19 @@ export function Clients() {
   const copyUniversalRedirects = () => {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
     const text =
-      `🎯 *SMR Platform Standard Inbound Return Redirects*\n` +
+      `*SMR Platform Standard Static Inbound Return Redirects*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `Configure your survey platform to redirect respondents upon survey exit:\n\n` +
-      `1. ✅ COMPLETE / SUCCESS (Status 10):\n${origin}/#/callback?status=10&pid=[PID]&uid=[UID]\n\n` +
-      `2. ❌ TERMINATE / SCREENOUT (Status 20):\n${origin}/#/callback?status=20&pid=[PID]&uid=[UID]\n\n` +
-      `3. ⚠️ OVERQUOTA / QUOTA FULL (Status 30):\n${origin}/#/callback?status=30&pid=[PID]&uid=[UID]\n\n` +
-      `4. 🚫 SECURITY / FRAUD BLOCK (Status 40):\n${origin}/#/callback?status=40&pid=[PID]&uid=[UID]\n\n` +
+      `Configure your survey platform with these 4 static exit redirects:\n\n` +
+      `1. COMPLETE / SUCCESS:\n${origin}/#/complete?uid=[UID]\n\n` +
+      `2. TERMINATE / SCREENOUT:\n${origin}/#/terminate?uid=[UID]\n\n` +
+      `3. OVERQUOTA / QUOTA FULL:\n${origin}/#/overquota?uid=[UID]\n\n` +
+      `4. SECURITY / QUALITY SCREENOUT:\n${origin}/#/security?uid=[UID]\n\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `Note: Replace [UID] with the respondent identifier and [PID] with your assigned study ID.`;
+      `Note: Replace [UID] with the respondent identifier upon survey exit. No project ID or status code parameters required.`;
 
     navigator.clipboard.writeText(text);
     setCopiedAllHeader(true);
-    toast("Universal SMR Client Redirects copied to clipboard!", "success");
+    toast("Standard Static SMR Client Redirects copied to clipboard!", "success");
     setTimeout(() => setCopiedAllHeader(false), 2200);
   };
 

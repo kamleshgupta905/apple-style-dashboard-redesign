@@ -40,38 +40,38 @@ export function ClientIntegrationModal({
   const cName = client.client_name || cCode;
   const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
 
-  // Inbound Return Redirect URLs (Given to Client)
-  const cbComplete = `${origin}/#/callback?status=10&pid=[PID]&uid=[UID]`;
-  const cbTerm = `${origin}/#/callback?status=20&pid=[PID]&uid=[UID]`;
-  const cbOverquota = `${origin}/#/callback?status=30&pid=[PID]&uid=[UID]`;
-  const cbSecurity = `${origin}/#/callback?status=40&pid=[PID]&uid=[UID]`;
+  // 100% Static Inbound Return Redirect URLs (Given to Client)
+  // Standard Client-Scoped Static REST Endpoints
+  const staticComplete = `${origin}/redirects/c/${encodeURIComponent(cCode)}/complete?rid=[identifier]`;
+  const staticTerm = `${origin}/redirects/c/${encodeURIComponent(cCode)}/terminate?rid=[identifier]`;
+  const staticOverquota = `${origin}/redirects/c/${encodeURIComponent(cCode)}/quotafull?rid=[identifier]`;
+  const staticSecurity = `${origin}/redirects/c/${encodeURIComponent(cCode)}/quality_terminate?rid=[identifier]`;
 
-  // Server S2S Endpoints
-  const srvComplete = `${origin}/redirects/c/${encodeURIComponent(cCode)}/complete?rid=[identifier]&hash=[hash]`;
-  const srvTerm = `${origin}/redirects/c/${encodeURIComponent(cCode)}/terminate?rid=[identifier]&hash=[hash]`;
-  const srvOverquota = `${origin}/redirects/c/${encodeURIComponent(cCode)}/quotafull?rid=[identifier]&hash=[hash]`;
-  const srvSecurity = `${origin}/redirects/c/${encodeURIComponent(cCode)}/quality_terminate?rid=[identifier]&hash=[hash]`;
+  // Universal Static SPA Hash Alternatives (Respondent UID only)
+  const spaComplete = `${origin}/#/complete?uid=[UID]`;
+  const spaTerm = `${origin}/#/terminate?uid=[UID]`;
+  const spaOverquota = `${origin}/#/overquota?uid=[UID]`;
+  const spaSecurity = `${origin}/#/security?uid=[UID]`;
 
   const copyAllRedirects = () => {
     const text =
-      `*SMR Platform Inbound Return Redirects for ${cName} (Code: ${cCode})*\n` +
+      `*SMR Platform Static Return Redirects for ${cName} (Code: ${cCode})*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `Please configure your survey software to redirect respondents to the matching URL upon survey exit:\n\n` +
-      `1. COMPLETE / SUCCESS (Status 10):\n${cbComplete}\n` +
-      `   (Server REST: ${srvComplete})\n\n` +
-      `2. TERMINATE / SCREENOUT (Status 20):\n${cbTerm}\n` +
-      `   (Server REST: ${srvTerm})\n\n` +
-      `3. OVERQUOTA / QUOTA FULL (Status 30):\n${cbOverquota}\n` +
-      `   (Server REST: ${srvOverquota})\n\n` +
-      `4. SECURITY / QUALITY SCREENOUT (Status 40):\n${cbSecurity}\n` +
-      `   (Server REST: ${srvSecurity})\n\n` +
-      `Anti-Tamper Security: ${client.hash_algorithm || "SHA-256"} Verification Enabled\n` +
+      `Please configure your survey software with these 4 static exit redirects:\n\n` +
+      `1. COMPLETE / SUCCESS (Status 10):\n${staticComplete}\n` +
+      `   (SPA Alternative: ${spaComplete})\n\n` +
+      `2. TERMINATE / SCREENOUT (Status 20):\n${staticTerm}\n` +
+      `   (SPA Alternative: ${spaTerm})\n\n` +
+      `3. OVERQUOTA / QUOTA FULL (Status 30):\n${staticOverquota}\n` +
+      `   (SPA Alternative: ${spaOverquota})\n\n` +
+      `4. SECURITY / QUALITY SCREENOUT (Status 40):\n${staticSecurity}\n` +
+      `   (SPA Alternative: ${spaSecurity})\n\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `Note: Replace [UID] with the respondent identifier and [PID] with your assigned study ID.`;
+      `Note: Replace [identifier] or [UID] with the respondent identifier upon survey exit. No project ID or status code parameters required.`;
 
     navigator.clipboard.writeText(text);
     setCopiedAll(true);
-    toast("All 4 Inbound Redirect URLs copied to clipboard!", "success");
+    toast("All 4 Static Redirect URLs copied to clipboard!", "success");
     setTimeout(() => setCopiedAll(false), 2500);
   };
 
@@ -104,7 +104,7 @@ export function ClientIntegrationModal({
       open={true}
       onClose={onClose}
       title={`Client Integration & Redirects · ${cName}`}
-      subtitle={`Code: ${cCode} · Manage return redirects to give to client and S2S API credentials`}
+      subtitle={`Code: ${cCode} · Manage static return redirects to give to client and S2S API credentials`}
       size="lg"
       footer={
         <div className="flex w-full items-center justify-between">
@@ -139,11 +139,11 @@ export function ClientIntegrationModal({
                   <Link2 size={15} />
                 </span>
                 <h4 className="text-[14px] font-semibold text-ink">
-                  Client Onboarding Redirect Package
+                  Client Onboarding Static Redirects
                 </h4>
               </div>
               <p className="text-[12px] text-ink-3 leading-relaxed">
-                Send these 4 links to <strong className="font-semibold text-ink">{cName}</strong> so their questionnaire redirects respondents back to your SMR platform.
+                Provide these 4 static return redirects to <strong className="font-semibold text-ink">{cName}</strong> to configure in their survey exit settings.
               </p>
             </div>
             <Button
@@ -168,25 +168,25 @@ export function ClientIntegrationModal({
                   </span>
                   <Badge tone="green">Status 10</Badge>
                 </div>
-                <CopyButton text={cbComplete} />
+                <CopyButton text={staticComplete} />
               </div>
               <div className="rounded-xl border border-line/50 bg-fill p-2.5 font-mono text-[12px] text-ink break-all select-all">
-                {cbComplete}
+                {staticComplete}
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pt-0.5 text-[11px] text-ink-3">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="shrink-0 text-ink-3">Server REST S2S:</span>
-                  <span className="font-mono text-ink-2 truncate">{srvComplete}</span>
+                  <span className="shrink-0 text-ink-3">SPA Alternative:</span>
+                  <span className="font-mono text-ink-2 truncate">{spaComplete}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(srvComplete);
-                    toast("Server REST Complete URL copied!");
+                    navigator.clipboard.writeText(spaComplete);
+                    toast("SPA Complete URL copied!");
                   }}
                   className="shrink-0 text-[11px] font-medium text-accent hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  <Copy size={11} /> Copy S2S
+                  <Copy size={11} /> Copy SPA
                 </button>
               </div>
             </div>
@@ -201,25 +201,25 @@ export function ClientIntegrationModal({
                   </span>
                   <Badge tone="red">Status 20</Badge>
                 </div>
-                <CopyButton text={cbTerm} />
+                <CopyButton text={staticTerm} />
               </div>
               <div className="rounded-xl border border-line/50 bg-fill p-2.5 font-mono text-[12px] text-ink break-all select-all">
-                {cbTerm}
+                {staticTerm}
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pt-0.5 text-[11px] text-ink-3">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="shrink-0 text-ink-3">Server REST S2S:</span>
-                  <span className="font-mono text-ink-2 truncate">{srvTerm}</span>
+                  <span className="shrink-0 text-ink-3">SPA Alternative:</span>
+                  <span className="font-mono text-ink-2 truncate">{spaTerm}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(srvTerm);
-                    toast("Server REST Terminate URL copied!");
+                    navigator.clipboard.writeText(spaTerm);
+                    toast("SPA Terminate URL copied!");
                   }}
                   className="shrink-0 text-[11px] font-medium text-accent hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  <Copy size={11} /> Copy S2S
+                  <Copy size={11} /> Copy SPA
                 </button>
               </div>
             </div>
@@ -234,25 +234,25 @@ export function ClientIntegrationModal({
                   </span>
                   <Badge tone="amber">Status 30</Badge>
                 </div>
-                <CopyButton text={cbOverquota} />
+                <CopyButton text={staticOverquota} />
               </div>
               <div className="rounded-xl border border-line/50 bg-fill p-2.5 font-mono text-[12px] text-ink break-all select-all">
-                {cbOverquota}
+                {staticOverquota}
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pt-0.5 text-[11px] text-ink-3">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="shrink-0 text-ink-3">Server REST S2S:</span>
-                  <span className="font-mono text-ink-2 truncate">{srvOverquota}</span>
+                  <span className="shrink-0 text-ink-3">SPA Alternative:</span>
+                  <span className="font-mono text-ink-2 truncate">{spaOverquota}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(srvOverquota);
-                    toast("Server REST Overquota URL copied!");
+                    navigator.clipboard.writeText(spaOverquota);
+                    toast("SPA Overquota URL copied!");
                   }}
                   className="shrink-0 text-[11px] font-medium text-accent hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  <Copy size={11} /> Copy S2S
+                  <Copy size={11} /> Copy SPA
                 </button>
               </div>
             </div>
@@ -267,25 +267,25 @@ export function ClientIntegrationModal({
                   </span>
                   <Badge tone="purple">Status 40</Badge>
                 </div>
-                <CopyButton text={cbSecurity} />
+                <CopyButton text={staticSecurity} />
               </div>
               <div className="rounded-xl border border-line/50 bg-fill p-2.5 font-mono text-[12px] text-ink break-all select-all">
-                {cbSecurity}
+                {staticSecurity}
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pt-0.5 text-[11px] text-ink-3">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="shrink-0 text-ink-3">Server REST S2S:</span>
-                  <span className="font-mono text-ink-2 truncate">{srvSecurity}</span>
+                  <span className="shrink-0 text-ink-3">SPA Alternative:</span>
+                  <span className="font-mono text-ink-2 truncate">{spaSecurity}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(srvSecurity);
-                    toast("Server REST Security Screenout URL copied!");
+                    navigator.clipboard.writeText(spaSecurity);
+                    toast("SPA Security Screenout URL copied!");
                   }}
                   className="shrink-0 text-[11px] font-medium text-accent hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  <Copy size={11} /> Copy S2S
+                  <Copy size={11} /> Copy SPA
                 </button>
               </div>
             </div>
