@@ -538,6 +538,7 @@ export const api = {
           client_name: c.client_name,
           email: c.email || null,
           phone: c.phone || null,
+          country: c.country || "United States",
           api_type: c.api_type || c.apiType || "S2S API",
           feed_api_url: c.feed_api_url || c.feedApiUrl || null,
           s2s_callback_url: c.s2s_callback_url || null,

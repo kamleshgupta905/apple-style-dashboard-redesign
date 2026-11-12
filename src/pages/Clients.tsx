@@ -28,18 +28,19 @@ import { PERMS, usePermissions } from "../lib/permissions";
 const blank = {
   client_name: "",
   client_code: "",
+  country: "United States",
   email: "",
   phone: "",
   api_type: "marketxcel",
-  feed_api_url: "",
-  s2s_callback_url: "",
-  master_data_url: "",
+  feed_api_url: "https://api.marketxcel.co.in/webservices/supplier/send_supplier_data",
+  s2s_callback_url: "https://api.marketxcel.co.in/webservices/callback/updateRespondentStatus",
+  master_data_url: "https://api.marketxcel.co.in/webservices/supplier/get_master_data/",
   complete_redirect: "",
   terminate_redirect: "",
   overquota_redirect: "",
   security_redirect: "",
   secret_key: "",
-  api_token: "",
+  api_token: "mx_token_live_2026",
   hash_algorithm: "sha3-256",
   security_enabled: 1,
   status: "Y",
@@ -146,6 +147,7 @@ export function Clients() {
         ...blank,
         client_name: c.client_name || "",
         client_code: c.client_code || "",
+        country: c.country || "United States",
         email: c.email || "",
         phone: c.phone || "",
         api_type: c.api_type || "marketxcel",
@@ -545,11 +547,87 @@ function ClientForm({
   const [v, setV] = useState(blank);
   const [busy, setBusy] = useState(false);
   const [key, setKey] = useState<unknown>(null);
+  const [manualCode, setManualCode] = useState(false);
+  const [copiedAll, setCopiedAll] = useState(false);
+
   if (state && key !== state) {
     setKey(state);
     setV(state.values);
+    setManualCode(!!state.id);
+    setCopiedAll(false);
   }
-  const set = (k: keyof typeof blank) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setV((p) => ({ ...p, [k]: e.target.value }));
+
+  const handleClientNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const name = e.target.value;
+    setV((prev) => {
+      const next = { ...prev, client_name: name };
+      if (!state?.id && !manualCode) {
+        next.client_code = name
+          .trim()
+          .replace(/[^a-zA-Z0-9]/g, "_")
+          .toUpperCase()
+          .slice(0, 16);
+      }
+      return next;
+    });
+  };
+
+  const handleApiTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    let autoFeed = "https://api.marketxcel.co.in/webservices/supplier/send_supplier_data";
+    let autoS2S = "https://api.marketxcel.co.in/webservices/callback/updateRespondentStatus";
+    let autoMaster = "https://api.marketxcel.co.in/webservices/supplier/get_master_data/";
+    let autoToken = "mx_token_live_2026";
+
+    if (val === "surveysherpa") {
+      autoFeed = "https://api.surveysherpa.com/api/supplier/getAllSurveys";
+      autoS2S = "https://api.surveysherpa.com/api/supplier/getSurveyDetails";
+      autoMaster = "https://api.surveysherpa.com/api/supplier/getQualifications";
+      autoToken = "sherpa_token_live_2026";
+    } else if (val === "zamplia") {
+      autoFeed = "https://api.zamplia.com/v1/surveys/live";
+      autoS2S = "https://api.zamplia.com/v1/surveys/callback";
+      autoMaster = "https://api.zamplia.com/v1/surveys/master-data";
+      autoToken = "zamplia_auth_token_live";
+    } else if (val === "custom" || val === "direct") {
+      autoFeed = "https://api.clientpartner.com/feed";
+      autoS2S = "https://api.clientpartner.com/callback";
+      autoMaster = "https://api.clientpartner.com/attributes";
+      autoToken = `tok_${(v.client_code || "client").toLowerCase()}_2026`;
+    }
+
+    setV((prev) => ({
+      ...prev,
+      api_type: val,
+      feed_api_url: autoFeed,
+      s2s_callback_url: autoS2S,
+      master_data_url: autoMaster,
+      api_token: prev.api_token || autoToken,
+    }));
+  };
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
+  const previewCode = (v.client_code || v.client_name || "CLIENT_CODE").trim().replace(/\s+/g, "_").toUpperCase();
+
+  const compUrl = `${origin}/redirects/c/${previewCode}/complete?rid=[identifier]`;
+  const termUrl = `${origin}/redirects/c/${previewCode}/terminate?rid=[identifier]`;
+  const oqUrl = `${origin}/redirects/c/${previewCode}/quotafull?rid=[identifier]`;
+  const secUrl = `${origin}/redirects/c/${previewCode}/quality_terminate?rid=[identifier]`;
+
+  const handleCopyAll = () => {
+    const text =
+      `🎯 *SMR Platform Inbound Redirect URLs for ${v.client_name || previewCode}*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `1. ✅ COMPLETE / SUCCESS:\n${compUrl}\n\n` +
+      `2. ❌ TERMINATE / SCREENOUT:\n${termUrl}\n\n` +
+      `3. ⚠️ OVERQUOTA / QUOTA FULL:\n${oqUrl}\n\n` +
+      `4. 🚫 SECURITY / QUALITY SCREENOUT:\n${secUrl}\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+    navigator.clipboard?.writeText?.(text);
+    setCopiedAll(true);
+    toast("All 4 redirect URLs copied to clipboard!", "success");
+    setTimeout(() => setCopiedAll(false), 2200);
+  };
 
   const save = async () => {
     if (!v.client_name.trim()) return toast("Client name is required.", "error");
@@ -559,16 +637,18 @@ function ClientForm({
       const body = {
         ...v,
         client_code: code,
+        country: v.country || "United States",
         api_type: v.api_type,
         apiType: v.api_type,
         feed_api_url: v.feed_api_url,
         feedApiUrl: v.feed_api_url,
         s2s_callback_url: v.s2s_callback_url,
         master_data_url: v.master_data_url,
-        complete_redirect: v.complete_redirect || null,
-        terminate_redirect: v.terminate_redirect || null,
-        overquota_redirect: v.overquota_redirect || null,
-        security_redirect: v.security_redirect || null,
+        complete_redirect: v.complete_redirect || compUrl,
+        terminate_redirect: v.terminate_redirect || termUrl,
+        overquota_redirect: v.overquota_redirect || oqUrl,
+        security_redirect: v.security_redirect || secUrl,
+        api_token: v.api_token,
         security_enabled: Number(v.security_enabled) ? 1 : 0,
         status: v.status === "Y" || v.status === "Active" ? "Y" : "N",
       };
@@ -577,7 +657,7 @@ function ClientForm({
       } else {
         await api.post("/clients", body);
       }
-      toast(state?.id ? "Client updated successfully" : "Client added successfully", "success");
+      toast(state?.id ? "Client updated successfully" : `Client "${v.client_name}" onboarded successfully!`, "success");
       onSaved();
     } catch (e: any) {
       toast(e.message, "error");
@@ -591,87 +671,217 @@ function ClientForm({
       open={!!state}
       onClose={onClose}
       size="lg"
-      title={state?.id ? "Edit client" : "Add client"}
-      subtitle="Demand partner connection details"
+      title={state?.id ? `Edit Client: ${v.client_name || ""}` : "Client Onboarding & 3-API Hub"}
+      subtitle="Configure 4 SMR Inbound Redirects and ingest the client's 3 API endpoints"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
           <Button loading={busy} onClick={save} icon={<Building2 size={16} />}>
-            {state?.id ? "Save changes" : "Add client"}
+            {state?.id ? "Save changes" : "Save & Onboard Client"}
           </Button>
         </>
       }
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Client name">
-          <Input value={v.client_name} onChange={set("client_name")} placeholder="Acme Research" />
-        </Field>
-        <Field label="Client code" hint="Identifier for tracking and routing">
-          <Input value={v.client_code} onChange={set("client_code")} placeholder="ACME" />
-        </Field>
-        <Field label="Email">
-          <Input type="email" value={v.email} onChange={set("email")} placeholder="partner@example.com" />
-        </Field>
-        <Field label="Phone">
-          <Input value={v.phone} onChange={set("phone")} placeholder="+1 (555) 000-0000" />
-        </Field>
-        <Field label="API type" className="sm:col-span-2">
-          <Select value={v.api_type} onChange={set("api_type")}>
-            <option value="marketxcel">MarketXcel</option>
-            <option value="zamplia">Zamplia</option>
-            <option value="S2S">S2S API</option>
-            <option value="direct">Direct</option>
-          </Select>
-        </Field>
-        <Field label="Feed API URL" className="sm:col-span-2">
-          <Input value={v.feed_api_url} onChange={set("feed_api_url")} placeholder="https://" />
-        </Field>
-        <Field label="S2S callback URL" className="sm:col-span-2">
-          <Input value={v.s2s_callback_url} onChange={set("s2s_callback_url")} placeholder="https://" />
-        </Field>
-        <Field label="Master data URL" className="sm:col-span-2">
-          <Input value={v.master_data_url} onChange={set("master_data_url")} placeholder="https://" />
-        </Field>
-
-        <div className="sm:col-span-2 pt-2 border-t border-line/60">
-          <p className="text-[13px] font-semibold text-ink mb-2">Redirect URLs (Return Callbacks)</p>
-        </div>
-        <Field label="Complete redirect URL" className="sm:col-span-2">
-          <Input value={v.complete_redirect} onChange={set("complete_redirect")} placeholder="https://..." />
-        </Field>
-        <Field label="Terminate redirect URL" className="sm:col-span-2">
-          <Input value={v.terminate_redirect} onChange={set("terminate_redirect")} placeholder="https://..." />
-        </Field>
-        <Field label="Over quota redirect URL" className="sm:col-span-2">
-          <Input value={v.overquota_redirect} onChange={set("overquota_redirect")} placeholder="https://..." />
-        </Field>
-        <Field label="Security redirect URL" className="sm:col-span-2">
-          <Input value={v.security_redirect} onChange={set("security_redirect")} placeholder="https://..." />
-        </Field>
-
-        <div className="sm:col-span-2 pt-2 border-t border-line/60">
-          <p className="text-[13px] font-semibold text-ink mb-2">API Security & Access</p>
-        </div>
-        <Field label="API token" className="sm:col-span-2">
-          <Input type="password" autoComplete="new-password" value={v.api_token} onChange={set("api_token")} placeholder="API token" />
-        </Field>
-
-        <div className="flex items-center justify-between rounded-2xl bg-fill px-4 py-3 sm:col-span-2">
-          <div>
-            <p className="text-[14px] font-medium">Active Partner</p>
-            <p className="text-[12px] text-ink-3">Inactive clients will hide their surveys from the Marketplace</p>
+      <div className="space-y-4">
+        {/* Section A: SMR Inbound Redirect URLs (Send these 4 links to your client) */}
+        <div className="rounded-2xl border border-line bg-fill/40 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="flex items-center gap-2 text-[12.5px] font-bold text-ink">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-extrabold text-white">
+                A
+              </span>
+              <span>SMR Inbound Redirect URLs (Send these 4 links to your client):</span>
+            </span>
+            <button
+              type="button"
+              onClick={handleCopyAll}
+              className="flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-[11px] font-semibold text-accent shadow-xs hover:bg-fill transition cursor-pointer"
+            >
+              {copiedAll ? <Check size={12} className="text-green" /> : <Copy size={12} />}
+              <span>{copiedAll ? "Copied All!" : "Copy All 4"}</span>
+            </button>
           </div>
-          <Toggle checked={v.status === "Y" || v.status === "Active"} onChange={(on) => setV((p) => ({ ...p, status: on ? "Y" : "N" }))} label="Active client" />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+            <div className="rounded-xl border border-line bg-surface p-2.5">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-emerald-600 flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                  Complete (Status 10)
+                </span>
+                <CopyButton text={compUrl} />
+              </div>
+              <p className="font-mono text-[11px] text-ink-3 truncate break-all">{compUrl}</p>
+            </div>
+
+            <div className="rounded-xl border border-line bg-surface p-2.5">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-red flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-red"></span>
+                  Terminate (Status 20)
+                </span>
+                <CopyButton text={termUrl} />
+              </div>
+              <p className="font-mono text-[11px] text-ink-3 truncate break-all">{termUrl}</p>
+            </div>
+
+            <div className="rounded-xl border border-line bg-surface p-2.5">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-amber-600 flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                  OverQuota (Status 30)
+                </span>
+                <CopyButton text={oqUrl} />
+              </div>
+              <p className="font-mono text-[11px] text-ink-3 truncate break-all">{oqUrl}</p>
+            </div>
+
+            <div className="rounded-xl border border-line bg-surface p-2.5">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-purple-600 flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-purple-500"></span>
+                  Quality / Security (Status 40)
+                </span>
+                <CopyButton text={secUrl} />
+              </div>
+              <p className="font-mono text-[11px] text-ink-3 truncate break-all">{secUrl}</p>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center justify-between rounded-2xl bg-fill px-4 py-3 sm:col-span-2">
-          <div>
-            <p className="text-[14px] font-medium">Security gate</p>
-            <p className="text-[12px] text-ink-3">Run fraud checks on this client's traffic</p>
+        {/* Section B: Client Information */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Client Name *">
+            <Input
+              required
+              value={v.client_name}
+              onChange={handleClientNameChange}
+              placeholder="e.g. Global Research Ltd, Insight Corp"
+            />
+          </Field>
+
+          <Field label="Client Code / Identifier" hint="Unique short slug for URLs">
+            <Input
+              value={v.client_code}
+              onChange={(e) => {
+                setManualCode(true);
+                setV((p) => ({ ...p, client_code: e.target.value.replace(/\s+/g, "_").toUpperCase() }));
+              }}
+              placeholder="e.g. MX_DEMAND, DE_CLIENT"
+              className="font-mono"
+            />
+          </Field>
+
+          <Field label="Market Country">
+            <Input
+              value={v.country || "United States"}
+              onChange={(e) => setV((p) => ({ ...p, country: e.target.value }))}
+              placeholder="e.g. United States, Global"
+            />
+          </Field>
+
+          <Field label="API Architecture">
+            <Select value={v.api_type} onChange={handleApiTypeChange}>
+              <option value="marketxcel">Standard Demand REST API (MarketXcel)</option>
+              <option value="surveysherpa">SurveySherpa API</option>
+              <option value="zamplia">S2S Supply / Callback API (Zamplia)</option>
+              <option value="custom">Custom Partner REST API</option>
+            </Select>
+          </Field>
+
+          <Field label="Contact Email">
+            <Input
+              type="email"
+              value={v.email}
+              onChange={(e) => setV((p) => ({ ...p, email: e.target.value }))}
+              placeholder="partner@example.com"
+            />
+          </Field>
+
+          <Field label="Phone">
+            <Input
+              value={v.phone}
+              onChange={(e) => setV((p) => ({ ...p, phone: e.target.value }))}
+              placeholder="+1 (555) 000-0000"
+            />
+          </Field>
+        </div>
+
+        {/* Section C: Client's 3 API Endpoints (Received from Client) */}
+        <div className="rounded-2xl border border-line bg-fill/40 p-4 space-y-3">
+          <div className="text-[12.5px] font-bold text-ink flex items-center gap-2">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-extrabold text-white">
+              B
+            </span>
+            <span>Client's 3 API Endpoints (Received from Client):</span>
           </div>
-          <Toggle checked={!!v.security_enabled} onChange={(on) => setV((p) => ({ ...p, security_enabled: on ? 1 : 0 }))} label="Security gate" />
+
+          <div className="space-y-2.5">
+            <Field label="1. Project Feed API Endpoint:">
+              <Input
+                value={v.feed_api_url}
+                onChange={(e) => setV((p) => ({ ...p, feed_api_url: e.target.value }))}
+                placeholder="https://api.marketxcel.co.in/webservices/supplier/send_supplier_data"
+                className="font-mono text-[12px]"
+              />
+            </Field>
+
+            <Field label="2. S2S Callback Webhook Endpoint:">
+              <Input
+                value={v.s2s_callback_url}
+                onChange={(e) => setV((p) => ({ ...p, s2s_callback_url: e.target.value }))}
+                placeholder="https://api.marketxcel.co.in/webservices/callback/updateRespondentStatus"
+                className="font-mono text-[12px]"
+              />
+            </Field>
+
+            <Field label="3. Master Data / Qualifications Endpoint:">
+              <Input
+                value={v.master_data_url}
+                onChange={(e) => setV((p) => ({ ...p, master_data_url: e.target.value }))}
+                placeholder="https://api.marketxcel.co.in/webservices/supplier/get_master_data/"
+                className="font-mono text-[12px]"
+              />
+            </Field>
+          </div>
+        </div>
+
+        {/* Section D: Client Security & Access Tokens */}
+        <div className="space-y-3">
+          <Field label="Client API Token / Bearer Key:">
+            <Input
+              value={v.api_token}
+              onChange={(e) => setV((p) => ({ ...p, api_token: e.target.value }))}
+              placeholder="e.g. mx_token_live_2026"
+              className="font-mono text-[12px]"
+            />
+          </Field>
+
+          <div className="flex items-center justify-between rounded-2xl bg-fill px-4 py-3">
+            <div>
+              <p className="text-[14px] font-medium text-ink">Active Partner</p>
+              <p className="text-[12px] text-ink-3">Inactive clients will hide their surveys from the Marketplace</p>
+            </div>
+            <Toggle
+              checked={v.status === "Y" || v.status === "Active"}
+              onChange={(on) => setV((p) => ({ ...p, status: on ? "Y" : "N" }))}
+              label="Active client"
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-2xl bg-fill px-4 py-3">
+            <div>
+              <p className="text-[14px] font-medium text-ink">Security gate</p>
+              <p className="text-[12px] text-ink-3">Run fraud checks on this client's traffic</p>
+            </div>
+            <Toggle
+              checked={!!v.security_enabled}
+              onChange={(on) => setV((p) => ({ ...p, security_enabled: on ? 1 : 0 }))}
+              label="Security gate"
+            />
+          </div>
         </div>
       </div>
     </Modal>
