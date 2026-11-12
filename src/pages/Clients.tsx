@@ -221,10 +221,6 @@ export function Clients() {
                   <dd className="font-medium capitalize text-ink">{c.api_type || "—"}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <dt className="text-ink-3">Hashing</dt>
-                  <dd className="font-medium uppercase text-ink">{c.hash_algorithm || "—"}</dd>
-                </div>
-                <div className="flex justify-between gap-3">
                   <dt className="text-ink-3">Contact</dt>
                   <dd className="max-w-[60%] truncate font-medium text-ink">{c.email || "—"}</dd>
                 </div>
@@ -471,22 +467,13 @@ function ClientDrawer({
             <section>
               <h3 className="mb-2 text-[15px] font-semibold">Credentials</h3>
               <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line text-[14px]">
-                {[
-                  ["Secret key", c.secret_key],
-                  ["API token", c.api_token],
-                ].map(([k, v]) => (
-                  <div key={k} className="flex items-center justify-between gap-3 px-4 py-3">
-                    <span className="text-ink-3">{k}</span>
-                    <span className="min-w-0 truncate font-mono text-[13px]">{reveal ? v || "—" : mask(v as string)}</span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between px-4 py-3">
-                  <span className="text-ink-3">Hash algorithm</span>
-                  <span className="font-medium uppercase">{c.hash_algorithm}</span>
+                <div className="flex items-center justify-between gap-3 px-4 py-3">
+                  <span className="text-ink-3">API token</span>
+                  <span className="min-w-0 truncate font-mono text-[13px]">{reveal ? c.api_token || "—" : mask(c.api_token as string)}</span>
                 </div>
               </div>
               <Button className="mt-2" size="sm" variant="ghost" icon={reveal ? <EyeOff size={14} /> : <Eye size={14} />} onClick={() => setReveal((r) => !r)}>
-                {reveal ? "Hide secrets" : "Reveal secrets"}
+                {reveal ? "Hide token" : "Reveal token"}
               </Button>
             </section>
           )}
@@ -630,20 +617,12 @@ function ClientForm({
         <Field label="Phone">
           <Input value={v.phone} onChange={set("phone")} placeholder="+1 (555) 000-0000" />
         </Field>
-        <Field label="API type">
+        <Field label="API type" className="sm:col-span-2">
           <Select value={v.api_type} onChange={set("api_type")}>
             <option value="marketxcel">MarketXcel</option>
             <option value="zamplia">Zamplia</option>
             <option value="S2S">S2S API</option>
             <option value="direct">Direct</option>
-          </Select>
-        </Field>
-        <Field label="Hash algorithm">
-          <Select value={v.hash_algorithm} onChange={set("hash_algorithm")}>
-            <option value="sha3-256">SHA3-256</option>
-            <option value="hmac-sha256">HMAC-SHA256</option>
-            <option value="sha256">SHA256</option>
-            <option value="md5">MD5</option>
           </Select>
         </Field>
         <Field label="Feed API URL" className="sm:col-span-2">
@@ -675,10 +654,7 @@ function ClientForm({
         <div className="sm:col-span-2 pt-2 border-t border-line/60">
           <p className="text-[13px] font-semibold text-ink mb-2">API Security & Access</p>
         </div>
-        <Field label="Secret key">
-          <Input type="password" autoComplete="new-password" value={v.secret_key} onChange={set("secret_key")} placeholder="Secret key" />
-        </Field>
-        <Field label="API token">
+        <Field label="API token" className="sm:col-span-2">
           <Input type="password" autoComplete="new-password" value={v.api_token} onChange={set("api_token")} placeholder="API token" />
         </Field>
 

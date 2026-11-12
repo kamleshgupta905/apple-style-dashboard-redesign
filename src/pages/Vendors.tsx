@@ -1,8 +1,25 @@
 import { useMemo, useState, useEffect } from "react";
-import { Cable, Download, Pencil, Plus, Share2, Trash2, Users } from "lucide-react";
+import {
+  Ban,
+  Cable,
+  Check,
+  ChevronDown,
+  Download,
+  Globe,
+  Link2,
+  Pencil,
+  Plus,
+  Search,
+  Share2,
+  Trash2,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { api, type Allotment, type Vendor, type Project } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { exportCSV, formatDate, initials, money, num } from "../lib/utils";
+import { cn } from "../utils/cn";
 import {
   Badge,
   Button,
@@ -26,12 +43,73 @@ import { VendorIntegrationModal } from "../components/VendorIntegrationModal";
 import { PERMS, usePermissions } from "../lib/permissions";
 import { useRealtime } from "../lib/useRealtime";
 
+export const DEFAULT_COUNTRIES = [
+  { id: 1, name: "United States", code: "US" },
+  { id: 2, name: "United Kingdom", code: "GB" },
+  { id: 3, name: "Canada", code: "CA" },
+  { id: 4, name: "Australia", code: "AU" },
+  { id: 5, name: "India", code: "IN" },
+  { id: 6, name: "Germany", code: "DE" },
+  { id: 7, name: "France", code: "FR" },
+  { id: 8, name: "Italy", code: "IT" },
+  { id: 9, name: "Spain", code: "ES" },
+  { id: 10, name: "Japan", code: "JP" },
+  { id: 11, name: "Brazil", code: "BR" },
+  { id: 12, name: "Mexico", code: "MX" },
+  { id: 13, name: "Netherlands", code: "NL" },
+  { id: 14, name: "Sweden", code: "SE" },
+  { id: 15, name: "Switzerland", code: "CH" },
+  { id: 16, name: "Singapore", code: "SG" },
+  { id: 17, name: "New Zealand", code: "NZ" },
+  { id: 18, name: "South Africa", code: "ZA" },
+  { id: 19, name: "United Arab Emirates", code: "AE" },
+  { id: 20, name: "Saudi Arabia", code: "SA" },
+  { id: 21, name: "Poland", code: "PL" },
+  { id: 22, name: "Turkey", code: "TR" },
+  { id: 23, name: "Indonesia", code: "ID" },
+  { id: 24, name: "Philippines", code: "PH" },
+  { id: 25, name: "Vietnam", code: "VN" },
+  { id: 26, name: "Thailand", code: "TH" },
+  { id: 27, name: "Malaysia", code: "MY" },
+  { id: 28, name: "Argentina", code: "AR" },
+  { id: 29, name: "Chile", code: "CL" },
+  { id: 30, name: "Colombia", code: "CO" },
+  { id: 31, name: "Peru", code: "PE" },
+  { id: 32, name: "Egypt", code: "EG" },
+  { id: 33, name: "Nigeria", code: "NG" },
+  { id: 34, name: "Kenya", code: "KE" },
+  { id: 35, name: "South Korea", code: "KR" },
+  { id: 36, name: "Ireland", code: "IE" },
+  { id: 37, name: "Belgium", code: "BE" },
+  { id: 38, name: "Austria", code: "AT" },
+  { id: 39, name: "Portugal", code: "PT" },
+  { id: 40, name: "Denmark", code: "DK" },
+  { id: 41, name: "Norway", code: "NO" },
+  { id: 42, name: "Finland", code: "FI" },
+  { id: 43, name: "Czech Republic", code: "CZ" },
+  { id: 44, name: "Romania", code: "RO" },
+  { id: 45, name: "Israel", code: "IL" },
+  { id: 46, name: "Greece", code: "GR" },
+  { id: 47, name: "Hungary", code: "HU" },
+  { id: 48, name: "Hong Kong", code: "HK" },
+];
+
 interface VRow {
   code: string;
   name: string;
   email?: string;
   phone?: string;
   share: number;
+  commission_type?: string;
+  cpi?: number | string;
+  status?: string;
+  countries?: string[];
+  blocked_clients?: (string | number)[];
+  contacts?: Array<{ name: string; email: string; phone?: string; role?: string }>;
+  redirect_complete?: string;
+  redirect_terminate?: string;
+  redirect_overquota?: string;
+  redirect_security?: string;
   dbId?: number | string;
   studies: number;
   clicks: number;
@@ -60,13 +138,32 @@ export function Vendors() {
   useRealtime(["smr_vendors", "smr_vendor_allotments"], () => q.reload());
 
   const q = useQuery(async () => {
-    const [mv, uni, al] = await Promise.all([
+    const [mv, uni, al, cl] = await Promise.all([
       api.get<{ data: Vendor[] }>("/manage/vendors", { limit: 500 }).catch(() => ({ data: [] as Vendor[] })),
       api.get<{ data: { vendors: any[] } }>("/reports/unified").catch(() => ({ data: { vendors: [] as any[] } })),
       api.get<{ data: Allotment[] }>("/vendor/allotments"),
+      api.get<{ data: any[] }>("/clients").catch(() => ({ data: [] as any[] })),
     ]);
     const map = new Map<string, VRow>();
-    const blank = (code: string, name: string): VRow => ({ code, name, share: 70, studies: 0, clicks: 0, completes: 0, terminates: 0, conv: 0, payout: 0, avgCpi: 0, registered: false });
+    const blank = (code: string, name: string): VRow => ({
+      code,
+      name,
+      share: 70,
+      commission_type: "fixed_cpi",
+      cpi: "1.50",
+      status: "Active",
+      countries: [],
+      blocked_clients: [],
+      contacts: [],
+      studies: 0,
+      clicks: 0,
+      completes: 0,
+      terminates: 0,
+      conv: 0,
+      payout: 0,
+      avgCpi: 0,
+      registered: false,
+    });
     
     // Clean allotments: remove dummy vendor allotments
     const realAllotments = (al.data || []).filter(
@@ -81,6 +178,16 @@ export function Vendors() {
           email: v.email,
           phone: v.phone,
           share: num(v.cpi_percentage ?? v.rev_share, 70),
+          commission_type: v.commission_type || "revenue_share",
+          cpi: v.cpi !== undefined && v.cpi !== null ? v.cpi : "1.50",
+          status: v.status || "Active",
+          countries: Array.isArray(v.countries) ? v.countries : [],
+          blocked_clients: Array.isArray(v.blocked_clients) ? v.blocked_clients : [],
+          contacts: Array.isArray(v.contacts) ? v.contacts : [],
+          redirect_complete: v.callback_complete || v.redirect_complete || "",
+          redirect_terminate: v.callback_terminate || v.redirect_terminate || "",
+          redirect_overquota: v.callback_overquota || v.redirect_overquota || "",
+          redirect_security: v.callback_security || v.redirect_security || "",
           dbId: v.id ?? v._id ?? code,
           registered: true,
         });
@@ -113,7 +220,11 @@ export function Vendors() {
       }
     });
 
-    return { vendors: [...map.values()], allotments: realAllotments };
+    return {
+      vendors: [...map.values()],
+      allotments: realAllotments,
+      clients: (cl as any)?.data || [],
+    };
   }, []);
 
   const rows = useMemo(() => {
@@ -410,6 +521,7 @@ export function Vendors() {
       <VendorForm
         state={form}
         existingVendors={q.data?.vendors || []}
+        clients={q.data?.clients || []}
         onClose={() => setForm(null)}
         onSaved={() => {
           setForm(null);
@@ -593,39 +705,138 @@ function getNextVendorCode(vendors: VRow[]): string {
 function VendorForm({
   state,
   existingVendors = [],
+  clients = [],
   onClose,
   onSaved,
 }: {
   state: null | { vendor?: VRow };
   existingVendors?: VRow[];
+  clients?: any[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { toast } = useFeedback();
-  const [v, setV] = useState({ code: "", name: "", email: "", phone: "", share: "70" });
+  const [tab, setTab] = useState<"general" | "countries" | "restrictions">("general");
+  const [showRedirects, setShowRedirects] = useState(false);
+  const [countryFilter, setCountryFilter] = useState("");
+  const [contactDraft, setContactDraft] = useState({ name: "", email: "", phone: "", role: "Account Manager" });
+  const [manualCode, setManualCode] = useState(false);
+
+  const [v, setV] = useState({
+    code: "",
+    name: "",
+    email: "",
+    phone: "",
+    commission_type: "fixed_cpi" as "fixed_cpi" | "revenue_share",
+    cpi: "1.50",
+    share: "70",
+    status: "Active" as "Active" | "Inactive",
+    redirect_complete: "",
+    redirect_terminate: "",
+    redirect_overquota: "",
+    redirect_security: "",
+    countries: [] as string[],
+    blocked_clients: [] as (string | number)[],
+    contacts: [] as Array<{ name: string; email: string; phone?: string; role?: string }>,
+  });
   const [busy, setBusy] = useState(false);
   const [key, setKey] = useState<unknown>(null);
 
   if (state && key !== state) {
     setKey(state);
+    setTab("general");
+    setShowRedirects(false);
+    setCountryFilter("");
     const x = state.vendor;
-    const defaultCode = x?.code || getNextVendorCode(existingVendors);
-    setV({
-      code: defaultCode,
-      name: x?.name || "",
-      email: x?.email || "",
-      phone: x?.phone || "",
-      share: String(x?.share ?? 70),
-    });
+    if (x) {
+      setManualCode(true);
+      setV({
+        code: x.code || "",
+        name: x.name || "",
+        email: x.email || "",
+        phone: x.phone || "",
+        commission_type:
+          x.commission_type === "fixed_cpi" || x.commission_type === "flat_rate"
+            ? "fixed_cpi"
+            : "revenue_share",
+        cpi: String(x.cpi ?? "1.50"),
+        share: String(x.share ?? "70"),
+        status:
+          x.status === "Inactive" || x.status === "inactive" || x.status === "N"
+            ? "Inactive"
+            : "Active",
+        redirect_complete: x.redirect_complete || "",
+        redirect_terminate: x.redirect_terminate || "",
+        redirect_overquota: x.redirect_overquota || "",
+        redirect_security: x.redirect_security || "",
+        countries: Array.isArray(x.countries) ? [...x.countries] : [],
+        blocked_clients: Array.isArray(x.blocked_clients) ? [...x.blocked_clients] : [],
+        contacts: Array.isArray(x.contacts) ? [...x.contacts] : [],
+      });
+    } else {
+      setManualCode(false);
+      setV({
+        code: "",
+        name: "",
+        email: "",
+        phone: "",
+        commission_type: "fixed_cpi",
+        cpi: "1.50",
+        share: "70",
+        status: "Active",
+        redirect_complete: "",
+        redirect_terminate: "",
+        redirect_overquota: "",
+        redirect_security: "",
+        countries: [],
+        blocked_clients: [],
+        contacts: [],
+      });
+    }
   }
 
-  const set = (k: keyof typeof v) => (e: React.ChangeEvent<HTMLInputElement>) => setV((p) => ({ ...p, [k]: e.target.value }));
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const name = e.target.value;
+    setV((prev) => {
+      const next = { ...prev, name };
+      if (!manualCode && !state?.vendor) {
+        next.code = name.toLowerCase().replace(/[^a-z0-9]/g, "-").slice(0, 20);
+      }
+      return next;
+    });
+  };
+
+  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setManualCode(true);
+    setV((prev) => ({
+      ...prev,
+      code: e.target.value.toLowerCase().replace(/\s+/g, "-"),
+    }));
+  };
+
+  const filteredCountries = useMemo(() => {
+    if (!countryFilter.trim()) return DEFAULT_COUNTRIES;
+    const q = countryFilter.toLowerCase().trim();
+    return DEFAULT_COUNTRIES.filter(
+      (c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q)
+    );
+  }, [countryFilter]);
 
   const save = async () => {
     if (!v.name.trim()) return toast("Vendor name is required.", "error");
-    const code = (v.code || getNextVendorCode(existingVendors)).trim();
+    const code = (
+      v.code ||
+      v.name.toLowerCase().replace(/[^a-z0-9]/g, "-").slice(0, 20) ||
+      getNextVendorCode(existingVendors)
+    ).trim();
+    if (!code) return toast("Vendor code/slug is required.", "error");
+
     const share = num(v.share, 70);
-    if (share <= 0 || share > 100) return toast("Share must be between 1 and 100.", "error");
+    const cpiVal = parseFloat(v.cpi) || 0;
+    if (v.commission_type === "revenue_share" && (share <= 0 || share > 100)) {
+      return toast("Revenue share must be between 1 and 100%.", "error");
+    }
+
     setBusy(true);
     try {
       await api.post("/manage/vendors", {
@@ -634,13 +845,26 @@ function VendorForm({
         vendor_id: code,
         name: v.name.trim(),
         vendor_name: v.name.trim(),
-        email: v.email,
-        phone: v.phone,
-        cpi_percentage: share,
-        rev_share: share,
-        status: "Active",
+        email: v.email.trim(),
+        phone: v.phone.trim(),
+        commission_type: v.commission_type,
+        cpi: v.commission_type === "fixed_cpi" ? cpiVal : 0,
+        cpi_percentage: v.commission_type === "revenue_share" ? share : 0,
+        rev_share: v.commission_type === "revenue_share" ? share : 0,
+        status: v.status,
+        redirect_complete: v.redirect_complete,
+        redirect_terminate: v.redirect_terminate,
+        redirect_overquota: v.redirect_overquota,
+        redirect_security: v.redirect_security,
+        callback_complete: v.redirect_complete,
+        callback_terminate: v.redirect_terminate,
+        callback_overquota: v.redirect_overquota,
+        callback_security: v.redirect_security,
+        countries: v.countries,
+        blocked_clients: v.blocked_clients,
+        contacts: v.contacts,
       });
-      toast(state?.vendor ? "Vendor updated" : `Vendor added (${code})`);
+      toast(state?.vendor ? "Vendor panel updated" : `Vendor panel added (${code})`);
       onSaved();
     } catch (e: any) {
       toast(e.message, "error");
@@ -653,55 +877,529 @@ function VendorForm({
     <Modal
       open={!!state}
       onClose={onClose}
-      title={state?.vendor ? "Edit vendor" : "Add vendor"}
-      subtitle={
-        state?.vendor
-          ? `Editing supply partner ${state.vendor.name}`
-          : "Supply partner profile with auto-generated sequential vendor code"
-      }
+      size="lg"
+      title={state?.vendor ? "Edit Supply Vendor Panel" : "Add Supply Vendor Panel"}
+      subtitle="Configure supplier profile, entry routes, and 4 callback redirects."
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button loading={busy} onClick={save}>
-            {state?.vendor ? "Save changes" : "Add vendor"}
+          <Button loading={busy} onClick={save} icon={<Plus size={16} />}>
+            {state?.vendor ? "Save Vendor Panel" : "Create Vendor"}
           </Button>
         </>
       }
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Vendor name" className="sm:col-span-2">
-          <Input value={v.name} onChange={set("name")} placeholder="e.g. Acme Research Panel" />
-        </Field>
-        <Field
-          label="Vendor code"
-          hint={!state?.vendor ? "Auto-generated sequential code (editable)" : "Unique partner tracking code"}
-        >
-          <div className="relative">
-            <Input
-              value={v.code}
-              onChange={set("code")}
-              placeholder="e.g. VND001"
-              disabled={!!state?.vendor}
-              className="font-mono pr-28"
-            />
-            {!state?.vendor && (
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
-                Auto Sequence
+      <div className="space-y-4">
+        {/* 3-Tab Navigation Bar */}
+        <div className="flex border-b border-line -mt-2 -mx-6 px-6 gap-2 bg-fill/40">
+          <button
+            type="button"
+            onClick={() => setTab("general")}
+            className={cn(
+              "flex items-center gap-2 py-3 px-2 text-[12.5px] font-bold transition border-b-2 cursor-pointer",
+              tab === "general"
+                ? "border-ink text-ink dark:border-accent dark:text-accent"
+                : "border-transparent text-ink-3 hover:text-ink"
+            )}
+          >
+            <Link2 size={14} />
+            <span>1. General Profile &amp; Redirects</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("countries")}
+            className={cn(
+              "flex items-center gap-2 py-3 px-2 text-[12.5px] font-bold transition border-b-2 cursor-pointer",
+              tab === "countries"
+                ? "border-ink text-ink dark:border-accent dark:text-accent"
+                : "border-transparent text-ink-3 hover:text-ink"
+            )}
+          >
+            <Globe size={14} />
+            <span>2. Operating Countries</span>
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[10px] font-extrabold",
+                v.countries.length > 0
+                  ? "bg-emerald-500 text-white"
+                  : "bg-fill text-ink-3 border border-line"
+              )}
+            >
+              {v.countries.length} / 48
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("restrictions")}
+            className={cn(
+              "flex items-center gap-2 py-3 px-2 text-[12.5px] font-bold transition border-b-2 cursor-pointer",
+              tab === "restrictions"
+                ? "border-ink text-ink dark:border-accent dark:text-accent"
+                : "border-transparent text-ink-3 hover:text-ink"
+            )}
+          >
+            <Ban size={14} />
+            <span>3. Blocked Clients &amp; Contacts</span>
+            {v.blocked_clients.length + v.contacts.length > 0 && (
+              <span className="rounded-full bg-ink px-2 py-0.5 text-[10px] font-extrabold text-surface">
+                {v.blocked_clients.length + v.contacts.length}
               </span>
             )}
+          </button>
+        </div>
+
+        {/* Tab 1: General Profile & Redirects */}
+        {tab === "general" && (
+          <div className="space-y-4 pt-1">
+            <Field label="Vendor / Panel Name *">
+              <Input
+                required
+                value={v.name}
+                onChange={handleNameChange}
+                placeholder="e.g. Dynata Panel, PureSpectrum, Lucid"
+              />
+            </Field>
+
+            <Field
+              label="Unique Vendor Code / Slug *"
+              hint={!state?.vendor ? "Unique identifier for traffic routing and entry links" : undefined}
+            >
+              <Input
+                required
+                value={v.code}
+                onChange={handleCodeChange}
+                placeholder="e.g. VND-DYN-01, pure-spectrum"
+                className="font-mono"
+              />
+            </Field>
+
+            <Field label="Contact Email">
+              <Input
+                type="email"
+                value={v.email}
+                onChange={(e) => setV((p) => ({ ...p, email: e.target.value }))}
+                placeholder="partners@supplier.com"
+              />
+            </Field>
+
+            <div>
+              <label className="block text-[13px] font-semibold text-ink mb-1.5">
+                Payout Model / Commission Type
+              </label>
+              <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-fill border border-line">
+                <button
+                  type="button"
+                  onClick={() => setV((p) => ({ ...p, commission_type: "fixed_cpi" }))}
+                  className={cn(
+                    "py-2 text-[13px] font-semibold rounded-lg transition text-center cursor-pointer",
+                    v.commission_type === "fixed_cpi"
+                      ? "bg-surface shadow-sm text-ink border border-line font-bold"
+                      : "text-ink-3 hover:text-ink"
+                  )}
+                >
+                  $ Fixed CPI ($)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setV((p) => ({ ...p, commission_type: "revenue_share" }))}
+                  className={cn(
+                    "py-2 text-[13px] font-semibold rounded-lg transition text-center cursor-pointer",
+                    v.commission_type === "revenue_share"
+                      ? "bg-surface shadow-sm text-ink border border-line font-bold"
+                      : "text-ink-3 hover:text-ink"
+                  )}
+                >
+                  % Revenue Share (%)
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {v.commission_type === "fixed_cpi" ? (
+                <Field label="Default CPI Payout ($)" hint="Fixed agreed payout per complete">
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-ink-3">$</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="pl-7 font-semibold"
+                      value={v.cpi}
+                      onChange={(e) => setV((p) => ({ ...p, cpi: e.target.value }))}
+                      placeholder="1.50"
+                    />
+                  </div>
+                </Field>
+              ) : (
+                <Field label="Revenue Share (%)" hint="% of client revenue paid to vendor">
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      min="1"
+                      max="100"
+                      className="pr-8 font-semibold"
+                      value={v.share}
+                      onChange={(e) => setV((p) => ({ ...p, share: e.target.value }))}
+                      placeholder="70"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-emerald-600">%</span>
+                  </div>
+                </Field>
+              )}
+
+              <Field label="Status">
+                <Select
+                  value={v.status}
+                  onChange={(e) => setV((p) => ({ ...p, status: e.target.value as any }))}
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </Select>
+              </Field>
+            </div>
+
+            {/* Collapsible 4 Callback Redirects */}
+            <div className="border-t border-line/60 pt-3">
+              <button
+                type="button"
+                onClick={() => setShowRedirects(!showRedirects)}
+                className="flex items-center gap-1.5 text-[12.5px] font-semibold text-accent hover:underline cursor-pointer"
+              >
+                <Link2 size={14} />
+                <span>
+                  {showRedirects
+                    ? "Hide 4 Callback Redirects"
+                    : "Configure 4 Callback Redirects Now (Optional - Defaults Provided)"}
+                </span>
+              </button>
+
+              {showRedirects && (
+                <div className="mt-3 space-y-3 rounded-2xl border border-line bg-fill/40 p-4">
+                  <p className="text-[12px] text-ink-3">
+                    Use <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-[11px] font-bold text-ink">[UID]</code> as respondent identifier placeholder.
+                  </p>
+
+                  <Field label="Complete Callback URL">
+                    <Input
+                      value={v.redirect_complete}
+                      onChange={(e) => setV((p) => ({ ...p, redirect_complete: e.target.value }))}
+                      placeholder={`https://${v.code || "partner"}.com/survey/complete?uid=[UID]`}
+                      className="font-mono text-[12px]"
+                    />
+                  </Field>
+
+                  <Field label="Terminate Callback URL">
+                    <Input
+                      value={v.redirect_terminate}
+                      onChange={(e) => setV((p) => ({ ...p, redirect_terminate: e.target.value }))}
+                      placeholder={`https://${v.code || "partner"}.com/survey/terminate?uid=[UID]`}
+                      className="font-mono text-[12px]"
+                    />
+                  </Field>
+
+                  <Field label="OverQuota Callback URL">
+                    <Input
+                      value={v.redirect_overquota}
+                      onChange={(e) => setV((p) => ({ ...p, redirect_overquota: e.target.value }))}
+                      placeholder={`https://${v.code || "partner"}.com/survey/overquota?uid=[UID]`}
+                      className="font-mono text-[12px]"
+                    />
+                  </Field>
+
+                  <Field label="Security Screenout Callback URL">
+                    <Input
+                      value={v.redirect_security}
+                      onChange={(e) => setV((p) => ({ ...p, redirect_security: e.target.value }))}
+                      placeholder={`https://${v.code || "partner"}.com/survey/security?uid=[UID]`}
+                      className="font-mono text-[12px]"
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
           </div>
-        </Field>
-        <Field label="Revenue share (%)" hint="Default payout percentage of client CPI">
-          <Input type="number" min={1} max={100} value={v.share} onChange={set("share")} />
-        </Field>
-        <Field label="Email">
-          <Input type="email" value={v.email} onChange={set("email")} placeholder="partner@domain.com" />
-        </Field>
-        <Field label="Phone">
-          <Input value={v.phone} onChange={set("phone")} placeholder="+1 555-0100" />
-        </Field>
+        )}
+
+        {/* Tab 2: Operating Countries */}
+        {tab === "countries" && (
+          <div className="space-y-3 pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span className="flex items-center gap-1.5 text-[13px] font-bold text-ink">
+                  <Globe size={15} /> Operating Countries &amp; Geographies
+                </span>
+                <span className="text-[11.5px] text-ink-3">
+                  Select respondent markets where this supplier can route survey traffic.
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setV((p) => ({ ...p, countries: DEFAULT_COUNTRIES.map((c) => c.code) }))}
+                  className="text-[11px] h-7 px-2.5"
+                >
+                  Select All (48)
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setV((p) => ({ ...p, countries: ["US", "GB", "CA", "AU", "DE", "FR"] }))}
+                  className="text-[11px] h-7 px-2.5"
+                >
+                  Tier 1
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setV((p) => ({ ...p, countries: [] }))}
+                  className="text-[11px] h-7 px-2.5 text-red hover:text-red hover:bg-red-soft"
+                >
+                  Clear All
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
+                <input
+                  type="text"
+                  value={countryFilter}
+                  onChange={(e) => setCountryFilter(e.target.value)}
+                  placeholder="Search country by name or code (e.g. India, US, Germany)..."
+                  className="w-full h-9 rounded-xl border border-line bg-surface pl-9 pr-3 text-[12px] text-ink focus:outline-none focus:border-accent"
+                />
+              </div>
+              <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                {v.countries.length} / 48 Markets Selected
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-[300px] overflow-y-auto p-1.5 rounded-2xl border border-line bg-fill/30">
+              {filteredCountries.map((c) => {
+                const isSel = v.countries.includes(c.code);
+                return (
+                  <div
+                    key={c.code}
+                    onClick={() => {
+                      setV((p) => ({
+                        ...p,
+                        countries: isSel
+                          ? p.countries.filter((x) => x !== c.code)
+                          : [...p.countries, c.code],
+                      }));
+                    }}
+                    className={cn(
+                      "flex items-center gap-2 p-2 rounded-xl border cursor-pointer select-none transition text-[12px]",
+                      isSel
+                        ? "border-accent bg-accent-soft/30 text-ink font-semibold"
+                        : "border-line/70 bg-surface text-ink-2 hover:border-line hover:bg-fill"
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSel}
+                      readOnly
+                      className="cursor-pointer rounded accent-accent h-3.5 w-3.5"
+                    />
+                    <span
+                      className={cn(
+                        "rounded px-1.5 py-0.5 font-mono text-[10px] font-bold",
+                        isSel ? "bg-accent text-white" : "bg-fill text-ink-3"
+                      )}
+                    >
+                      {c.code}
+                    </span>
+                    <span className="truncate" title={c.name}>
+                      {c.name}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Blocked Clients & Contacts */}
+        {tab === "restrictions" && (
+          <div className="space-y-5 pt-1">
+            {/* 1. Blocked Clients Section */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="flex items-center gap-1.5 text-[13px] font-bold text-ink">
+                    <Ban size={15} className="text-red" /> Restricted / Blocked Client Accounts
+                  </span>
+                  <span className="text-[11.5px] text-ink-3">
+                    Select buyers that this vendor is forbidden from supplying responses to.
+                  </span>
+                </div>
+                <span className="rounded-full bg-red-soft px-2.5 py-0.5 text-[11px] font-bold text-red">
+                  {v.blocked_clients.length} Clients Blocked
+                </span>
+              </div>
+
+              {clients.length === 0 ? (
+                <p className="rounded-xl bg-fill p-3 text-[12px] text-ink-3">
+                  No demand clients configured yet.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-[160px] overflow-y-auto p-1.5 rounded-2xl border border-line bg-fill/30">
+                  {clients.map((cl) => {
+                    const cId = cl.id || cl.client_code || cl.client_name;
+                    const cName = cl.client_name || cl.name || cId;
+                    const isBlocked =
+                      v.blocked_clients.includes(cId) ||
+                      v.blocked_clients.includes(cName) ||
+                      (cl.id && v.blocked_clients.includes(cl.id));
+                    return (
+                      <div
+                        key={"bl_" + cId}
+                        onClick={() => {
+                          setV((p) => ({
+                            ...p,
+                            blocked_clients: isBlocked
+                              ? p.blocked_clients.filter((x) => x !== cId && x !== cName && x !== cl.id)
+                              : [...p.blocked_clients, cId],
+                          }));
+                        }}
+                        className={cn(
+                          "flex items-center justify-between gap-2 p-2 rounded-xl border cursor-pointer select-none transition text-[12px]",
+                          isBlocked
+                            ? "border-red/40 bg-red-soft/40 text-red font-semibold"
+                            : "border-line/70 bg-surface text-ink-2 hover:border-line hover:bg-fill"
+                        )}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isBlocked}
+                            readOnly
+                            className="cursor-pointer rounded accent-red h-3.5 w-3.5"
+                          />
+                          <span className="truncate" title={cName}>
+                            {cName}
+                          </span>
+                        </div>
+                        {isBlocked && (
+                          <span className="shrink-0 rounded bg-red text-white text-[9px] font-extrabold px-1.5 py-0.5">
+                            BLOCKED
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 2. Supplier Contact Persons Section */}
+            <div className="border-t border-line/60 pt-4 space-y-3">
+              <div>
+                <span className="flex items-center gap-1.5 text-[13px] font-bold text-ink">
+                  <UserPlus size={15} /> Supplier Contact Persons ({v.contacts.length})
+                </span>
+                <span className="text-[11.5px] text-ink-3">
+                  Maintain key account managers, billing, and technical leads for this supplier.
+                </span>
+              </div>
+
+              {/* Add Contact Draft Form */}
+              <div className="rounded-2xl border border-line bg-fill/30 p-3 space-y-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Full Name *"
+                    value={contactDraft.name}
+                    onChange={(e) => setContactDraft({ ...contactDraft, name: e.target.value })}
+                    className="h-8 rounded-lg border border-line bg-surface px-2.5 text-[12px] text-ink focus:outline-none focus:border-accent"
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email Address"
+                    value={contactDraft.email}
+                    onChange={(e) => setContactDraft({ ...contactDraft, email: e.target.value })}
+                    className="h-8 rounded-lg border border-line bg-surface px-2.5 text-[12px] text-ink focus:outline-none focus:border-accent"
+                  />
+                  <input
+                    type="tel"
+                    placeholder="Phone Number"
+                    value={contactDraft.phone}
+                    onChange={(e) => setContactDraft({ ...contactDraft, phone: e.target.value })}
+                    className="h-8 rounded-lg border border-line bg-surface px-2.5 text-[12px] text-ink focus:outline-none focus:border-accent"
+                  />
+                  <select
+                    value={contactDraft.role}
+                    onChange={(e) => setContactDraft({ ...contactDraft, role: e.target.value })}
+                    className="h-8 rounded-lg border border-line bg-surface px-2 text-[12px] text-ink focus:outline-none focus:border-accent"
+                  >
+                    <option value="Account Manager">Account Manager</option>
+                    <option value="Technical Lead">Technical Lead</option>
+                    <option value="Billing & Finance">Billing &amp; Finance</option>
+                    <option value="Operations">Operations</option>
+                  </select>
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Plus size={13} />}
+                    onClick={() => {
+                      if (!contactDraft.name.trim() && !contactDraft.email.trim()) return;
+                      setV((p) => ({
+                        ...p,
+                        contacts: [...p.contacts, { ...contactDraft }],
+                      }));
+                      setContactDraft({ name: "", email: "", phone: "", role: "Account Manager" });
+                    }}
+                    className="h-7 text-[11px] px-3"
+                  >
+                    Add Contact
+                  </Button>
+                </div>
+              </div>
+
+              {/* Contacts List */}
+              {v.contacts.length > 0 && (
+                <div className="space-y-1.5 max-h-[140px] overflow-y-auto">
+                  {v.contacts.map((c, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between gap-3 p-2 rounded-xl border border-line bg-surface text-[12px]"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-semibold text-ink truncate">{c.name}</span>
+                        {c.role && (
+                          <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                            {c.role}
+                          </span>
+                        )}
+                        {c.email && <span className="text-ink-3 truncate text-[11px]">({c.email})</span>}
+                        {c.phone && <span className="text-ink-3 truncate text-[11px]">{c.phone}</span>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setV((p) => ({
+                            ...p,
+                            contacts: p.contacts.filter((_, idx) => idx !== i),
+                          }))
+                        }
+                        className="text-ink-3 hover:text-red transition cursor-pointer p-1"
+                        title="Remove contact"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );

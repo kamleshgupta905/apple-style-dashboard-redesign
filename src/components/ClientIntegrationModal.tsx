@@ -122,7 +122,7 @@ export function ClientIntegrationModal({
         onChange={(t) => setTab(t as any)}
         options={[
           { value: "inbound", label: "Inbound Redirects" },
-          { value: "s2s", label: "S2S API & Keys" },
+          { value: "s2s", label: "S2S API" },
           { value: "outbound", label: "Outbound URLs" },
         ]}
         className="w-full mb-5"
@@ -322,12 +322,12 @@ export function ClientIntegrationModal({
             </div>
 
             <div className="rounded-2xl border border-line bg-surface p-3.5 space-y-1">
-              <span className="text-[11px] font-semibold uppercase text-ink-3">Hash Algorithm</span>
+              <span className="text-[11px] font-semibold uppercase text-ink-3">Integration Status</span>
               <div className="flex items-center justify-between">
-                <span className="font-mono text-[13px] font-bold text-ink uppercase">
-                  {client.hash_algorithm || "SHA-256"}
+                <span className="font-mono text-[13px] font-bold text-ink">
+                  {client.status === "Y" || client.status === "Active" ? "Active" : "Standard"}
                 </span>
-                <Badge tone="blue">HMAC Signed</Badge>
+                <Badge tone="green">Ready</Badge>
               </div>
             </div>
 
@@ -338,16 +338,6 @@ export function ClientIntegrationModal({
                   {client.api_token || `tok_${cCode.toLowerCase()}_2026`}
                 </span>
                 <CopyButton text={client.api_token || `tok_${cCode.toLowerCase()}_2026`} />
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-line bg-surface p-3.5 space-y-1 sm:col-span-2">
-              <span className="text-[11px] font-semibold uppercase text-ink-3">Secret Key (HMAC Key)</span>
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[12px] text-ink break-all">
-                  {client.secret_key || `sk_${cCode.toLowerCase()}_hmac`}
-                </span>
-                <CopyButton text={client.secret_key || `sk_${cCode.toLowerCase()}_hmac`} />
               </div>
             </div>
           </div>

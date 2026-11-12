@@ -1,0 +1,8 @@
+{
+  "0": "package.json",
+  "1": "compilerOptions",
+  "2": "devDependencies",
+  "3": "dependencies",
+  "4": "scripts",
+  "5": "tsconfig.json"
+}

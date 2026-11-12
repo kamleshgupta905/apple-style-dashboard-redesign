@@ -43,7 +43,7 @@ export const MENU_TREE: MenuItemNode[] = [
       { id: 601, name: "Client Directory" },
       { id: 602, name: "Add New Client Onboarding" },
       { id: 603, name: "API Endpoints (Feed & S2S Callbacks)" },
-      { id: 604, name: "Anti-Tamper & Security Hash Keys" },
+      { id: 604, name: "Anti-Tamper & Security Credentials" },
       { id: 605, name: "Client Contacts Directory" },
       { id: 606, name: "Edit Client Configuration" },
       { id: 607, name: "Delete / Deactivate Client" },

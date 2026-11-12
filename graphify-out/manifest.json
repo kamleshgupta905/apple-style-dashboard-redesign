@@ -1,0 +1,62 @@
+{
+  "package.json": {
+    "mtime": 1793900380.894188,
+    "seen": 1794427254.3438418,
+    "ast_hash": "d9d3ab79c80e76644ebb615d6658bab2",
+    "semantic_hash": ""
+  },
+  "public/api-docs/openapi.json": {
+    "mtime": 1794027905.759646,
+    "seen": 1794427254.3438418,
+    "ast_hash": "a32c236251bb29e57666e859dec0bb34",
+    "semantic_hash": ""
+  },
+  "tsconfig.json": {
+    "mtime": 1793900381.0444055,
+    "seen": 1794427254.3438418,
+    "ast_hash": "8839cc264b6bf839be15addcf618cbe6",
+    "semantic_hash": ""
+  },
+  ".github/workflows/deploy.yml": {
+    "mtime": 1794327954.6936693,
+    "seen": 1794427254.3438418,
+    "ast_hash": "37e6ddc607d5c1a8373ccb16479ed51b",
+    "semantic_hash": ""
+  },
+  "index.html": {
+    "mtime": 1793900380.8871071,
+    "seen": 1794427254.3438418,
+    "ast_hash": "5dadf4c50634b536ce329b2c580a21d3",
+    "semantic_hash": ""
+  },
+  "public/api-docs/index.html": {
+    "mtime": 1794027924.2053583,
+    "seen": 1794427254.3438418,
+    "ast_hash": "4f18130d5077064676414c29c6c1a6cd",
+    "semantic_hash": ""
+  },
+  "public/app-logo.png": {
+    "mtime": 1793900380.902781,
+    "seen": 1794427254.3438418,
+    "ast_hash": "ce700fff08f1db313df4379921e90f69",
+    "semantic_hash": ""
+  },
+  "public/smr-logo.jpg": {
+    "mtime": 1793900380.902781,
+    "seen": 1794427254.3438418,
+    "ast_hash": "fa57e1c293783f3c2fa3496d09d4b1ac",
+    "semantic_hash": ""
+  },
+  "public/smr-logo.png": {
+    "mtime": 1793900380.902781,
+    "seen": 1794427254.3438418,
+    "ast_hash": "fa57e1c293783f3c2fa3496d09d4b1ac",
+    "semantic_hash": ""
+  },
+  "public/vmh-logo.png": {
+    "mtime": 1793900380.902781,
+    "seen": 1794427254.3438418,
+    "ast_hash": "a8624a888a0226598427d4ea43dd5efc",
+    "semantic_hash": ""
+  }
+}
