@@ -1,14 +1,14 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "VMH Group SMR - Suppliers API Documentation",
+    "title": "VMH GROUP • Vendors API Documentation",
     "version": "1.0.0",
-    "description": "Official API documentation and integration specifications for VMH Group SMR Supply Partners and Vendors. Use these REST endpoints to fetch assigned surveys in real time, obtain dynamic respondent entry links, inspect targeting qualifications, and process automated S2S postback callbacks."
+    "description": "Official API documentation and integration specifications for VMH Group API Tool Partners and Vendors. Use these REST endpoints to fetch assigned surveys in real time, obtain dynamic respondent entry links, inspect targeting qualifications, and process automated S2S postback callbacks."
   },
   "servers": [
     {
       "url": "https://api.vmhgroupsmr.com",
-      "description": "Production SMR Gateway"
+      "description": "Production API Tool Gateway"
     }
   ],
   "components": {
@@ -32,7 +32,7 @@
         "summary": "Get all assigned surveys for vendor",
         "description": "Retrieves all active market research surveys allocated to the authenticated vendor. Contains CPI, LOI, incidence rate, remaining quota, and dynamic entry links.",
         "tags": [
-          "Supplier Inventory"
+          "Vendor Inventory"
         ],
         "parameters": [
           {
@@ -95,7 +95,7 @@
         "summary": "Get detailed study info & qualifications",
         "description": "Retrieves comprehensive details for a specific survey including targeting criteria, quotas, and qualification questions.",
         "tags": [
-          "Supplier Inventory"
+          "Vendor Inventory"
         ],
         "parameters": [
           {
