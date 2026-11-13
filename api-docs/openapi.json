@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "VMH GROUP \u2022 Vendors API Documentation",
+    "title": "VMH GROUP • Vendors API Documentation",
     "version": "1.0.0",
-    "description": "Official API documentation and integration specifications for VMH Group API Tool Partners and Vendors. Use these REST endpoints to fetch assigned surveys in real time, obtain dynamic respondent entry links, inspect targeting qualifications, and process automated S2S postback callbacks."
+    "description": "Official API documentation and integration specifications for VMH Group API Tool Partners and Vendors. Use these REST endpoints to fetch assigned surveys in real time, inspect targeting qualifications, and process automated S2S postback callbacks."
   },
   "servers": [
     {
@@ -144,45 +144,6 @@
             }
           }
         }
-      },
-      "SurveyStatsResponse": {
-        "type": "object",
-        "properties": {
-          "success": {
-            "type": "boolean"
-          },
-          "result": {
-            "type": "object",
-            "properties": {
-              "success": {
-                "type": "boolean"
-              },
-              "data": {
-                "type": "object",
-                "properties": {
-                  "survey_id": {
-                    "type": "string"
-                  },
-                  "total_clicks": {
-                    "type": "integer"
-                  },
-                  "completes": {
-                    "type": "integer"
-                  },
-                  "terminates": {
-                    "type": "integer"
-                  },
-                  "overquota": {
-                    "type": "integer"
-                  },
-                  "conversion_rate": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
       }
     }
   },
@@ -197,7 +158,7 @@
         "summary": "Get all assigned surveys for vendor",
         "description": "Retrieves all active market research surveys allocated to the authenticated vendor. Contains CPI, LOI, incidence rate, remaining quota, and dynamic entry links.",
         "tags": [
-          "Vendor Inventory"
+          "Supplier Survey Inventory"
         ],
         "parameters": [
           {
@@ -207,7 +168,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Your vendor code (e.g. VND-AFC01 or VI1793895852). Required if access-key header is omitted.",
+            "description": "Your vendor code (e.g. VND-AFC01). Required if access-key header is omitted.",
             "example": "VND-AFC01"
           }
         ],
@@ -226,7 +187,7 @@
                   "result": {
                     "success": true,
                     "vendor_id": "VND-AFC01",
-                    "total": 3,
+                    "total": 1,
                     "data": [
                       {
                         "survey_id": "2141504327",
@@ -248,19 +209,16 @@
           },
           "401": {
             "description": "Unauthorized - Missing or invalid access key"
-          },
-          "500": {
-            "description": "Internal server error"
           }
         }
       }
     },
     "/api/supplier/getSurveyDetails": {
       "get": {
-        "summary": "Get detailed study info & qualifications",
-        "description": "Retrieves comprehensive details for a specific survey including targeting criteria, quotas, and qualification questions.",
+        "summary": "Get survey details & qualifications",
+        "description": "Retrieves targeting criteria, demographic qualifications, and quota limits for a specific survey.",
         "tags": [
-          "Vendor Inventory"
+          "Supplier Survey Inventory"
         ],
         "parameters": [
           {
@@ -270,7 +228,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Unique survey / study ID",
+            "description": "Survey ID to inspect",
             "example": "2141504327"
           }
         ],
@@ -322,143 +280,6 @@
           },
           "404": {
             "description": "Survey not found"
-          }
-        }
-      }
-    },
-    "/api/supplier/getSurveyStats": {
-      "get": {
-        "summary": "Get real-time study statistics",
-        "description": "Retrieves traffic and conversion statistics for a specific survey (entrances, completes, terminates, overquota).",
-        "tags": [
-          "Performance & Stats"
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "survey_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Survey ID to inspect",
-            "example": "2141504327"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successfully retrieved survey statistics",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SurveyStatsResponse"
-                },
-                "example": {
-                  "success": true,
-                  "apiVersion": 1,
-                  "result": {
-                    "success": true,
-                    "data": {
-                      "survey_id": "2141504327",
-                      "total_clicks": 142,
-                      "completes": 38,
-                      "terminates": 82,
-                      "overquota": 12,
-                      "conversion_rate": "26.8%"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request - survey_id is required"
-          }
-        }
-      }
-    },
-    "/api/supplier/getDefinitions": {
-      "get": {
-        "summary": "Get system definitions & languages",
-        "description": "Retrieves standard definitions including supported ISO country codes and language definitions.",
-        "tags": [
-          "Metadata & Definitions"
-        ],
-        "responses": {
-          "200": {
-            "description": "Definitions retrieved successfully",
-            "content": {
-              "application/json": {
-                "example": {
-                  "success": true,
-                  "apiVersion": 1,
-                  "message": "Definitions retrieved successfully",
-                  "result": {
-                    "success": true,
-                    "data": {
-                      "languages": [
-                        {
-                          "id": 1,
-                          "country_code": "US",
-                          "language": "en-US",
-                          "language_name": "English"
-                        },
-                        {
-                          "id": 2,
-                          "country_code": "GB",
-                          "language": "en-GB",
-                          "language_name": "English"
-                        },
-                        {
-                          "id": 3,
-                          "country_code": "IN",
-                          "language": "hi-IN",
-                          "language_name": "Hindi"
-                        }
-                      ],
-                      "countries": [
-                        {
-                          "id": 1,
-                          "country_code": "US",
-                          "country_name": "United States"
-                        },
-                        {
-                          "id": 2,
-                          "country_code": "IN",
-                          "country_name": "India"
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/supplier/getQualifications": {
-      "get": {
-        "summary": "Get demographic qualification schema",
-        "description": "Retrieves qualification questions and answer options for standard screening.",
-        "tags": [
-          "Metadata & Definitions"
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "lang_id",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Language ID from getDefinitions (e.g. 1 for en-US)",
-            "example": 1
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Qualifications schema retrieved successfully"
           }
         }
       }
