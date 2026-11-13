@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, AlertTriangle, RefreshCw, ShieldCheck } from "lucide-react";
+import { CheckCircle2, AlertTriangle, RefreshCw, ShieldCheck, ArrowRight, Laptop, Smartphone, Tablet } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import {
   recordStudyClickAndCheckAutoPause,
@@ -7,43 +7,24 @@ import {
   markStudyAttempted,
 } from "../lib/waterfall";
 
-interface Question {
-  id: string;
-  title: string;
-  options: { id: string; label: string; disqualify?: boolean }[];
-}
-
-const QUESTIONS: Question[] = [
-  {
-    id: "age",
-    title: "What is your age group?",
-    options: [
-      { id: "18_24", label: "18 – 24 years old" },
-      { id: "25_34", label: "25 – 34 years old" },
-      { id: "35_49", label: "35 – 49 years old" },
-      { id: "50_plus", label: "50 years or older" },
-    ],
-  },
-  {
-    id: "device",
-    title: "Which device are you primarily using to take this survey?",
-    options: [
-      { id: "mobile", label: "Smartphone (iOS or Android)" },
-      { id: "desktop", label: "Laptop / Desktop Computer" },
-      { id: "tablet", label: "Tablet / iPad" },
-      { id: "other", label: "Other connected device" },
-    ],
-  },
+const DEVICE_OPTIONS = [
+  { id: "desktop", label: "Laptop / Desktop Computer", icon: Laptop },
+  { id: "mobile", label: "Smartphone (iOS or Android)", icon: Smartphone },
+  { id: "tablet", label: "Tablet / iPad", icon: Tablet },
 ];
 
 export function Prescreener() {
+  // Step 0: Age (manual input), Step 1: Gender (dropdown), Step 2: Device (selection)
   const [step, setStep] = useState<number>(0);
-  const [selectedOption, setSelectedOption] = useState<string>("");
-  const [isAdvancing, setIsAdvancing] = useState<boolean>(false);
+  const [ageInput, setAgeInput] = useState<string>("");
+  const [ageError, setAgeError] = useState<string>("");
+  const [genderInput, setGenderInput] = useState<string>("");
+  const [genderError, setGenderError] = useState<string>("");
+  const [selectedDevice, setSelectedDevice] = useState<string>("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"checking" | "screening" | "connecting" | "disqualified" | "blocked">("checking");
   const [blockReason, setBlockReason] = useState<string>("");
-  const [redirectCountdown, setRedirectCountdown] = useState<number>(3);
+  const [redirectCountdown, setRedirectCountdown] = useState<number>(1);
   const [finalUrl, setFinalUrl] = useState<string>("");
   const [dbLiveUrl, setDbLiveUrl] = useState<string>("");
 
@@ -124,34 +105,49 @@ export function Prescreener() {
     return () => clearTimeout(timer);
   }, [uid, pid, vid, targetParam]);
 
-  const currentQ = QUESTIONS[step];
-  const percent = Math.round(((step + 1) / QUESTIONS.length) * 100);
+  const TOTAL_STEPS = 3;
+  const percent = Math.round(((step + 1) / TOTAL_STEPS) * 100);
 
-  // Auto-advance on option click (No Next button required)
-  const handleSelect = (opt: { id: string; label: string; disqualify?: boolean }) => {
-    if (isAdvancing) return;
-    setSelectedOption(opt.id);
-    setIsAdvancing(true);
+  // Step 0: Age handler (manual numeric entry)
+  const handleAgeSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = ageInput.trim();
+    if (!trimmed) {
+      setAgeError("Please enter your age to continue");
+      return;
+    }
+    const numAge = parseInt(trimmed, 10);
+    if (isNaN(numAge) || numAge < 14 || numAge > 99) {
+      setAgeError("Please enter a valid age between 14 and 99");
+      return;
+    }
+    setAgeError("");
+    setAnswers((prev) => ({ ...prev, age: String(numAge) }));
+    setStep(1);
+  };
 
-    setAnswers((prev) => ({ ...prev, [currentQ.id]: opt.id }));
+  // Step 1: Gender handler (dropdown select)
+  const handleGenderSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!genderInput) {
+      setGenderError("Please select your gender to continue");
+      return;
+    }
+    setGenderError("");
+    setAnswers((prev) => ({ ...prev, gender: genderInput }));
+    setStep(2);
+  };
 
+  // Step 2: Device handler (device selection)
+  const handleDeviceSelect = (devId: string) => {
+    setSelectedDevice(devId);
+    setAnswers((prev) => ({ ...prev, device: devId }));
     setTimeout(() => {
-      if (opt.disqualify) {
-        window.location.hash = `#/callback?status=20&pid=${encodeURIComponent(pid)}&uid=${encodeURIComponent(uid)}&vid=${encodeURIComponent(vid)}&reason=demographic_criteria_not_met`;
-        return;
-      }
-
-      if (step < QUESTIONS.length - 1) {
-        setStep((prev) => prev + 1);
-        setSelectedOption("");
-        setIsAdvancing(false);
-      } else {
-        completeScreener();
-      }
+      completeScreener(devId);
     }, 220);
   };
 
-  const completeScreener = () => {
+  const completeScreener = (_device?: string) => {
     setStatus("connecting");
 
     // Resolve Final Target Survey URL
@@ -239,8 +235,8 @@ export function Prescreener() {
           </div>
         )}
 
-        {/* State 2: Active Screening Questions (Auto-advance on click) */}
-        {status === "screening" && currentQ && (
+        {/* State 2: Active Screening Questions */}
+        {status === "screening" && (
           <div>
             {/* Top Progress bar and percentage */}
             <div className="flex items-center gap-4 mb-7">
@@ -255,41 +251,152 @@ export function Prescreener() {
               </span>
             </div>
 
-            {/* Question Title */}
-            <h2 className="text-[17px] sm:text-[18px] font-bold text-[#1e293b] text-center leading-snug mb-7 max-w-md mx-auto">
-              {currentQ.title}
-            </h2>
+            {/* Step 0: Age (Manual numeric entry) */}
+            {step === 0 && (
+              <div>
+                <h2 className="text-[17px] sm:text-[18px] font-bold text-[#1e293b] text-center leading-snug mb-2 max-w-md mx-auto">
+                  What is your age?
+                </h2>
+                <p className="text-xs text-slate-400 text-center mb-6">
+                  Please enter your age in years
+                </p>
 
-            {/* Answer Options */}
-            <div className="space-y-3">
-              {currentQ.options.map((opt) => {
-                const isSelected = selectedOption === opt.id;
-                return (
-                  <label
-                    key={opt.id}
-                    onClick={() => handleSelect(opt)}
-                    className={`flex items-center gap-3.5 px-4.5 py-3.5 rounded-2xl border transition-all cursor-pointer select-none ${
-                      isSelected
-                        ? "border-indigo-500 bg-indigo-50/30 shadow-sm"
-                        : "border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/50 bg-white"
-                    }`}
+                <form onSubmit={handleAgeSubmit} className="flex flex-col items-center">
+                  <div className="w-full max-w-xs">
+                    <input
+                      type="number"
+                      min="14"
+                      max="99"
+                      autoFocus
+                      value={ageInput}
+                      onChange={(e) => {
+                        setAgeInput(e.target.value);
+                        setAgeError("");
+                      }}
+                      placeholder="Enter age (e.g. 28)"
+                      className="w-full text-center text-2xl font-bold tracking-tight py-3.5 px-5 rounded-2xl border border-slate-200 bg-white text-slate-900 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 outline-none transition-all shadow-sm placeholder:text-slate-300 placeholder:font-normal placeholder:text-base"
+                    />
+                    {ageError && (
+                      <p className="text-xs text-rose-500 font-medium text-center mt-2.5">
+                        {ageError}
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={!ageInput.trim()}
+                    className="mt-6 w-full max-w-xs py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    {/* Radio Indicator */}
-                    <div
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                        isSelected ? "border-indigo-600 bg-white" : "border-slate-300 bg-white"
-                      }`}
-                    >
-                      {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-indigo-600" />}
+                    Continue
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* Step 1: Gender (Dropdown box) */}
+            {step === 1 && (
+              <div>
+                <h2 className="text-[17px] sm:text-[18px] font-bold text-[#1e293b] text-center leading-snug mb-2 max-w-md mx-auto">
+                  What is your gender?
+                </h2>
+                <p className="text-xs text-slate-400 text-center mb-6">
+                  Please select your gender from the dropdown
+                </p>
+
+                <form onSubmit={handleGenderSubmit} className="flex flex-col items-center">
+                  <div className="w-full max-w-xs">
+                    <div className="relative">
+                      <select
+                        autoFocus
+                        value={genderInput}
+                        onChange={(e) => {
+                          setGenderInput(e.target.value);
+                          setGenderError("");
+                        }}
+                        className="w-full text-base font-medium py-3.5 px-4 rounded-2xl border border-slate-200 bg-white text-slate-800 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 outline-none transition-all shadow-sm cursor-pointer appearance-none"
+                      >
+                        <option value="">-- Select Gender --</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other / Prefer not to say</option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
                     </div>
-                    {/* Text Label */}
-                    <span className="text-[14.5px] font-medium text-slate-700 leading-snug">
-                      {opt.label}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
+                    {genderError && (
+                      <p className="text-xs text-rose-500 font-medium text-center mt-2.5">
+                        {genderError}
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={!genderInput}
+                    className="mt-6 w-full max-w-xs py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    Continue
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* Step 2: Device (Which device are you using) */}
+            {step === 2 && (
+              <div>
+                <h2 className="text-[17px] sm:text-[18px] font-bold text-[#1e293b] text-center leading-snug mb-2 max-w-md mx-auto">
+                  Which device are you using to take this survey?
+                </h2>
+                <p className="text-xs text-slate-400 text-center mb-6">
+                  Select your current device to begin
+                </p>
+
+                <div className="space-y-3 max-w-md mx-auto">
+                  {DEVICE_OPTIONS.map((opt) => {
+                    const isSelected = selectedDevice === opt.id;
+                    const IconComponent = opt.icon;
+                    return (
+                      <button
+                        type="button"
+                        key={opt.id}
+                        onClick={() => handleDeviceSelect(opt.id)}
+                        className={`w-full flex items-center gap-3.5 px-4.5 py-3.5 rounded-2xl border transition-all cursor-pointer text-left ${
+                          isSelected
+                            ? "border-indigo-500 bg-indigo-50/30 shadow-sm"
+                            : "border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/50 bg-white"
+                        }`}
+                      >
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                            isSelected ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          <IconComponent className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1">
+                          <span className="text-[14.5px] font-semibold text-slate-800 leading-snug block">
+                            {opt.label}
+                          </span>
+                        </div>
+                        <div
+                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                            isSelected ? "border-indigo-600 bg-white" : "border-slate-300 bg-white"
+                          }`}
+                        >
+                          {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-indigo-600" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
