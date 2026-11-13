@@ -1,0 +1,516 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "VMH GROUP \u2022 Vendors API Documentation",
+    "version": "1.0.0",
+    "description": "Official Vendor API specification for VMH GROUP API Tool. Connect your panel supply to access real-time survey feeds, fetch targeting criteria, dispatch respondent traffic, receive return callbacks, and handle S2S postback webhooks.",
+    "contact": {
+      "name": "VMH GROUP Operations & Technical Support",
+      "email": "operations@vmhgroupsmr.com",
+      "url": "https://api.vmhgroupsmr.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.vmhgroupsmr.com",
+      "description": "Production API Tool Gateway"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "access-key",
+        "description": "Enter your Vendor Access Key provided by VMH GROUP Operations (e.g. VND-DYN-01 or your allocated secret token)"
+      }
+    }
+  },
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Vendor Survey Inventory",
+      "description": "Automated inventory polling, study details, demographic qualifications, and real-time statistics."
+    },
+    {
+      "name": "Participant Traffic Routing",
+      "description": "Universal respondent entry gateway, pre-screener, and fraud security gate."
+    },
+    {
+      "name": "Callbacks & Redirections",
+      "description": "The 4 standard return callbacks (Complete, Terminate, OverQuota, Security)."
+    },
+    {
+      "name": "Server-to-Server (S2S) Webhooks",
+      "description": "Cryptographically signed real-time SHA3-256 postback delivery."
+    }
+  ],
+  "paths": {
+    "/api/supplier/getDefinitions": {
+      "get": {
+        "tags": [
+          "Vendor Survey Inventory"
+        ],
+        "summary": "Get definitions (languages & countries)",
+        "description": "Retrieves all supported languages, countries, and regional taxonomy master data.",
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved definitions",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "apiVersion": 1,
+                  "message": "Definitions retrieved successfully",
+                  "result": {
+                    "success": true,
+                    "data": {
+                      "languages": [
+                        {
+                          "id": 1,
+                          "country_code": "US",
+                          "country_name": "United States",
+                          "language_code": "en",
+                          "language": "en-US"
+                        },
+                        {
+                          "id": 2,
+                          "country_code": "GB",
+                          "country_name": "United Kingdom",
+                          "language_code": "en",
+                          "language": "en-GB"
+                        },
+                        {
+                          "id": 3,
+                          "country_code": "IN",
+                          "country_name": "India",
+                          "language_code": "hi",
+                          "language": "hi-IN"
+                        },
+                        {
+                          "id": 4,
+                          "country_code": "CA",
+                          "country_name": "Canada",
+                          "language_code": "en",
+                          "language": "en-CA"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/supplier/getQualifications": {
+      "get": {
+        "tags": [
+          "Vendor Survey Inventory"
+        ],
+        "summary": "Get demographic qualifications by language",
+        "description": "Retrieves demographic questions library (Age, Gender, Region, Employment, etc.) and answer options for a specific language ID.",
+        "parameters": [
+          {
+            "name": "lang_id",
+            "in": "query",
+            "description": "Language ID (default: 1 for en-US)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved qualifications",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "apiVersion": 1,
+                  "result": {
+                    "success": true,
+                    "data": {
+                      "qualifications": [
+                        {
+                          "qualification_id": 42,
+                          "name": "AGE",
+                          "type": "Numeric",
+                          "question": "What is your age?"
+                        },
+                        {
+                          "qualification_id": 43,
+                          "name": "GENDER",
+                          "type": "SingleSelect",
+                          "question": "What is your gender?",
+                          "options": [
+                            {
+                              "code": "1",
+                              "text": "Male"
+                            },
+                            {
+                              "code": "2",
+                              "text": "Female"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/supplier/getAllSurveys": {
+      "get": {
+        "tags": [
+          "Vendor Survey Inventory"
+        ],
+        "summary": "Get all active surveys for vendor",
+        "description": "Returns real-time list of all active survey studies allocated to this vendor with CPI, LOI, IR, quota, and entry link.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Number of surveys to return (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved survey inventory",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "apiVersion": 1,
+                  "message": "Active surveys retrieved successfully",
+                  "result": {
+                    "success": true,
+                    "total": 1,
+                    "data": [
+                      {
+                        "survey_id": "VMHPI000142026",
+                        "survey_name": "Healthcare Provider Study",
+                        "cpi": 2.5,
+                        "loi": "15",
+                        "ir": "80%",
+                        "total_quota": 500,
+                        "remaining_quota": 482,
+                        "country": "US",
+                        "language": "en-US",
+                        "live_url": "https://api.vmhgroupsmr.com/vendor/auth/VND-DYN-01/project/VMHPI000142026?uid=[RESPONDENT_ID]"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/supplier/getSurveyDetails": {
+      "get": {
+        "tags": [
+          "Vendor Survey Inventory"
+        ],
+        "summary": "Get detailed information about a specific survey",
+        "description": "Retrieves complete demographic criteria, questions, and parameters for a specific survey_id.",
+        "parameters": [
+          {
+            "name": "survey_id",
+            "in": "query",
+            "required": true,
+            "description": "The unique Project Code or Survey ID (e.g. VMHPI000142026)",
+            "schema": {
+              "type": "string",
+              "example": "VMHPI000142026"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved survey details",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "apiVersion": 1,
+                  "result": {
+                    "success": true,
+                    "data": {
+                      "survey_id": "VMHPI000142026",
+                      "name": "Healthcare Provider Study",
+                      "cpi": 2.5,
+                      "loi": "15",
+                      "ir": "80%",
+                      "status": "Active",
+                      "quota_limit": 500,
+                      "entry_link": "https://api.vmhgroupsmr.com/vendor/auth/VND-DYN-01/project/VMHPI000142026?uid=[RESPONDENT_ID]"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/supplier/getSurveyStats": {
+      "get": {
+        "tags": [
+          "Vendor Survey Inventory"
+        ],
+        "summary": "Get real-time survey statistics",
+        "description": "Retrieves performance telemetry for a specific survey including total entrants, completed interviews, terminates, and conversion rate.",
+        "parameters": [
+          {
+            "name": "survey_id",
+            "in": "query",
+            "required": true,
+            "description": "Survey Project ID (e.g. VMHPI000142026)",
+            "schema": {
+              "type": "string",
+              "example": "VMHPI000142026"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved survey stats",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "apiVersion": 1,
+                  "result": {
+                    "success": true,
+                    "data": {
+                      "survey_id": "VMHPI000142026",
+                      "total_clicks": 142,
+                      "completes": 18,
+                      "terminates": 84,
+                      "overquota": 12,
+                      "security_disqualified": 28,
+                      "conversion_rate": "12.68%"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/vendor/auth/{vendor_id}/project/{project_id}": {
+      "get": {
+        "tags": [
+          "Participant Traffic Routing"
+        ],
+        "summary": "Participant traffic router & entry gateway",
+        "description": "Universal participant entry point. Routes panelists through pre-screener, fraud gates (duplicate IP, VPN, device check), and launches buyer survey.",
+        "parameters": [
+          {
+            "name": "vendor_id",
+            "in": "path",
+            "required": true,
+            "description": "Your allocated Vendor Code (e.g. VND-DYN-01)",
+            "schema": {
+              "type": "string",
+              "example": "VND-DYN-01"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "description": "Survey Study ID (e.g. VMHPI000142026)",
+            "schema": {
+              "type": "string",
+              "example": "VMHPI000142026"
+            }
+          },
+          {
+            "name": "uid",
+            "in": "query",
+            "required": true,
+            "description": "Dynamic unique panelist tracking identifier ([RESPONDENT_ID])",
+            "schema": {
+              "type": "string",
+              "example": "RESP_USER_88321"
+            }
+          },
+          {
+            "name": "test",
+            "in": "query",
+            "required": false,
+            "description": "Set to 1 for integration testing (bypasses duplicate IP/device checks)",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1
+              ],
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirects respondent to Pre-Screener or directly to Buyer Survey."
+          }
+        }
+      }
+    },
+    "/survey/callback": {
+      "get": {
+        "tags": [
+          "Callbacks & Redirections"
+        ],
+        "summary": "Participant return callbacks",
+        "description": "The 4 status callback URLs for returning panelists to vendor's panel upon study conclusion. Status 10=Complete (Billable), 20=Terminate, 30=OverQuota, 40=Security.",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": true,
+            "description": "Return outcome status code: 10 (Complete), 20 (Terminate), 30 (OverQuota), 40 (Security)",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                10,
+                20,
+                30,
+                40
+              ],
+              "example": 10
+            }
+          },
+          {
+            "name": "vid",
+            "in": "query",
+            "required": false,
+            "description": "Vendor Code (e.g. VND-DYN-01)",
+            "schema": {
+              "type": "string",
+              "example": "VND-DYN-01"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "required": false,
+            "description": "Project ID (e.g. VMHPI000142026)",
+            "schema": {
+              "type": "string",
+              "example": "VMHPI000142026"
+            }
+          },
+          {
+            "name": "uid",
+            "in": "query",
+            "required": true,
+            "description": "Original respondent unique identifier",
+            "schema": {
+              "type": "string",
+              "example": "RESP_USER_88321"
+            }
+          },
+          {
+            "name": "hash",
+            "in": "query",
+            "required": false,
+            "description": "Anti-tamper SHA3-256 HMAC signature verification token",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Returns respondent to the vendor's registered panel return URL."
+          }
+        }
+      }
+    },
+    "/api/s2s/callback": {
+      "post": {
+        "tags": [
+          "Server-to-Server (S2S) Webhooks"
+        ],
+        "summary": "Server-to-Server (S2S) postback webhook",
+        "description": "Automated real-time postback webhook sent directly to vendor's server endpoint when a respondent finishes a survey. Includes SHA3-256 anti-tamper signature.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "supplierId": {
+                    "type": "string",
+                    "example": "VND-DYN-01"
+                  },
+                  "respondentId": {
+                    "type": "string",
+                    "example": "RESP_USER_88321"
+                  },
+                  "status": {
+                    "type": "integer",
+                    "enum": [
+                      1,
+                      2,
+                      3,
+                      4
+                    ],
+                    "description": "1=Complete, 2=Terminate, 3=Overquota, 4=Security"
+                  },
+                  "projectId": {
+                    "type": "string",
+                    "example": "VMHPI000142026"
+                  },
+                  "timestamp": {
+                    "type": "integer",
+                    "example": 1730571234
+                  },
+                  "hash": {
+                    "type": "string",
+                    "example": "a4d3f... (SHA3-256 anti-tamper hash)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Callback acknowledged successfully",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "S2S Postback verified successfully"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

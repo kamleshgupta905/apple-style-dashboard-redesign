@@ -3,12 +3,13 @@
     Options -MultiViews
 </IfModule>
 RewriteEngine On
+RewriteBase /
+
+# 1. Existing files and directories served directly
 RewriteCond %{REQUEST_FILENAME} -d [OR]
 RewriteCond %{REQUEST_FILENAME} -f
-RewriteRule ^ ^$1 [N]
-RewriteCond %{REQUEST_URI} (\.\w+$) [NC]
-RewriteRule ^(.*)$ public/$1 
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^ index.php
+RewriteRule ^ - [L]
+
+# 2. Universal PHP router & SPA fallback
+RewriteRule ^ index.php [QSA,L]
 </IfModule>
