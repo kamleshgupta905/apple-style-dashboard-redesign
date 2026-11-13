@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Building2, Eye, EyeOff, Pencil, Plug, Plus, ShieldCheck, Trash2, Link2, Copy, Check, Sparkles } from "lucide-react";
+import { Building2, Eye, EyeOff, Pencil, Plug, Plus, ShieldCheck, Trash2, Link2, Copy, Check, Sparkles, RefreshCw } from "lucide-react";
 import { api, type Client } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { initials, mask } from "../lib/utils";
@@ -24,6 +24,53 @@ import {
 } from "../components/ui";
 import { useFeedback } from "../components/feedback";
 import { PERMS, usePermissions } from "../lib/permissions";
+
+export function normalizeClientApiType(rawType?: string, name?: string, code?: string): string {
+  const t = (rawType || "").toLowerCase().trim();
+  const n = (name || "").toLowerCase().trim();
+  const c = (code || "").toLowerCase().trim();
+
+  if (t === "zamplia" || n.includes("zamplia") || c.includes("zamp")) return "zamplia";
+  if (t === "surveysherpa" || n.includes("sherpa") || c.includes("ss")) return "surveysherpa";
+  if (t === "marketxcel" || n.includes("marketxcel") || c.includes("mx")) return "marketxcel";
+  if (t === "custom" || n.includes("research") || c.includes("arcfl")) return "custom";
+
+  if (t === "marketxcel" || t === "surveysherpa" || t === "zamplia" || t === "custom") return t;
+  return "marketxcel";
+}
+
+export function getDefaultEndpoints(apiType: string, code?: string) {
+  if (apiType === "zamplia") {
+    return {
+      feed: "https://api.zamplia.com/v1/surveys/live",
+      s2s: "https://api.zamplia.com/v1/surveys/callback",
+      master: "https://api.zamplia.com/v1/surveys/master-data",
+      token: "zamplia_auth_token_live",
+    };
+  }
+  if (apiType === "surveysherpa") {
+    return {
+      feed: "https://api.surveysherpa.com/api/supplier/getAllSurveys",
+      s2s: "https://api.surveysherpa.com/api/supplier/getSurveyDetails",
+      master: "https://api.surveysherpa.com/api/supplier/getQualifications",
+      token: "f3f5bf8fde5242a5964263444e1d9814",
+    };
+  }
+  if (apiType === "custom") {
+    return {
+      feed: "https://api.clientpartner.com/feed",
+      s2s: "https://api.clientpartner.com/callback",
+      master: "https://api.clientpartner.com/attributes",
+      token: `tok_${(code || "client").toLowerCase()}_2026`,
+    };
+  }
+  return {
+    feed: "https://api.marketxcel.co.in/webservices/supplier/send_supplier_data",
+    s2s: "https://api.marketxcel.co.in/webservices/callback/updateRespondentStatus",
+    master: "https://api.marketxcel.co.in/webservices/supplier/get_master_data/",
+    token: "mx_token_live_2026",
+  };
+}
 
 const blank = {
   client_name: "",
@@ -140,7 +187,10 @@ export function Clients() {
     }
   };
 
-  const edit = (c: Client) =>
+  const edit = (c: Client) => {
+    const normType = normalizeClientApiType(c.api_type, c.client_name, c.client_code);
+    const defaults = getDefaultEndpoints(normType, c.client_code);
+
     setForm({
       id: c.id,
       values: {
@@ -150,21 +200,22 @@ export function Clients() {
         country: c.country || "United States",
         email: c.email || "",
         phone: c.phone || "",
-        api_type: c.api_type || "marketxcel",
-        feed_api_url: c.feed_api_url || "",
-        s2s_callback_url: c.s2s_callback_url || "",
-        master_data_url: c.master_data_url || "",
+        api_type: normType,
+        feed_api_url: c.feed_api_url || defaults.feed,
+        s2s_callback_url: c.s2s_callback_url || defaults.s2s,
+        master_data_url: c.master_data_url || defaults.master,
         complete_redirect: c.complete_redirect || "",
         terminate_redirect: c.terminate_redirect || "",
         overquota_redirect: c.overquota_redirect || "",
         security_redirect: c.security_redirect || "",
         secret_key: c.secret_key || "",
-        api_token: c.api_token || "",
+        api_token: c.api_token || defaults.token,
         hash_algorithm: c.hash_algorithm || "sha3-256",
         security_enabled: Number(c.security_enabled ?? 1),
         status: c.status || "Y",
       },
     });
+  };
 
   return (
     <div>
@@ -574,35 +625,15 @@ function ClientForm({
 
   const handleApiTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
-    let autoFeed = "https://api.marketxcel.co.in/webservices/supplier/send_supplier_data";
-    let autoS2S = "https://api.marketxcel.co.in/webservices/callback/updateRespondentStatus";
-    let autoMaster = "https://api.marketxcel.co.in/webservices/supplier/get_master_data/";
-    let autoToken = "mx_token_live_2026";
-
-    if (val === "surveysherpa") {
-      autoFeed = "https://api.surveysherpa.com/api/supplier/getAllSurveys";
-      autoS2S = "https://api.surveysherpa.com/api/supplier/getSurveyDetails";
-      autoMaster = "https://api.surveysherpa.com/api/supplier/getQualifications";
-      autoToken = "sherpa_token_live_2026";
-    } else if (val === "zamplia") {
-      autoFeed = "https://api.zamplia.com/v1/surveys/live";
-      autoS2S = "https://api.zamplia.com/v1/surveys/callback";
-      autoMaster = "https://api.zamplia.com/v1/surveys/master-data";
-      autoToken = "zamplia_auth_token_live";
-    } else if (val === "custom" || val === "direct") {
-      autoFeed = "https://api.clientpartner.com/feed";
-      autoS2S = "https://api.clientpartner.com/callback";
-      autoMaster = "https://api.clientpartner.com/attributes";
-      autoToken = `tok_${(v.client_code || "client").toLowerCase()}_2026`;
-    }
+    const defs = getDefaultEndpoints(val, v.client_code);
 
     setV((prev) => ({
       ...prev,
       api_type: val,
-      feed_api_url: autoFeed,
-      s2s_callback_url: autoS2S,
-      master_data_url: autoMaster,
-      api_token: prev.api_token || autoToken,
+      feed_api_url: defs.feed,
+      s2s_callback_url: defs.s2s,
+      master_data_url: defs.master,
+      api_token: prev.api_token || defs.token,
     }));
   };
 
@@ -811,11 +842,30 @@ function ClientForm({
 
         {/* Section C: Client's 3 API Endpoints (Received from Client) */}
         <div className="rounded-2xl border border-line bg-fill/40 p-4 space-y-3">
-          <div className="text-[12.5px] font-bold text-ink flex items-center gap-2">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-extrabold text-white">
-              B
-            </span>
-            <span>Client's 3 API Endpoints (Received from Client):</span>
+          <div className="flex items-center justify-between">
+            <div className="text-[12.5px] font-bold text-ink flex items-center gap-2">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-extrabold text-white">
+                B
+              </span>
+              <span>Client's 3 API Endpoints (Received from Client):</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const defs = getDefaultEndpoints(v.api_type, v.client_code);
+                setV((p) => ({
+                  ...p,
+                  feed_api_url: defs.feed,
+                  s2s_callback_url: defs.s2s,
+                  master_data_url: defs.master,
+                  api_token: p.api_token || defs.token,
+                }));
+                toast("Populated 3 API endpoints from selected architecture!", "success");
+              }}
+              className="text-[11.5px] font-medium text-accent hover:underline cursor-pointer flex items-center gap-1"
+            >
+              <RefreshCw size={11} /> Auto-fill Defaults
+            </button>
           </div>
 
           <div className="space-y-2.5">
@@ -823,7 +873,7 @@ function ClientForm({
               <Input
                 value={v.feed_api_url}
                 onChange={(e) => setV((p) => ({ ...p, feed_api_url: e.target.value }))}
-                placeholder="https://api.marketxcel.co.in/webservices/supplier/send_supplier_data"
+                placeholder={getDefaultEndpoints(v.api_type, v.client_code).feed}
                 className="font-mono text-[12px]"
               />
             </Field>
@@ -832,7 +882,7 @@ function ClientForm({
               <Input
                 value={v.s2s_callback_url}
                 onChange={(e) => setV((p) => ({ ...p, s2s_callback_url: e.target.value }))}
-                placeholder="https://api.marketxcel.co.in/webservices/callback/updateRespondentStatus"
+                placeholder={getDefaultEndpoints(v.api_type, v.client_code).s2s}
                 className="font-mono text-[12px]"
               />
             </Field>
@@ -841,7 +891,7 @@ function ClientForm({
               <Input
                 value={v.master_data_url}
                 onChange={(e) => setV((p) => ({ ...p, master_data_url: e.target.value }))}
-                placeholder="https://api.marketxcel.co.in/webservices/supplier/get_master_data/"
+                placeholder={getDefaultEndpoints(v.api_type, v.client_code).master}
                 className="font-mono text-[12px]"
               />
             </Field>
