@@ -277,6 +277,8 @@ export function hasPermission(user: AuthUser | null | undefined, permissionId: n
   if (permSet.size === 0) {
     return (
       user.role_id === 1 ||
+      user.role_id === 4 ||
+      user.role_name === "Super Admin" ||
       user.role_name === "Admin" ||
       user.role_name === "Developer" ||
       (typeof user.role_name === "string" && user.role_name.toLowerCase().includes("admin"))
@@ -334,6 +336,8 @@ export function hasModuleAccess(user: AuthUser | null | undefined, moduleId: num
   if (permSet.size === 0) {
     return (
       user.role_id === 1 ||
+      user.role_id === 4 ||
+      user.role_name === "Super Admin" ||
       user.role_name === "Admin" ||
       user.role_name === "Developer" ||
       (typeof user.role_name === "string" && user.role_name.toLowerCase().includes("admin"))

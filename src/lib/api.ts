@@ -249,6 +249,7 @@ export const api = {
       if (path === "/auth/roles") {
         return {
           data: [
+            { id: 4, name: "Super Admin" },
             { id: 1, name: "Admin" },
             { id: 2, name: "Manager" },
             { id: 3, name: "Vendor" },
@@ -484,7 +485,7 @@ export const api = {
           email: u.email || null,
           mobile_no: u.mobile_no || null,
           role_id: Number(u.role_id) || 3,
-          role_name: Number(u.role_id) === 1 ? "Admin" : Number(u.role_id) === 2 ? "Manager" : "Vendor",
+          role_name: u.role_name || (Number(u.role_id) === 4 ? "Super Admin" : Number(u.role_id) === 1 ? "Admin" : Number(u.role_id) === 2 ? "Manager" : "Vendor"),
           vendor_code: vendorCode,
           vendor_id: vendorCode,
           supplier_id: vendorCode,

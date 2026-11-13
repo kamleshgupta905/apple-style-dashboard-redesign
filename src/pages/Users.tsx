@@ -91,9 +91,11 @@ export function Users() {
   const { can, user: currentAuthUser } = usePermissions();
   const isAdmin =
     currentAuthUser?.role_id === 1 ||
+    currentAuthUser?.role_id === 4 ||
     currentAuthUser?.role_name?.toLowerCase().includes("admin") ||
     currentAuthUser?.username === "admin" ||
-    currentAuthUser?.role_name === "Developer";
+    currentAuthUser?.role_name === "Developer" ||
+    currentAuthUser?.role_name === "Super Admin";
 
   const q = useQuery(async () => {
     const [u, r, v] = await Promise.all([
@@ -172,7 +174,7 @@ export function Users() {
         }) : null;
         return (
           <div className="flex flex-col gap-1 items-start">
-            <Badge tone={u.role_id === 1 ? "purple" : u.role_id === 2 ? "blue" : "orange"}>
+            <Badge tone={u.role_name === "Super Admin" || u.role_id === 4 ? "purple" : u.role_id === 1 ? "blue" : u.role_id === 2 ? "sky" : "orange"}>
               {u.role_name === "Employee" ? "Vendor" : (u.role_name || (u.role_id === 3 ? "Vendor" : "Member"))}
             </Badge>
             {isVnd && (
@@ -335,6 +337,32 @@ function UserForm({
   const [key, setKey] = useState<unknown>(null);
   const u = state?.user;
 
+  const sanitizedRoles = useMemo(() => {
+    const list = (roles && roles.length > 0
+      ? roles
+      : [
+          { id: 4, name: "Super Admin" },
+          { id: 1, name: "Admin" },
+          { id: 2, name: "Manager" },
+          { id: 3, name: "Vendor" },
+        ]
+    )
+      .filter((r) => !r.name?.toLowerCase().includes("supplier"))
+      .map((r) => (r.name === "Employee" ? { ...r, name: "Vendor" } : r));
+
+    const hasSuperAdmin = list.some((r) => r.name.toLowerCase() === "super admin");
+    if (!hasSuperAdmin) {
+      list.unshift({ id: 4, name: "Super Admin" });
+    }
+
+    const order = ["super admin", "admin", "manager", "vendor"];
+    return list.sort((a, b) => {
+      const ia = order.indexOf(a.name.toLowerCase());
+      const ib = order.indexOf(b.name.toLowerCase());
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+  }, [roles]);
+
   if (state && key !== state) {
     setKey(state);
     setTab("profile");
@@ -345,7 +373,7 @@ function UserForm({
       username: u?.username || "",
       email: u?.email || "",
       mobile_no: u?.mobile_no || "",
-      role_id: String(u?.role_id ?? 3),
+      role_id: String(u?.role_name?.toLowerCase() === "super admin" ? 4 : (u?.role_id ?? 3)),
       vendor_code: u?.vendor_code || u?.supplier_id || u?.vendor_id || "",
       vendor_id: u?.vendor_id || u?.vendor_code || "",
       password: "",
@@ -367,7 +395,7 @@ function UserForm({
     setF((p) => ({ ...p, [k]: val }));
     if (k === "role_id") {
       const rid = Number(val);
-      if (rid === 1 || rid === 2) {
+      if (rid === 1 || rid === 2 || rid === 4) {
         setCheckedIds(new Set(ALL_MENU_IDS));
       } else if (rid === 3) {
         setCheckedIds(new Set(VENDOR_DEFAULT_PERMISSIONS));
@@ -435,6 +463,8 @@ function UserForm({
 
     setBusy(true);
     try {
+      const roleObj = sanitizedRoles.find((r) => String(r.id) === String(f.role_id));
+      const roleName = roleObj?.name || (Number(f.role_id) === 4 ? "Super Admin" : Number(f.role_id) === 1 ? "Admin" : Number(f.role_id) === 2 ? "Manager" : "Vendor");
       const vCode = Number(f.role_id) === 3 ? (f.vendor_code.trim() || null) : null;
       await api.post("/manage/users/save", {
         id: u?.id,
@@ -443,6 +473,7 @@ function UserForm({
         email: f.email.trim() || null,
         mobile_no: f.mobile_no.trim() || null,
         role_id: Number(f.role_id),
+        role_name: roleName,
         employee_type: Number(f.role_id),
         vendor_code: vCode,
         vendor_id: vCode,
@@ -534,14 +565,7 @@ function UserForm({
           </Field>
           <Field label="Role">
             <Select value={f.role_id} onChange={set("role_id")}>
-              {(roles.length
-                ? roles.map((r) => (r.name === "Employee" ? { ...r, name: "Vendor" } : r))
-                : [
-                    { id: 1, name: "Admin" },
-                    { id: 2, name: "Manager" },
-                    { id: 3, name: "Vendor" },
-                  ]
-              ).map((r) => (
+              {sanitizedRoles.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
                 </option>

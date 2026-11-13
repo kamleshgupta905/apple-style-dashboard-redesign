@@ -216,7 +216,7 @@ export function ApiDocs() {
                 OpenAPI 3.0 Specification
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-                Suppliers API Documentation
+                Vendors API Documentation
               </h1>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
                 Official REST API specifications for Supply Partners to integrate directly with VMH Group's API Tool Platform. Fetch allotted surveys, query study parameters, and process S2S callbacks automatically.
