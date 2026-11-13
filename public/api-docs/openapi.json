@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "VMH GROUP • Vendors API Documentation",
+    "title": "VMH GROUP \u2022 Vendors API Documentation",
     "version": "1.0.0",
     "description": "Official API documentation and integration specifications for VMH Group API Tool Partners and Vendors. Use these REST endpoints to fetch assigned surveys in real time, obtain dynamic respondent entry links, inspect targeting qualifications, and process automated S2S postback callbacks."
   },
@@ -18,6 +18,171 @@
         "in": "header",
         "name": "access-key",
         "description": "Enter your Partner API Key. You can also provide `?vendor_id=YOUR_VENDOR_CODE` in query parameters."
+      }
+    },
+    "schemas": {
+      "AllSurveysResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "apiVersion": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "result": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              },
+              "vendor_id": {
+                "type": "string"
+              },
+              "total": {
+                "type": "integer"
+              },
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SurveyItem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "SurveyItem": {
+        "type": "object",
+        "properties": {
+          "survey_id": {
+            "type": "string"
+          },
+          "survey_name": {
+            "type": "string"
+          },
+          "cpi": {
+            "type": "number",
+            "format": "float"
+          },
+          "loi": {
+            "type": "string",
+            "description": "Length of interview in minutes"
+          },
+          "ir": {
+            "type": "string",
+            "description": "Incidence rate percentage"
+          },
+          "total_quota": {
+            "type": "integer"
+          },
+          "remaining_quota": {
+            "type": "integer"
+          },
+          "country": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "live_url": {
+            "type": "string",
+            "description": "Entry URL containing [RESPONDENT_ID] placeholder"
+          }
+        }
+      },
+      "SurveyDetailsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "result": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "survey_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "cpi": {
+                    "type": "number"
+                  },
+                  "loi": {
+                    "type": "string"
+                  },
+                  "ir": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "quota_limit": {
+                    "type": "integer"
+                  },
+                  "entry_link": {
+                    "type": "string"
+                  },
+                  "qualifications": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "SurveyStatsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "result": {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "survey_id": {
+                    "type": "string"
+                  },
+                  "total_clicks": {
+                    "type": "integer"
+                  },
+                  "completes": {
+                    "type": "integer"
+                  },
+                  "terminates": {
+                    "type": "integer"
+                  },
+                  "overquota": {
+                    "type": "integer"
+                  },
+                  "conversion_rate": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -66,7 +231,7 @@
                       {
                         "survey_id": "2141504327",
                         "survey_name": "Consumer Tech Study",
-                        "cpi": 1.20,
+                        "cpi": 1.2,
                         "loi": "13",
                         "ir": "74",
                         "total_quota": 656,
@@ -126,7 +291,7 @@
                     "data": {
                       "survey_id": "2141504327",
                       "name": "Consumer Tech Study",
-                      "cpi": 1.20,
+                      "cpi": 1.2,
                       "loi": "13",
                       "ir": "74",
                       "status": "Live",
@@ -232,13 +397,36 @@
                     "success": true,
                     "data": {
                       "languages": [
-                        { "id": 1, "country_code": "US", "language": "en-US", "language_name": "English" },
-                        { "id": 2, "country_code": "GB", "language": "en-GB", "language_name": "English" },
-                        { "id": 3, "country_code": "IN", "language": "hi-IN", "language_name": "Hindi" }
+                        {
+                          "id": 1,
+                          "country_code": "US",
+                          "language": "en-US",
+                          "language_name": "English"
+                        },
+                        {
+                          "id": 2,
+                          "country_code": "GB",
+                          "language": "en-GB",
+                          "language_name": "English"
+                        },
+                        {
+                          "id": 3,
+                          "country_code": "IN",
+                          "language": "hi-IN",
+                          "language_name": "Hindi"
+                        }
                       ],
                       "countries": [
-                        { "id": 1, "country_code": "US", "country_name": "United States" },
-                        { "id": 2, "country_code": "IN", "country_name": "India" }
+                        {
+                          "id": 1,
+                          "country_code": "US",
+                          "country_name": "United States"
+                        },
+                        {
+                          "id": 2,
+                          "country_code": "IN",
+                          "country_name": "India"
+                        }
                       ]
                     }
                   }
@@ -271,99 +459,6 @@
         "responses": {
           "200": {
             "description": "Qualifications schema retrieved successfully"
-          }
-        }
-      }
-    }
-  },
-  "components": {
-    "schemas": {
-      "AllSurveysResponse": {
-        "type": "object",
-        "properties": {
-          "success": { "type": "boolean" },
-          "apiVersion": { "type": "integer" },
-          "message": { "type": "string" },
-          "result": {
-            "type": "object",
-            "properties": {
-              "success": { "type": "boolean" },
-              "vendor_id": { "type": "string" },
-              "total": { "type": "integer" },
-              "data": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SurveyItem"
-                }
-              }
-            }
-          }
-        }
-      },
-      "SurveyItem": {
-        "type": "object",
-        "properties": {
-          "survey_id": { "type": "string" },
-          "survey_name": { "type": "string" },
-          "cpi": { "type": "number", "format": "float" },
-          "loi": { "type": "string", "description": "Length of interview in minutes" },
-          "ir": { "type": "string", "description": "Incidence rate percentage" },
-          "total_quota": { "type": "integer" },
-          "remaining_quota": { "type": "integer" },
-          "country": { "type": "string" },
-          "language": { "type": "string" },
-          "live_url": { "type": "string", "description": "Entry URL containing [RESPONDENT_ID] placeholder" }
-        }
-      },
-      "SurveyDetailsResponse": {
-        "type": "object",
-        "properties": {
-          "success": { "type": "boolean" },
-          "result": {
-            "type": "object",
-            "properties": {
-              "success": { "type": "boolean" },
-              "data": {
-                "type": "object",
-                "properties": {
-                  "survey_id": { "type": "string" },
-                  "name": { "type": "string" },
-                  "cpi": { "type": "number" },
-                  "loi": { "type": "string" },
-                  "ir": { "type": "string" },
-                  "status": { "type": "string" },
-                  "quota_limit": { "type": "integer" },
-                  "entry_link": { "type": "string" },
-                  "qualifications": {
-                    "type": "array",
-                    "items": { "type": "object" }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "SurveyStatsResponse": {
-        "type": "object",
-        "properties": {
-          "success": { "type": "boolean" },
-          "result": {
-            "type": "object",
-            "properties": {
-              "success": { "type": "boolean" },
-              "data": {
-                "type": "object",
-                "properties": {
-                  "survey_id": { "type": "string" },
-                  "total_clicks": { "type": "integer" },
-                  "completes": { "type": "integer" },
-                  "terminates": { "type": "integer" },
-                  "overquota": { "type": "integer" },
-                  "conversion_rate": { "type": "string" }
-                }
-              }
-            }
           }
         }
       }
