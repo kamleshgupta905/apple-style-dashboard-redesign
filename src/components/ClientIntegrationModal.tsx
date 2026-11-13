@@ -55,7 +55,7 @@ export function ClientIntegrationModal({
 
   const copyAllRedirects = () => {
     const text =
-      `*SMR Platform Static Return Redirects for ${cName} (Code: ${cCode})*\n` +
+      `*VMH GROUP API Tool Static Return Redirects for ${cName} (Code: ${cCode})*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `Please configure your survey software with these 4 static exit redirects:\n\n` +
       `1. COMPLETE / SUCCESS (Status 10):\n${staticComplete}\n` +
@@ -109,7 +109,7 @@ export function ClientIntegrationModal({
       footer={
         <div className="flex w-full items-center justify-between">
           <span className="text-[12px] text-ink-3">
-            Realtime SMR Data Gateway · VMH GROUP
+            Realtime API Tool Data Gateway · VMH GROUP
           </span>
           <Button variant="secondary" onClick={onClose}>
             Close

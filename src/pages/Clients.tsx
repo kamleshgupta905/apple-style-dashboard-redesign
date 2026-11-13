@@ -119,7 +119,7 @@ export function Clients() {
   const copyUniversalRedirects = () => {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
     const text =
-      `*SMR Platform Standard Static Inbound Return Redirects*\n` +
+      `*VMH GROUP API Tool Standard Static Inbound Return Redirects*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `Configure your survey platform with these 4 static exit redirects:\n\n` +
       `1. COMPLETE / SUCCESS:\n${origin}/#/complete?uid=[UID]\n\n` +
@@ -131,7 +131,7 @@ export function Clients() {
 
     navigator.clipboard.writeText(text);
     setCopiedAllHeader(true);
-    toast("Standard Static SMR Client Redirects copied to clipboard!", "success");
+    toast("Standard Static Client Redirects copied to clipboard!", "success");
     setTimeout(() => setCopiedAllHeader(false), 2200);
   };
 
@@ -228,9 +228,9 @@ export function Clients() {
               variant="secondary"
               icon={copiedAllHeader ? <Check size={14} className="text-green" /> : <Copy size={14} />}
               onClick={copyUniversalRedirects}
-              title="Copy universal SMR 4 Inbound Return Redirect URLs for clients"
+              title="Copy universal 4 Inbound Return Redirect URLs for clients"
             >
-              {copiedAllHeader ? "Redirects Copied!" : "Copy SMR Redirects"}
+              {copiedAllHeader ? "Redirects Copied!" : "Copy Redirects"}
             </Button>
             {canCreate && (
               <Button icon={<Plus size={16} />} onClick={() => setForm({ values: blank })}>
@@ -314,7 +314,7 @@ export function Clients() {
                     variant="secondary"
                     icon={<Link2 size={13} className="text-accent" />}
                     onClick={() => setIntegrationClient(c)}
-                    title="View & copy SMR Return Redirects and API keys for this client"
+                    title="View & copy Return Redirects and API keys for this client"
                   >
                     Redirects & API
                   </Button>
@@ -548,7 +548,7 @@ function ClientDrawer({
           <div className="rounded-2xl border border-accent/20 bg-accent-soft/30 p-4">
             <h4 className="text-[14px] font-semibold text-ink flex items-center gap-1.5 mb-1">
               <Link2 size={16} className="text-accent" />
-              SMR Return Redirects (For Client Onboarding)
+              Return Redirects (For Client Onboarding)
             </h4>
             <p className="text-[12px] text-ink-3 mb-3">
               Generate & copy the 4 formatted inbound return redirect URLs or S2S API credentials to send to {c.client_name}.
@@ -647,7 +647,7 @@ function ClientForm({
 
   const handleCopyAll = () => {
     const text =
-      `🎯 *SMR Platform Inbound Redirect URLs for ${v.client_name || previewCode}*\n` +
+      `🎯 *VMH GROUP API Tool Inbound Redirect URLs for ${v.client_name || previewCode}*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `1. ✅ COMPLETE / SUCCESS:\n${compUrl}\n\n` +
       `2. ❌ TERMINATE / SCREENOUT:\n${termUrl}\n\n` +
@@ -703,7 +703,7 @@ function ClientForm({
       onClose={onClose}
       size="lg"
       title={state?.id ? `Edit Client: ${v.client_name || ""}` : "Client Onboarding & 3-API Hub"}
-      subtitle="Configure 4 SMR Inbound Redirects and ingest the client's 3 API endpoints"
+      subtitle="Configure 4 Inbound Redirects and ingest the client's 3 API endpoints"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -716,14 +716,14 @@ function ClientForm({
       }
     >
       <div className="space-y-4">
-        {/* Section A: SMR Inbound Redirect URLs (Send these 4 links to your client) */}
+        {/* Section A: Inbound Redirect URLs (Send these 4 links to your client) */}
         <div className="rounded-2xl border border-line bg-fill/40 p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="flex items-center gap-2 text-[12.5px] font-bold text-ink">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-extrabold text-white">
                 A
               </span>
-              <span>SMR Inbound Redirect URLs (Send these 4 links to your client):</span>
+              <span>API Tool Inbound Redirect URLs (Send these 4 links to your client):</span>
             </span>
             <button
               type="button"

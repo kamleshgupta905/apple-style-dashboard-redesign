@@ -87,7 +87,7 @@ export function Settings({ user, dark, onSetDark, onLogout }: { user: AuthUser; 
                 <div className="min-w-0 flex-1">
                   <p className="text-[14px] font-semibold text-ink">Auto-Pause Inactive Studies</p>
                   <p className="text-[12px] text-ink-3">
-                    If a study receives 50 clicks (or your customized click limit) without delivering a single complete (0 completes), SMR automatically pauses routing to prevent traffic loss.
+                    If a study receives 50 clicks (or your customized click limit) without delivering a single complete (0 completes), the system automatically pauses routing to prevent traffic loss.
                   </p>
                 </div>
               </div>

@@ -93,10 +93,10 @@ export function VendorIntegrationModal({
       onClose={onClose}
       size="lg"
       title={`Integration Kit · ${vName}`}
-      subtitle={`Partner code: ${vCode} · Connect this vendor to your SMR platform`}
+      subtitle={`Partner code: ${vCode} · Connect this vendor to your API Tool platform`}
       footer={
         <div className="flex w-full items-center justify-between">
-          <span className="text-xs text-ink-3">VMH Group SMR Gateway</span>
+          <span className="text-xs text-ink-3">VMH Group API Tool Gateway</span>
           <Button variant="ghost" onClick={onClose}>
             Close
           </Button>
@@ -128,7 +128,7 @@ export function VendorIntegrationModal({
               </div>
               <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80 leading-relaxed">
                 Give this <strong>single link</strong> to your vendor to put in their dashboard as an Offer or Global Survey Router. 
-                Any survey you assign to <strong>{vName}</strong> from your SMR dashboard will automatically receive traffic through this link!
+                Any survey you assign to <strong>{vName}</strong> from your API Tool dashboard will automatically receive traffic through this link!
               </p>
             </div>
 
@@ -170,7 +170,7 @@ export function VendorIntegrationModal({
                   <strong>You assign surveys here:</strong> In your <em>My Studies</em> table, click <strong>"Assign"</strong> and select <strong>{vName}</strong>.
                 </li>
                 <li>
-                  <strong>Automatic matching:</strong> When a respondent clicks the link, SMR matches them to the highest paying active survey assigned to {vName}.
+                  <strong>Automatic matching:</strong> When a respondent clicks the link, API Tool matches them to the highest paying active survey assigned to {vName}.
                 </li>
                 <li>
                   <strong>Zero link updates:</strong> You never have to send new links to the vendor for new surveys!
@@ -294,7 +294,7 @@ export function VendorIntegrationModal({
         {tab === "callbacks" && (
           <div className="space-y-4">
             <p className="text-xs text-ink-3 leading-relaxed">
-              When a respondent from <strong>{vName}</strong> finishes or screens out of a study, SMR will redirect them or send a postback to these URLs. Use <code>[UID]</code> where the respondent ID belongs.
+              When a respondent from <strong>{vName}</strong> finishes or screens out of a study, API Tool will redirect them or send a postback to these URLs. Use <code>[UID]</code> where the respondent ID belongs.
             </p>
 
             <div className="space-y-3">

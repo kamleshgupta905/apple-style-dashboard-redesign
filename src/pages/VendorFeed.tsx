@@ -61,7 +61,7 @@ export function VendorFeed() {
 
         const output = {
           success: true,
-          endpoint: "VMH Group SMR Partner Inventory Feed API",
+          endpoint: "VMH Group API Tool Partner Inventory Feed API",
           partner_code: vid || "ALL_PARTNERS",
           total_active_surveys: studies.length,
           generated_at: new Date().toISOString(),

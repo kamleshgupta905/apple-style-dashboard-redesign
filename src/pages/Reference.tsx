@@ -67,7 +67,7 @@ export function Reference() {
               https://api.vmhgroupsmr.com/#/router?vid=<b className="text-accent">VND-CODE</b>&uid=<b className="text-green">[RESPONDENT_ID]</b>
             </p>
             <p className="mt-2.5 text-[13px] text-ink-3 leading-relaxed">
-              Vendors configure this <b>one time</b> in their dashboard. When you assign any survey to that vendor in SMR, the router automatically serves it to their panelists.
+              Vendors configure this <b>one time</b> in their dashboard. When you assign any survey to that vendor in the API Tool, the router automatically serves it to their panelists.
             </p>
           </Card>
           <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "40ms" }}>

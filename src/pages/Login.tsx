@@ -38,8 +38,8 @@ export function Login({ onSuccess }: { onSuccess: (u: AuthUser) => void }) {
           <div className="mb-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-[24px] bg-white p-2.5 shadow-[var(--shadow-md)] ring-1 ring-line">
             <img src="/vmh-logo.png" alt="VMH Group" className="h-full w-full object-contain" />
           </div>
-          <h1 className="text-[28px] font-bold tracking-tight text-ink">Sign in to SMR</h1>
-          <p className="mt-1 text-[14px] text-ink-3">VMH GROUP'S · SMR PLATFORM</p>
+          <h1 className="text-[28px] font-bold tracking-tight text-ink">Sign in to API Tool</h1>
+          <p className="mt-1 text-[14px] text-ink-3">VMH GROUP'S · API TOOL</p>
         </div>
 
         <form

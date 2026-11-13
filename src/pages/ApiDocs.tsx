@@ -219,7 +219,7 @@ export function ApiDocs() {
                 Suppliers API Documentation
               </h1>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
-                Official REST API specifications for Supply Partners to integrate directly with VMH Group's SMR Platform. Fetch allotted surveys, query study parameters, and process S2S callbacks automatically.
+                Official REST API specifications for Supply Partners to integrate directly with VMH Group's API Tool Platform. Fetch allotted surveys, query study parameters, and process S2S callbacks automatically.
               </p>
             </div>
             <div className="flex items-center gap-2.5">
@@ -418,7 +418,7 @@ export function ApiDocs() {
         <div className="pt-6 border-t border-slate-200 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-2">
             <ShieldCheck size={16} className="text-indigo-600" />
-            <span>VMH Group SMR Gateway API v1.0.0</span>
+            <span>VMH Group API Tool Gateway API v1.0.0</span>
           </div>
           <div>
             Swagger UI compatible with Survey Sherpa / Cint / Dynata supplier standards.

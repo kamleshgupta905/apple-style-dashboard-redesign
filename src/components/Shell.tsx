@@ -75,7 +75,7 @@ function Logo() {
       </div>
       <div className="leading-tight">
         <p className="text-[14px] font-bold tracking-tight text-ink">VMH GROUP'S</p>
-        <p className="text-[9.5px] font-semibold tracking-wider text-ink-3">SMR PLATFORM</p>
+        <p className="text-[9.5px] font-semibold tracking-wider text-ink-3">API TOOL</p>
       </div>
     </div>
   );

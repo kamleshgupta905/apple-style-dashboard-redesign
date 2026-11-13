@@ -381,7 +381,7 @@ export function SurveyCallback() {
                 VMH GROUP
               </div>
               <div className="text-[10px] text-slate-400 font-medium">
-                Research Gateway • SMR Verification
+                Research Gateway • API Tool Verification
               </div>
             </div>
           </div>
@@ -524,12 +524,6 @@ export function SurveyCallback() {
               <ChevronRight className="w-3 h-3" />
             </a>
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-8 pt-4 border-t border-slate-100 w-full flex items-center justify-center text-[11px] text-slate-400 gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
-          <span>VMH GROUP SMR • 256-bit Encrypted Research Verification</span>
         </div>
       </div>
     </div>

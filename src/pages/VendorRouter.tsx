@@ -146,7 +146,7 @@ export function VendorRouter() {
               No Active Surveys Assigned
             </h2>
             <p className="text-xs text-slate-600 max-w-md leading-relaxed mb-6">
-              Your partner account (<strong>{vendorName || vid}</strong>) is connected to our SMR Router. However, there are currently no live studies allocated to this partner code.
+              Your partner account (<strong>{vendorName || vid}</strong>) is connected to our API Tool Router. However, there are currently no live studies allocated to this partner code.
             </p>
 
             <div className="w-full bg-slate-50/90 rounded-2xl border border-slate-200/80 p-4 text-left text-xs space-y-2 mb-6">
@@ -155,7 +155,7 @@ export function VendorRouter() {
                 How to activate studies:
               </div>
               <p className="text-slate-500 text-[12px] leading-relaxed">
-                Log into your VMH Group SMR Dashboard, go to <strong>My Studies</strong> or <strong>Vendors</strong>, and click <strong>"Assign"</strong> to allocate any study to partner <strong>{vid}</strong>. It will immediately appear here for your respondents.
+                Log into your VMH Group API Tool Dashboard, go to <strong>My Studies</strong> or <strong>Vendors</strong>, and click <strong>"Assign"</strong> to allocate any study to partner <strong>{vid}</strong>. It will immediately appear here for your respondents.
               </p>
             </div>
 
@@ -195,12 +195,6 @@ export function VendorRouter() {
             </a>
           </div>
         )}
-
-        {/* Calibr8 / SMR footer */}
-        <div className="mt-8 pt-4 border-t border-slate-100 w-full flex items-center justify-center text-[11px] text-slate-400 gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
-          <span>VMH Group SMR Global Router • 256-bit Encrypted Session</span>
-        </div>
       </div>
     </div>
   );

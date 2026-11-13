@@ -361,12 +361,6 @@ export function Prescreener() {
             </a>
           </div>
         )}
-
-        {/* VMH GROUP Encrypted Footer */}
-        <div className="mt-7 pt-4 border-t border-slate-100 flex items-center justify-center text-[11px] text-slate-400 gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
-          <span>VMH GROUP SMR • 256-bit Encrypted Research Verification</span>
-        </div>
       </div>
     </div>
   );
