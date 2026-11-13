@@ -183,7 +183,8 @@ export function Prescreener() {
 
     setFinalUrl(resolved);
 
-    let seconds = 2;
+    let seconds = 1;
+    setRedirectCountdown(1);
     const interval = setInterval(() => {
       seconds -= 1;
       setRedirectCountdown(seconds);
@@ -195,7 +196,7 @@ export function Prescreener() {
           window.location.href = resolved;
         }
       }
-    }, 1000);
+    }, 800);
   };
 
   return (
@@ -303,22 +304,15 @@ export function Prescreener() {
               You match the requirements for this study. Transferring you to the research survey now...
             </p>
 
-            <div className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-150 mb-6 text-left">
+            <div className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-150 text-left">
               <div className="text-xs font-semibold text-indigo-600 mb-1 flex items-center gap-2">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                Redirecting in {redirectCountdown}s...
+                Connecting to study...
               </div>
               <div className="text-[11px] text-slate-400 truncate font-mono">
                 {finalUrl || "Preparing secure survey link..."}
               </div>
             </div>
-
-            <a
-              href={finalUrl || "#"}
-              className="inline-flex items-center justify-center px-8 py-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold shadow-md shadow-indigo-100 transition-all"
-            >
-              Continue to Survey Immediately
-            </a>
           </div>
         )}
 
