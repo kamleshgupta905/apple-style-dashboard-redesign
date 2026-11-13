@@ -16,6 +16,9 @@ export interface AuthUser {
   email?: string | null;
   role_name?: string;
   role_id?: number;
+  vendor_id?: string | null;
+  vendor_code?: string | null;
+  supplier_id?: string | null;
   permissions?: number[];
   menu_permissions?: number[];
   granular_permissions?: Record<string, any>;
@@ -120,6 +123,9 @@ export async function login(username: string, password: string) {
         name: user.name,
         username: user.username,
         email: user.email,
+        vendor_id: user.vendor_id || user.vendor_code || user.supplier_id || null,
+        vendor_code: user.vendor_code || user.vendor_id || user.supplier_id || null,
+        supplier_id: user.supplier_id || user.vendor_code || user.vendor_id || null,
         role_name: user.role_name === "Employee" ? "Vendor" : (user.role_name || (user.role_id === 1 ? "Admin" : user.role_id === 2 ? "Manager" : "Vendor")),
         role_id: user.role_id || 3,
         permissions: Array.isArray(user.menu_permissions) ? user.menu_permissions : [],
@@ -157,6 +163,9 @@ export async function refreshCurrentUser(): Promise<AuthUser | null> {
         name: user.name,
         username: user.username,
         email: user.email,
+        vendor_id: user.vendor_id || user.vendor_code || user.supplier_id || cur.vendor_id || null,
+        vendor_code: user.vendor_code || user.vendor_id || user.supplier_id || cur.vendor_code || null,
+        supplier_id: user.supplier_id || user.vendor_code || user.vendor_id || cur.supplier_id || null,
         role_name: user.role_name,
         role_id: user.role_id,
         permissions: perms,
@@ -468,6 +477,7 @@ export const api = {
       // 1. Save User
       if (path === "/manage/users/save") {
         const u = body;
+        const vendorCode = u.vendor_code || u.supplier_id || u.vendor_id || null;
         const payload: any = {
           name: u.name,
           username: u.username,
@@ -475,6 +485,9 @@ export const api = {
           mobile_no: u.mobile_no || null,
           role_id: Number(u.role_id) || 3,
           role_name: Number(u.role_id) === 1 ? "Admin" : Number(u.role_id) === 2 ? "Manager" : "Vendor",
+          vendor_code: vendorCode,
+          vendor_id: vendorCode,
+          supplier_id: vendorCode,
           menu_permissions: u.menu_permissions || [],
           granular_permissions: u.granular_permissions || {},
           status: u.status || "active",
@@ -482,6 +495,9 @@ export const api = {
           updated_at: new Date().toISOString(),
         };
         if (u.password) payload.password = u.password;
+
+        // Try syncing to Hostinger Live Gateway in background
+        request("POST", "/manage/users/save", { body: u }).catch(() => {});
 
         if (u.id) {
           const { data, error } = await supabase.from("smr_users").update(payload).eq("id", u.id).select().single();

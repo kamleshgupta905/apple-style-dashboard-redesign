@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, CheckSquare, Copy, Eye, EyeOff, MinusSquare, Pencil, Plus, Search, Square, Trash2 } from "lucide-react";
+import { Check, CheckSquare, Copy, Eye, EyeOff, MinusSquare, Pencil, Plus, Search, Square, Store, Trash2 } from "lucide-react";
 import { api, auth } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { formatDate, initials } from "../lib/utils";
@@ -32,6 +32,9 @@ interface User {
   mobile_no: string | null;
   role_id: number;
   role_name: string;
+  vendor_code?: string | null;
+  vendor_id?: string | null;
+  supplier_id?: string | null;
   is_active: "Y" | "N";
   is_online?: "Y" | "N";
   created_at: string;
@@ -93,11 +96,12 @@ export function Users() {
     currentAuthUser?.role_name === "Developer";
 
   const q = useQuery(async () => {
-    const [u, r] = await Promise.all([
+    const [u, r, v] = await Promise.all([
       api.get<{ data: User[] }>("/manage/users"),
       api.get<{ data: { id: number; name: string }[] }>("/auth/roles").catch(() => ({ data: [] })),
+      api.get<{ data: any[] }>("/vendors").catch(() => ({ data: [] })),
     ]);
-    return { users: u.data || [], roles: r.data || [] };
+    return { users: u.data || [], roles: r.data || [], vendors: v.data || [] };
   }, []);
   const [search, setSearch] = useState("");
   const [edit, setEdit] = useState<null | { user?: User }>(null);
@@ -157,12 +161,28 @@ export function Users() {
     },
     {
       key: "role",
-      header: "Role",
-      render: (u) => (
-        <Badge tone={u.role_id === 1 ? "purple" : u.role_id === 2 ? "blue" : "orange"}>
-          {u.role_name === "Employee" ? "Vendor" : (u.role_name || (u.role_id === 3 ? "Vendor" : "Member"))}
-        </Badge>
-      ),
+      header: "Role & Vendor",
+      render: (u) => {
+        const isVnd = u.role_id === 3 || u.role_name === "Vendor" || u.role_name?.toLowerCase().includes("vendor");
+        const vCode = u.vendor_code || u.vendor_id || u.supplier_id;
+        const matchedV = isVnd && vCode ? (q.data?.vendors || []).find((v: any) => {
+          const c = (v.vendor_code || "").toLowerCase().trim();
+          const target = vCode.toLowerCase().trim();
+          return c === target || String(v.id) === target;
+        }) : null;
+        return (
+          <div className="flex flex-col gap-1 items-start">
+            <Badge tone={u.role_id === 1 ? "purple" : u.role_id === 2 ? "blue" : "orange"}>
+              {u.role_name === "Employee" ? "Vendor" : (u.role_name || (u.role_id === 3 ? "Vendor" : "Member"))}
+            </Badge>
+            {isVnd && (
+              <span className="text-[11px] font-mono text-ink-3">
+                {matchedV ? `${matchedV.vendor_name} (${vCode})` : (vCode ? `Code: ${vCode}` : "No vendor linked")}
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     ...(isAdmin
       ? [
@@ -267,6 +287,7 @@ export function Users() {
       <UserForm
         state={edit}
         roles={q.data?.roles || []}
+        vendors={q.data?.vendors || []}
         isAdmin={isAdmin}
         onClose={() => setEdit(null)}
         onSaved={() => {
@@ -281,12 +302,14 @@ export function Users() {
 function UserForm({
   state,
   roles,
+  vendors,
   isAdmin,
   onClose,
   onSaved,
 }: {
   state: null | { user?: User };
   roles: { id: number; name: string }[];
+  vendors: any[];
   isAdmin: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -300,6 +323,8 @@ function UserForm({
     email: "",
     mobile_no: "",
     role_id: "3",
+    vendor_code: "",
+    vendor_id: "",
     password: "",
     active: true,
   });
@@ -321,6 +346,8 @@ function UserForm({
       email: u?.email || "",
       mobile_no: u?.mobile_no || "",
       role_id: String(u?.role_id ?? 3),
+      vendor_code: u?.vendor_code || u?.supplier_id || u?.vendor_id || "",
+      vendor_id: u?.vendor_id || u?.vendor_code || "",
       password: "",
       active: u ? u.is_active === "Y" : true,
     });
@@ -408,6 +435,7 @@ function UserForm({
 
     setBusy(true);
     try {
+      const vCode = Number(f.role_id) === 3 ? (f.vendor_code.trim() || null) : null;
       await api.post("/manage/users/save", {
         id: u?.id,
         name: f.name.trim(),
@@ -416,6 +444,9 @@ function UserForm({
         mobile_no: f.mobile_no.trim() || null,
         role_id: Number(f.role_id),
         employee_type: Number(f.role_id),
+        vendor_code: vCode,
+        vendor_id: vCode,
+        supplier_id: vCode,
         password: f.password || undefined,
         status: f.active ? "active" : "inactive",
         is_active: f.active ? "Y" : "N",
@@ -429,6 +460,9 @@ function UserForm({
         auth.save(auth.token(), {
           ...cur,
           name: f.name.trim(),
+          vendor_code: vCode,
+          vendor_id: vCode,
+          supplier_id: vCode,
           permissions: finalIds,
           menu_permissions: finalIds,
           granular_permissions: granularMap,
@@ -514,6 +548,62 @@ function UserForm({
               ))}
             </Select>
           </Field>
+
+          {Number(f.role_id) === 3 && (
+            <div className="flex flex-col gap-3 rounded-2xl border border-accent/25 bg-accent-soft/20 p-4 sm:col-span-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-semibold text-ink flex items-center gap-1.5">
+                  <Store size={15} className="text-accent" /> Linked Supply Vendor Panel
+                </span>
+                <span className="text-[11px] text-ink-3">Required to view assigned studies on Dashboard</span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Select Supply Vendor Panel">
+                  <Select
+                    value={vendors.some((v: any) => v.vendor_code === f.vendor_code || String(v.id) === f.vendor_code) ? f.vendor_code : (f.vendor_code ? "__custom__" : "")}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "__custom__") {
+                        return;
+                      }
+                      const selected = vendors.find((v: any) => v.vendor_code === val || String(v.id) === val);
+                      setF((prev) => ({
+                        ...prev,
+                        vendor_code: selected?.vendor_code || val,
+                        vendor_id: selected?.vendor_code || val,
+                        name: !prev.name && selected ? selected.vendor_name : prev.name,
+                        email: !prev.email && selected?.email ? selected.email : prev.email,
+                      }));
+                    }}
+                  >
+                    <option value="">-- Select Existing Vendor --</option>
+                    {vendors.map((v: any) => (
+                      <option key={v.id || v.vendor_code} value={v.vendor_code || v.id}>
+                        {v.vendor_name} ({v.vendor_code || `ID #${v.id}`})
+                      </option>
+                    ))}
+                    <option value="__custom__">+ Enter Custom Vendor Code</option>
+                  </Select>
+                </Field>
+                <Field label="Vendor Code / Slug" hint="Unique supply vendor identifier">
+                  <Input
+                    placeholder="e.g. VND001 or VND-AFC01"
+                    value={f.vendor_code}
+                    onChange={(e) => {
+                      const val = e.target.value.trim();
+                      setF((prev) => ({ ...prev, vendor_code: val, vendor_id: val }));
+                    }}
+                  />
+                </Field>
+              </div>
+              {f.vendor_code && (
+                <div className="flex items-center gap-2 text-[12px] text-ink-2 bg-surface/80 rounded-xl px-3 py-2 border border-line">
+                  <span className="text-green font-semibold">Active Link:</span>
+                  <span>Studies allotted to <strong className="font-mono text-ink">{f.vendor_code}</strong> will automatically appear in this vendor's dashboard.</span>
+                </div>
+              )}
+            </div>
+          )}
           {can(PERMS.USERS_PASSWORDS) ? (
             <Field
               label={u ? "New password" : "Password"}

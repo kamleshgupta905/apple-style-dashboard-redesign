@@ -49,39 +49,57 @@ function VendorAssignedSurveys() {
   const uName = (user?.username || "").toLowerCase().trim();
   const rName = (user?.name || "").toLowerCase().trim();
   const email = (user?.email || "").toLowerCase().trim();
+  const uVendorCode = (user?.vendor_code || user?.vendor_id || user?.supplier_id || "").toLowerCase().trim();
 
-  // Find vendor code
+  // Matched vendor entity from vendors directory
   const matchedVendor = useMemo(() => {
-    return (vendorsQuery.data || []).find((v: any) => {
+    const list = vendorsQuery.data || [];
+    return list.find((v: any) => {
       const vc = (v.vendor_code || "").toLowerCase().trim();
       const vn = (v.vendor_name || "").toLowerCase().trim();
       const ve = (v.email || "").toLowerCase().trim();
+      const vid = String(v.id || "").toLowerCase().trim();
       return (
+        (uVendorCode && (vc === uVendorCode || vid === uVendorCode || vn === uVendorCode)) ||
         (vc && (vc === uName || vc === rName)) ||
         (vn && (vn === uName || vn === rName)) ||
         (ve && email && ve === email)
       );
     });
-  }, [vendorsQuery.data, uName, rName, email]);
+  }, [vendorsQuery.data, uVendorCode, uName, rName, email]);
 
-  const activeVendorCode = matchedVendor?.vendor_code || user?.username || "VND";
+  // Comprehensive set of all valid identifiers for this vendor
+  const vendorIdentifiers = useMemo(() => {
+    const set = new Set<string>();
+    if (uVendorCode) set.add(uVendorCode);
+    if (user?.vendor_code) set.add(user.vendor_code.toLowerCase().trim());
+    if (user?.vendor_id) set.add(String(user.vendor_id).toLowerCase().trim());
+    if (user?.supplier_id) set.add(user.supplier_id.toLowerCase().trim());
+    if (matchedVendor) {
+      if (matchedVendor.vendor_code) set.add(matchedVendor.vendor_code.toLowerCase().trim());
+      if (matchedVendor.vendor_name) set.add(matchedVendor.vendor_name.toLowerCase().trim());
+      if (matchedVendor.id) set.add(String(matchedVendor.id).toLowerCase().trim());
+    }
+    if (uName) set.add(uName);
+    if (rName) set.add(rName);
+    return set;
+  }, [uVendorCode, user, matchedVendor, uName, rName]);
+
+  const activeVendorCode =
+    user?.vendor_code ||
+    matchedVendor?.vendor_code ||
+    user?.supplier_id ||
+    user?.username ||
+    "VND";
 
   // Filter allotments specifically provided to this vendor
   const myAllotments = useMemo(() => {
-    const vc = activeVendorCode.toLowerCase();
-    const vn = (matchedVendor?.vendor_name || user?.name || "").toLowerCase();
     return (allotmentsQuery.data || []).filter((a: any) => {
       const vid = (a.vendor_id || "").toLowerCase().trim();
       const vname = (a.vendor_name || "").toLowerCase().trim();
-      return (
-        vid === vc ||
-        vname === vc ||
-        vid === uName ||
-        vname === uName ||
-        (vn && (vname === vn || vid === vn))
-      );
+      return vendorIdentifiers.has(vid) || vendorIdentifiers.has(vname);
     });
-  }, [allotmentsQuery.data, activeVendorCode, matchedVendor, user, uName]);
+  }, [allotmentsQuery.data, vendorIdentifiers]);
 
   // Combine allotment info with project details
   const rows = useMemo(() => {

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { ArrowUpRight, CircleDollarSign, Copy, ExternalLink, MousePointerClick, Radio, RefreshCw, Target, TrendingUp } from "lucide-react";
 import { api, type Lead } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
+import { useRealtime } from "../lib/useRealtime";
 import { compact, money, num, timeAgo } from "../lib/utils";
 import { BarList, Donut, Legend } from "../components/charts";
 import { Button, Card, CountUp, ErrorState, PageHeader, SectionTitle, Skeleton, StatusBadge, Badge } from "../components/ui";
@@ -31,18 +32,57 @@ export function Dashboard({ userName }: { userName: string }) {
   const vendorsQuery = useQuery(async () => (await api.get<{ data: any[] }>("/vendors")).data || [], []);
   const allotmentsQuery = useQuery(async () => (await api.get<{ data: any[] }>("/vendor/allotments")).data || [], []);
 
+  // Real-time synchronization when allotments or studies update
+  useRealtime(["smr_vendor_allotments", "smr_projects", "smr_leads"], () => {
+    allotmentsQuery.reload();
+  });
+
   const uName = (user?.username || "").toLowerCase().trim();
   const rName = (user?.name || "").toLowerCase().trim();
+  const uEmail = (user?.email || "").toLowerCase().trim();
+  const uVendorCode = (user?.vendor_code || user?.vendor_id || user?.supplier_id || "").toLowerCase().trim();
 
-  const activeVendorCode = useMemo(() => {
-    if (!isVendor) return "";
-    const found = (vendorsQuery.data || []).find((v: any) => {
+  // Matched vendor entity from vendors directory
+  const matchedVendor = useMemo(() => {
+    if (!isVendor) return null;
+    const list = vendorsQuery.data || [];
+    return list.find((v: any) => {
       const vc = (v.vendor_code || "").toLowerCase().trim();
       const vn = (v.vendor_name || "").toLowerCase().trim();
-      return vc === uName || vc === rName || vn === uName || vn === rName;
+      const ve = (v.email || "").toLowerCase().trim();
+      const vid = String(v.id || "").toLowerCase().trim();
+      return (
+        (uVendorCode && (vc === uVendorCode || vid === uVendorCode || vn === uVendorCode)) ||
+        (vc && (vc === uName || vc === rName)) ||
+        (vn && (vn === uName || vn === rName)) ||
+        (ve && uEmail && ve === uEmail)
+      );
     });
-    return found?.vendor_code || user?.username || "VND";
-  }, [isVendor, vendorsQuery.data, uName, rName, user]);
+  }, [isVendor, vendorsQuery.data, uVendorCode, uName, rName, uEmail]);
+
+  // Comprehensive set of all valid identifiers for this vendor
+  const vendorIdentifiers = useMemo(() => {
+    const set = new Set<string>();
+    if (uVendorCode) set.add(uVendorCode);
+    if (user?.vendor_code) set.add(user.vendor_code.toLowerCase().trim());
+    if (user?.vendor_id) set.add(String(user.vendor_id).toLowerCase().trim());
+    if (user?.supplier_id) set.add(user.supplier_id.toLowerCase().trim());
+    if (matchedVendor) {
+      if (matchedVendor.vendor_code) set.add(matchedVendor.vendor_code.toLowerCase().trim());
+      if (matchedVendor.vendor_name) set.add(matchedVendor.vendor_name.toLowerCase().trim());
+      if (matchedVendor.id) set.add(String(matchedVendor.id).toLowerCase().trim());
+    }
+    if (uName) set.add(uName);
+    if (rName) set.add(rName);
+    return set;
+  }, [uVendorCode, user, matchedVendor, uName, rName]);
+
+  const activeVendorCode =
+    user?.vendor_code ||
+    matchedVendor?.vendor_code ||
+    user?.supplier_id ||
+    user?.username ||
+    "VND";
 
   const q = useQuery(
     async () => {
@@ -63,24 +103,23 @@ export function Dashboard({ userName }: { userName: string }) {
   const vendorLeads = useMemo(() => {
     const raw = d?.leads || [];
     if (!isVendor) return raw;
-    const vc = activeVendorCode.toLowerCase();
-    return raw.filter((l) => {
+    return raw.filter((l: any) => {
       const lvc = (l.vendor_code || "").toLowerCase().trim();
       const lvn = (l.vendor_name || "").toLowerCase().trim();
-      return lvc === vc || lvn === vc || lvc === uName || lvn === rName;
+      const lvid = (l.vendor_id || "").toLowerCase().trim();
+      return vendorIdentifiers.has(lvc) || vendorIdentifiers.has(lvn) || vendorIdentifiers.has(lvid);
     });
-  }, [d?.leads, isVendor, activeVendorCode, uName, rName]);
+  }, [d?.leads, isVendor, vendorIdentifiers]);
 
   // Vendor's assigned allotments
   const myAllots = useMemo(() => {
     if (!isVendor) return [];
-    const vc = activeVendorCode.toLowerCase();
     return (allotmentsQuery.data || []).filter((a: any) => {
       const vid = (a.vendor_id || "").toLowerCase().trim();
       const vname = (a.vendor_name || "").toLowerCase().trim();
-      return vid === vc || vname === vc || vid === uName || vname === uName || vname === rName;
+      return vendorIdentifiers.has(vid) || vendorIdentifiers.has(vname);
     });
-  }, [isVendor, allotmentsQuery.data, activeVendorCode, uName, rName]);
+  }, [isVendor, allotmentsQuery.data, vendorIdentifiers]);
 
   const stats = useMemo(() => {
     if (!d) return null;
@@ -285,24 +324,48 @@ export function Dashboard({ userName }: { userName: string }) {
           <div className="space-y-4 lg:col-span-2 lg:space-y-5">
             {isVendor ? (
               <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "260ms" }}>
-                <SectionTitle title="My assigned studies" hint="Active tracking entry links" />
+                <SectionTitle
+                  title="My assigned studies"
+                  hint={`${myAllots.length} active study allocation${myAllots.length === 1 ? "" : "s"}`}
+                  action={
+                    myAllots.length > 0 ? (
+                      <a href="#/surveys" className="text-[12px] font-medium text-accent hover:underline flex items-center gap-1">
+                        View all <ArrowUpRight size={13} />
+                      </a>
+                    ) : undefined
+                  }
+                />
                 {myAllots.length === 0 ? (
-                  <p className="py-6 text-center text-[13px] text-ink-3">
-                    No studies assigned yet. Contact your VMH account manager.
-                  </p>
+                  <div className="py-8 text-center">
+                    <p className="text-[13px] text-ink-3">
+                      No studies assigned yet. Contact your VMH account manager.
+                    </p>
+                    {activeVendorCode && (
+                      <p className="mt-1 text-[11px] font-mono text-ink-3">
+                        Vendor Identifier: {activeVendorCode}
+                      </p>
+                    )}
+                  </div>
                 ) : (
-                  <ul className="space-y-3">
-                    {myAllots.slice(0, 4).map((a: any) => {
+                  <ul className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
+                    {myAllots.map((a: any) => {
+                      const proj = (d?.u?.projects || []).find(
+                        (p: any) => String(p.project_id) === String(a.project_id) || String(p.id) === String(a.project_id)
+                      );
+                      const studyTitle = proj?.project_name || a.project_name || `Study #${a.project_id}`;
                       const link =
                         a.entry_link ||
                         `https://api.vmhgroupsmr.com/#/prescreener?pid=${encodeURIComponent(a.project_id)}&vid=${encodeURIComponent(activeVendorCode)}&uid=[YOUR_UID]`;
                       return (
-                        <li key={a.id || a.project_id} className="rounded-xl border border-line p-3 bg-fill/30">
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span className="font-mono text-[12px] font-semibold text-ink">#{a.project_id}</span>
-                            <span className="font-semibold text-green text-[12.5px] tabular">{money(a.vendor_cpi)}</span>
+                        <li key={a.id || a.project_id} className="rounded-xl border border-line p-3 bg-fill/30 hover:border-accent/30 transition">
+                          <div className="flex items-start justify-between mb-1.5 gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[13px] font-semibold text-ink leading-tight">{studyTitle}</p>
+                              <span className="font-mono text-[11px] text-ink-3">#{a.project_id}</span>
+                            </div>
+                            <span className="font-semibold text-green text-[13px] tabular shrink-0">{money(a.vendor_cpi)}</span>
                           </div>
-                          <div className="flex items-center justify-between text-[11px] text-ink-3 mb-2 tabular">
+                          <div className="flex items-center justify-between text-[11px] text-ink-3 mb-2.5 tabular">
                             <span>Quota: {a.complete_count || 0}/{a.quota_limit}</span>
                             <StatusBadge status={a.status || "Live"} />
                           </div>
