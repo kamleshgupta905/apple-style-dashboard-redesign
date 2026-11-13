@@ -690,6 +690,9 @@ export const api = {
           updated_at: new Date().toISOString(),
         };
 
+        // Also sync to Hostinger Live Gateway in background
+        request("POST", "/vendor/allot", { body: a }).catch(() => {});
+
         const { data: existing } = await supabase
           .from("smr_vendor_allotments")
           .select("id")

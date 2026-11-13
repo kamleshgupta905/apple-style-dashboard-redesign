@@ -178,8 +178,8 @@ export function Users() {
               {u.role_name === "Employee" ? "Vendor" : (u.role_name || (u.role_id === 3 ? "Vendor" : "Member"))}
             </Badge>
             {isVnd && (
-              <span className="text-[11px] font-mono text-ink-3">
-                {matchedV ? `${matchedV.vendor_name} (${vCode})` : (vCode ? `Code: ${vCode}` : "No vendor linked")}
+              <span className={cn("text-[11px] font-mono", vCode ? "text-ink-3" : "text-amber-500 font-medium")}>
+                {matchedV ? `${matchedV.vendor_name} (${vCode})` : (vCode ? `Code: ${vCode}` : "⚠️ No vendor linked (Click Edit)")}
               </span>
             )}
           </div>
