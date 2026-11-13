@@ -587,7 +587,6 @@ if ($normalizedRoute === 'api-docs' || $normalizedRoute === 'api-docs/' || $norm
     </div>
     <div class="custom-topbar-right">
       <a href="/api/api-docs/openapi.json" target="_blank" class="custom-btn">Raw OpenAPI Spec JSON</a>
-      <a href="/#/vendors" class="custom-btn" style="background:#2563eb; border-color:#2563eb; color:#fff">Back to API Tool &rarr;</a>
     </div>
   </div>
   <div id="swagger-ui"></div>
