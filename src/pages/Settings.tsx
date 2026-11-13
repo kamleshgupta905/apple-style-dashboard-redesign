@@ -9,6 +9,7 @@ import { initials } from "../lib/utils";
 export function Settings({ user, dark, onSetDark, onLogout }: { user: AuthUser; dark: boolean; onSetDark: (d: boolean) => void; onLogout: () => void }) {
   const { toast } = useFeedback();
   const { can } = usePermissions();
+  const isVendor = user.role_id === 3 || user.role_name === "Vendor" || user.role_name?.toLowerCase().includes("vendor");
   const [f, setF] = useState({ next: "", confirm: "" });
   const [busy, setBusy] = useState(false);
 
@@ -73,49 +74,51 @@ export function Settings({ user, dark, onSetDark, onLogout }: { user: AuthUser; 
           </p>
         </Card>
 
-        <Card className="p-5 sm:p-6">
-          <SectionTitle
-            title="Survey Automation & Smart Routing"
-            hint="Global rules applied to incoming respondents & study conversions"
-          />
-          <div className="space-y-4 pt-1">
-            <div className="rounded-2xl border border-line p-4 space-y-3">
-              <div className="flex items-start gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500">
-                  <Zap size={18} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-semibold text-ink">Auto-Pause Inactive Studies</p>
-                  <p className="text-[12px] text-ink-3">
-                    If a study receives 50 clicks (or your customized click limit) without delivering a single complete (0 completes), the system automatically pauses routing to prevent traffic loss.
-                  </p>
+        {!isVendor && (
+          <Card className="p-5 sm:p-6">
+            <SectionTitle
+              title="Survey Automation & Smart Routing"
+              hint="Global rules applied to incoming respondents & study conversions"
+            />
+            <div className="space-y-4 pt-1">
+              <div className="rounded-2xl border border-line p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500">
+                    <Zap size={18} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14px] font-semibold text-ink">Auto-Pause Inactive Studies</p>
+                    <p className="text-[12px] text-ink-3">
+                      If a study receives 50 clicks (or your customized click limit) without delivering a single complete (0 completes), the system automatically pauses routing to prevent traffic loss.
+                    </p>
+                  </div>
                 </div>
+                <p className="text-[11px] text-ink-3 font-mono bg-fill px-3 py-2 rounded-xl">
+                  Configurable per study in Surveys → Edit Study (e.g. 10, 30, 50 clicks).
+                </p>
               </div>
-              <p className="text-[11px] text-ink-3 font-mono bg-fill px-3 py-2 rounded-xl">
-                Configurable per study in Surveys → Edit Study (e.g. 10, 30, 50 clicks).
-              </p>
-            </div>
 
-            <div className="rounded-2xl border border-line p-4 space-y-3">
-              <div className="flex items-start gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-500">
-                  <Layers size={18} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-semibold text-ink">Smart Waterfall Auto-Reroute</p>
-                  <p className="text-[12px] text-ink-3">
-                    • <strong>Screenout / Quota / Security:</strong> Instantly connects respondent to another live survey without showing any negative terminate screen.<br />
-                    • <strong>Complete:</strong> Verified Complete page is shown for exactly 5 seconds, then auto-redirects respondent to another available paid study.
-                  </p>
+              <div className="rounded-2xl border border-line p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-500">
+                    <Layers size={18} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14px] font-semibold text-ink">Smart Waterfall Auto-Reroute</p>
+                    <p className="text-[12px] text-ink-3">
+                      • <strong>Screenout / Quota / Security:</strong> Instantly connects respondent to another live survey without showing any negative terminate screen.<br />
+                      • <strong>Complete:</strong> Verified Complete page is shown for exactly 5 seconds, then auto-redirects respondent to another available paid study.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-[11px] font-mono text-emerald-600 bg-emerald-500/10 px-3 py-2 rounded-xl">
+                  <span>Waterfall Router: Active</span>
+                  <span className="font-semibold">Seamless Transition Enabled</span>
                 </div>
               </div>
-              <div className="flex items-center justify-between text-[11px] font-mono text-emerald-600 bg-emerald-500/10 px-3 py-2 rounded-xl">
-                <span>Waterfall Router: Active</span>
-                <span className="font-semibold">Seamless Transition Enabled</span>
-              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        )}
 
         {can(PERMS.USERS_PASSWORDS) && (
           <Card className="p-5 sm:p-6">

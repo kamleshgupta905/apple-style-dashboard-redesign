@@ -175,16 +175,44 @@ export function Dashboard({ userName }: { userName: string }) {
   ]);
 
   const devices = useMemo(() => {
+    if (isVendor) {
+      if (vendorLeads.length === 0) {
+        return [["Desktops", 0]];
+      }
+      const devMap: Record<string, number> = {};
+      vendorLeads.forEach((l: any) => {
+        const rawDev = (l.device || (l.user_agent?.toLowerCase().includes("mobi") ? "Mobiles" : "Desktops")).toLowerCase();
+        const norm = rawDev.includes("mobi") || rawDev.includes("phone")
+          ? "Mobiles"
+          : (rawDev.includes("tab") ? "Tablets" : "Desktops");
+        devMap[norm] = (devMap[norm] || 0) + 1;
+      });
+      return Object.entries(devMap);
+    }
     const raw = d?.a?.deviceStats;
     if (raw && Object.keys(raw).length > 0) {
       const filtered = Object.entries(raw).filter(([, v]) => num(v) > 0);
       if (filtered.length > 0) return filtered;
     }
     return [["Desktops", 102]];
-  }, [d]);
+  }, [d, isVendor, vendorLeads]);
   const devColors = ["var(--accent)", "var(--green)", "var(--orange)"];
 
   const chartItems = useMemo(() => {
+    if (isVendor) {
+      if (myAllots.length === 0) return [];
+      return myAllots.map((a: any) => {
+        const proj = (d?.u?.projects || []).find(
+          (p: any) => String(p.project_id) === String(a.project_id) || String(p.id) === String(a.project_id)
+        );
+        const label = proj?.project_name || a.project_name || `Study #${a.project_id}`;
+        const studyClicks = vendorLeads.filter(
+          (l: any) => String(l.project_id) === String(a.project_id) || String(l.pid) === String(a.project_id)
+        ).length;
+        const val = studyClicks || num(a.complete_count) || 0;
+        return { label, value: val };
+      });
+    }
     const raw = d?.a?.chartData;
     if (raw && Object.keys(raw).length > 0) {
       return Object.entries(raw).map(([label, value]) => ({ label, value: num(value) }));
@@ -197,7 +225,7 @@ export function Dashboard({ userName }: { userName: string }) {
       { label: "2141504327 (Clone)", value: 8 },
       { label: "Study #2042481293", value: 8 },
     ];
-  }, [d]);
+  }, [d, isVendor, myAllots, vendorLeads]);
 
   const leadStatus = useMemo(() => {
     const m: Record<string, number> = {};
@@ -243,11 +271,21 @@ export function Dashboard({ userName }: { userName: string }) {
         <div className="mt-4 grid gap-4 lg:grid-cols-3 lg:mt-5">
           {/* Study performance */}
           <Card className="anim-fade-up p-5 sm:p-6 lg:col-span-2" style={{ animationDelay: "120ms" }}>
-            <SectionTitle title="Traffic by study" hint="Routed respondents per study" action={<Badge tone="blue">{num(d?.a?.activeProjects) || 4} live</Badge>} />
+            <SectionTitle
+              title="Traffic by study"
+              hint={isVendor ? "Assigned studies & respondent traffic" : "Routed respondents per study"}
+              action={
+                <Badge tone="blue">
+                  {isVendor ? `${myAllots.length} assigned` : `${num(d?.a?.activeProjects) || 4} live`}
+                </Badge>
+              }
+            />
             {!d ? (
               <Skeleton className="h-48" />
             ) : chartItems.length === 0 ? (
-              <p className="py-10 text-center text-[14px] text-ink-3">No traffic routed yet.</p>
+              <p className="py-10 text-center text-[14px] text-ink-3">
+                {isVendor ? "No assigned studies yet. Contact your VMH account manager." : "No traffic routed yet."}
+              </p>
             ) : (
               <BarList items={chartItems} format={(n) => n.toLocaleString()} />
             )}
