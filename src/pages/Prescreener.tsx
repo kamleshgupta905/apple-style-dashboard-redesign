@@ -1,10 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, AlertTriangle, RefreshCw, ShieldCheck, ArrowRight, Laptop, Smartphone, Tablet } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import {
   recordStudyClickAndCheckAutoPause,
   findNextAvailableStudy,
   markStudyAttempted,
+  evaluateLiveEntranceSecurity,
+  signUrlIfNeeded,
+  DEFAULT_SECURITY_POLICY,
+  type SecurityPolicyConfig,
 } from "../lib/waterfall";
 
 const DEVICE_OPTIONS = [
@@ -27,21 +31,35 @@ export function Prescreener() {
   const [redirectCountdown, setRedirectCountdown] = useState<number>(1);
   const [finalUrl, setFinalUrl] = useState<string>("");
   const [dbLiveUrl, setDbLiveUrl] = useState<string>("");
+  const [activePolicy, setActivePolicy] = useState<SecurityPolicyConfig>(DEFAULT_SECURITY_POLICY);
+  const [clientSecurityOn, setClientSecurityOn] = useState<boolean>(true);
 
   // Parse URL Parameters
-  const params = new URLSearchParams(
-    window.location.hash.includes("?")
-      ? window.location.hash.split("?")[1]
-      : window.location.search
+  const params = useMemo(
+    () =>
+      new URLSearchParams(
+        window.location.hash.includes("?")
+          ? window.location.hash.split("?")[1]
+          : window.location.search
+      ),
+    []
   );
 
   const vid = params.get("vid") || "VND-AFC01";
   const pid = params.get("pid") || "VMHPI000142026";
   const rawUid = params.get("uid") || "";
-  const uid = rawUid && rawUid !== "[RESPONDENT_ID]" && rawUid !== "%5BRESPONDENT_ID%5D"
-    ? rawUid
-    : `RESP_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+  const uid = useMemo(
+    () =>
+      rawUid && rawUid !== "[RESPONDENT_ID]" && rawUid !== "%5BRESPONDENT_ID%5D"
+        ? rawUid
+        : `RESP_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+    [rawUid]
+  );
   const targetParam = params.get("target") || "";
+  const isTest =
+    uid.toUpperCase().startsWith("TEST_") ||
+    params.get("test") === "1" ||
+    params.get("simulate") === "1";
 
   // Browser Tab Title - Always VMH GROUP Branding
   useEffect(() => {
@@ -52,33 +70,26 @@ export function Prescreener() {
     };
   }, []);
 
-  // Entrance Click tracking, Auto-pause check, and Security duplicate validation
+  // Entrance Click tracking, Auto-pause check, and Live Security Gate evaluation
   useEffect(() => {
     if (!pid) return;
 
     markStudyAttempted(uid, pid);
 
     const initSession = async () => {
-      // 1. Check duplicate session in fraud logs
+      // 1. Live Security & Fraud Policy Gate (Duplicate, Bot, Browser Integrity, Allowed Hardware)
       try {
-        const { data: dup } = await supabase
-          .from("smr_fraud_logs")
-          .select("id, reason")
-          .eq("uid", uid)
-          .eq("project_id", pid)
-          .maybeSingle();
+        const sec = await evaluateLiveEntranceSecurity({ pid, vid, uid, isTest });
+        setActivePolicy(sec.policy);
+        setClientSecurityOn(sec.clientSecurityEnabled);
 
-        if (dup) {
-          setBlockReason(dup.reason || "Duplicate session detected");
+        if (!sec.allowed) {
+          setBlockReason(sec.reason || "Blocked by Security & Fraud Gate");
           setStatus("blocked");
           return;
         }
-      } catch (e) {
-        console.warn("Security check bypass:", e);
-      }
 
-      // 2. Track click entrance and automatically evaluate 50-clicks auto-pause condition
-      try {
+        // 2. Track click entrance and automatically evaluate auto-pause condition
         const result = await recordStudyClickAndCheckAutoPause(pid, vid, uid);
         if (result.liveUrl && !targetParam) {
           setDbLiveUrl(result.liveUrl);
@@ -94,6 +105,12 @@ export function Prescreener() {
             return;
           }
         }
+
+        // 3. Respect Security Policy "Pre-screen" toggle: if disabled, bypass screening questions
+        if (sec.policy.preScreenEnabled === false) {
+          void completeScreener(undefined, result.liveUrl);
+          return;
+        }
       } catch (e) {
         console.warn("Entrance check error:", e);
       }
@@ -103,7 +120,8 @@ export function Prescreener() {
 
     const timer = setTimeout(initSession, 300);
     return () => clearTimeout(timer);
-  }, [uid, pid, vid, targetParam]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid, pid, vid, targetParam, isTest]);
 
   const TOTAL_STEPS = 3;
   const percent = Math.round(((step + 1) / TOTAL_STEPS) * 100);
@@ -138,20 +156,51 @@ export function Prescreener() {
     setStep(2);
   };
 
-  // Step 2: Device handler (device selection)
-  const handleDeviceSelect = (devId: string) => {
+  // Step 2: Device handler (device selection + policy enforcement)
+  const handleDeviceSelect = async (devId: string) => {
     setSelectedDevice(devId);
     setAnswers((prev) => ({ ...prev, device: devId }));
+
+    if (clientSecurityOn && !isTest) {
+      const restricted =
+        (devId === "desktop" && activePolicy.allowDesktop === false) ||
+        (devId === "mobile" && activePolicy.allowMobile === false) ||
+        (devId === "tablet" && activePolicy.allowTablet === false);
+
+      if (restricted) {
+        const label = devId.charAt(0).toUpperCase() + devId.slice(1);
+        const reason = `${label} devices are restricted by active study security policy`;
+        try {
+          await supabase.from("smr_fraud_logs").insert([
+            {
+              project_id: pid,
+              vendor: vid || "Direct",
+              uid,
+              reason,
+              check_type: "Device Policy Block",
+              risk_score: 80,
+              device: label,
+              action: "BLOCKED",
+              created_at: new Date().toISOString(),
+            },
+          ]);
+        } catch {}
+        setBlockReason(reason);
+        setStatus("blocked");
+        return;
+      }
+    }
+
     setTimeout(() => {
-      completeScreener(devId);
+      void completeScreener(devId);
     }, 220);
   };
 
-  const completeScreener = (_device?: string) => {
+  const completeScreener = async (_device?: string, overrideLiveUrl?: string) => {
     setStatus("connecting");
 
     // Resolve Final Target Survey URL
-    const rawTarget = targetParam || dbLiveUrl;
+    const rawTarget = targetParam || overrideLiveUrl || dbLiveUrl;
     let resolved = "";
     if (rawTarget) {
       resolved = rawTarget
@@ -169,6 +218,7 @@ export function Prescreener() {
       if (!resolved.includes("transaction_id") && !resolved.includes("rid") && !resolved.includes("uid=")) {
         resolved = `${resolved}${sep}transaction_id=${encodeURIComponent(uid)}&rid=${encodeURIComponent(uid)}`;
       }
+      resolved = await signUrlIfNeeded(resolved, pid, uid);
     } else if (/^\d{8,12}$/.test(pid.trim())) {
       // Valid numeric Zamplia / PureSpectrum exchange study ID
       resolved = `https://res.zamplia.com/?vid=2138&isMap=1&sid=${encodeURIComponent(pid)}&username=${encodeURIComponent(vid)}&cid=42&transaction_id=${encodeURIComponent(uid)}&rid=${encodeURIComponent(uid)}`;

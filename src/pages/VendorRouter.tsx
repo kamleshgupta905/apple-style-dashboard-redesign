@@ -42,7 +42,7 @@ export function VendorRouter() {
         const { data: vendorData } = await supabase
           .from("smr_vendors")
           .select("vendor_code, vendor_name, status")
-          .eq("vendor_code", vid)
+          .ilike("vendor_code", vid)
           .maybeSingle();
 
         setVendorName(vendorData?.vendor_name || vid);

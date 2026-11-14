@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Building2, Eye, EyeOff, Pencil, Plug, Plus, ShieldCheck, Trash2, Link2, Copy, Check, RefreshCw } from "lucide-react";
+import { Building2, Eye, EyeOff, Pencil, Plug, Plus, ShieldCheck, Trash2, Link2, Copy, Check } from "lucide-react";
 import { api, type Client } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { initials, mask } from "../lib/utils";
@@ -33,43 +33,9 @@ export function normalizeClientApiType(rawType?: string, name?: string, code?: s
   if (t === "zamplia" || n.includes("zamplia") || c.includes("zamp")) return "zamplia";
   if (t === "surveysherpa" || n.includes("sherpa") || c.includes("ss")) return "surveysherpa";
   if (t === "marketxcel" || n.includes("marketxcel") || c.includes("mx")) return "marketxcel";
-  if (t === "custom" || n.includes("research") || c.includes("arcfl")) return "custom";
+  if (t === "custom") return "custom";
 
-  if (t === "marketxcel" || t === "surveysherpa" || t === "zamplia" || t === "custom") return t;
-  return "marketxcel";
-}
-
-export function getDefaultEndpoints(apiType: string, code?: string) {
-  if (apiType === "zamplia") {
-    return {
-      feed: "https://api.zamplia.com/v1/surveys/live",
-      s2s: "https://api.zamplia.com/v1/surveys/callback",
-      master: "https://api.zamplia.com/v1/surveys/master-data",
-      token: "zamplia_auth_token_live",
-    };
-  }
-  if (apiType === "surveysherpa") {
-    return {
-      feed: "https://api.surveysherpa.com/api/supplier/getAllSurveys",
-      s2s: "https://api.surveysherpa.com/api/supplier/getSurveyDetails",
-      master: "https://api.surveysherpa.com/api/supplier/getQualifications",
-      token: "f3f5bf8fde5242a5964263444e1d9814",
-    };
-  }
-  if (apiType === "custom") {
-    return {
-      feed: "https://api.clientpartner.com/feed",
-      s2s: "https://api.clientpartner.com/callback",
-      master: "https://api.clientpartner.com/attributes",
-      token: `tok_${(code || "client").toLowerCase()}_2026`,
-    };
-  }
-  return {
-    feed: "https://api.marketxcel.co.in/webservices/supplier/send_supplier_data",
-    s2s: "https://api.marketxcel.co.in/webservices/callback/updateRespondentStatus",
-    master: "https://api.marketxcel.co.in/webservices/supplier/get_master_data/",
-    token: "mx_token_live_2026",
-  };
+  return "custom";
 }
 
 const blank = {
@@ -78,17 +44,17 @@ const blank = {
   country: "United States",
   email: "",
   phone: "",
-  api_type: "marketxcel",
-  feed_api_url: "https://api.marketxcel.co.in/webservices/supplier/send_supplier_data",
-  s2s_callback_url: "https://api.marketxcel.co.in/webservices/callback/updateRespondentStatus",
-  master_data_url: "https://api.marketxcel.co.in/webservices/supplier/get_master_data/",
+  api_type: "custom",
+  feed_api_url: "",
+  s2s_callback_url: "",
+  master_data_url: "",
   complete_redirect: "",
   terminate_redirect: "",
   overquota_redirect: "",
   security_redirect: "",
   secret_key: "",
-  api_token: "mx_token_live_2026",
-  hash_algorithm: "sha3-256",
+  api_token: "",
+  hash_algorithm: "none",
   security_enabled: 1,
   status: "Y",
 };
@@ -189,7 +155,6 @@ export function Clients() {
 
   const edit = (c: Client) => {
     const normType = normalizeClientApiType(c.api_type, c.client_name, c.client_code);
-    const defaults = getDefaultEndpoints(normType, c.client_code);
 
     setForm({
       id: c.id,
@@ -201,16 +166,16 @@ export function Clients() {
         email: c.email || "",
         phone: c.phone || "",
         api_type: normType,
-        feed_api_url: c.feed_api_url || defaults.feed,
-        s2s_callback_url: c.s2s_callback_url || defaults.s2s,
-        master_data_url: c.master_data_url || defaults.master,
+        feed_api_url: c.feed_api_url || "",
+        s2s_callback_url: c.s2s_callback_url || "",
+        master_data_url: c.master_data_url || "",
         complete_redirect: c.complete_redirect || "",
         terminate_redirect: c.terminate_redirect || "",
         overquota_redirect: c.overquota_redirect || "",
         security_redirect: c.security_redirect || "",
         secret_key: c.secret_key || "",
-        api_token: c.api_token || defaults.token,
-        hash_algorithm: c.hash_algorithm || "sha3-256",
+        api_token: c.api_token || "",
+        hash_algorithm: c.hash_algorithm || "none",
         security_enabled: Number(c.security_enabled ?? 1),
         status: c.status || "Y",
       },
@@ -518,15 +483,23 @@ function ClientDrawer({
 
           {can(PERMS.CLIENTS_SECURITY_KEYS) && (
             <section>
-              <h3 className="mb-2 text-[15px] font-semibold">Credentials</h3>
+              <h3 className="mb-2 text-[15px] font-semibold">Credentials &amp; Hashing</h3>
               <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line text-[14px]">
                 <div className="flex items-center justify-between gap-3 px-4 py-3">
                   <span className="text-ink-3">API token</span>
-                  <span className="min-w-0 truncate font-mono text-[13px]">{reveal ? c.api_token || "—" : mask(c.api_token as string)}</span>
+                  <span className="min-w-0 truncate font-mono text-[13px]">{c.api_token ? (reveal ? c.api_token : mask(c.api_token as string)) : "—"}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 px-4 py-3">
+                  <span className="text-ink-3">Hash algorithm</span>
+                  <span className="font-mono text-[13px] uppercase">{c.hash_algorithm || "none"}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 px-4 py-3">
+                  <span className="text-ink-3">Hashing secret key</span>
+                  <span className="min-w-0 truncate font-mono text-[13px]">{c.secret_key ? (reveal ? c.secret_key : mask(c.secret_key as string)) : "—"}</span>
                 </div>
               </div>
               <Button className="mt-2" size="sm" variant="ghost" icon={reveal ? <EyeOff size={14} /> : <Eye size={14} />} onClick={() => setReveal((r) => !r)}>
-                {reveal ? "Hide token" : "Reveal token"}
+                {reveal ? "Hide secrets" : "Reveal secrets"}
               </Button>
             </section>
           )}
@@ -625,15 +598,9 @@ function ClientForm({
 
   const handleApiTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
-    const defs = getDefaultEndpoints(val, v.client_code);
-
     setV((prev) => ({
       ...prev,
       api_type: val,
-      feed_api_url: defs.feed,
-      s2s_callback_url: defs.s2s,
-      master_data_url: defs.master,
-      api_token: prev.api_token || defs.token,
     }));
   };
 
@@ -815,10 +782,10 @@ function ClientForm({
 
           <Field label="API Architecture">
             <Select value={v.api_type} onChange={handleApiTypeChange}>
-              <option value="marketxcel">Standard Demand REST API (MarketXcel)</option>
+              <option value="custom">Custom / Standard Partner API</option>
+              <option value="marketxcel">MarketXcel Demand API</option>
               <option value="surveysherpa">SurveySherpa API</option>
-              <option value="zamplia">S2S Supply / Callback API (Zamplia)</option>
-              <option value="custom">Custom Partner REST API</option>
+              <option value="zamplia">Zamplia S2S API</option>
             </Select>
           </Field>
 
@@ -840,71 +807,79 @@ function ClientForm({
           </Field>
         </div>
 
-        {/* Section C: Client's 3 API Endpoints (Received from Client) */}
+        {/* Section C: Client's API Endpoints & Docs (Received from Client) */}
         <div className="rounded-2xl border border-line bg-fill/40 p-4 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <div className="text-[12.5px] font-bold text-ink flex items-center gap-2">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-extrabold text-white">
                 B
               </span>
-              <span>Client's 3 API Endpoints (Received from Client):</span>
+              <span>Client's Own API Endpoints (Paste this client's links):</span>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                const defs = getDefaultEndpoints(v.api_type, v.client_code);
-                setV((p) => ({
-                  ...p,
-                  feed_api_url: defs.feed,
-                  s2s_callback_url: defs.s2s,
-                  master_data_url: defs.master,
-                  api_token: p.api_token || defs.token,
-                }));
-                toast("Populated 3 API endpoints from selected architecture!", "success");
-              }}
-              className="text-[11.5px] font-medium text-accent hover:underline cursor-pointer flex items-center gap-1"
-            >
-              <RefreshCw size={11} /> Auto-fill Defaults
-            </button>
           </div>
 
           <div className="space-y-2.5">
-            <Field label="1. Project Feed API Endpoint:">
+            <Field label="1. Supply / Project Feed API URL" hint="Endpoint or supply spec URL provided by this client">
               <Input
                 value={v.feed_api_url}
                 onChange={(e) => setV((p) => ({ ...p, feed_api_url: e.target.value }))}
-                placeholder={getDefaultEndpoints(v.api_type, v.client_code).feed}
+                placeholder="https://api.clientdomain.com/supply/projects"
                 className="font-mono text-[12px]"
               />
             </Field>
 
-            <Field label="2. S2S Callback Webhook Endpoint:">
+            <Field label="2. S2S Integration / Callback URL" hint="Server-to-server notification endpoint from client's S2S guide">
               <Input
                 value={v.s2s_callback_url}
                 onChange={(e) => setV((p) => ({ ...p, s2s_callback_url: e.target.value }))}
-                placeholder={getDefaultEndpoints(v.api_type, v.client_code).s2s}
+                placeholder="https://api.clientdomain.com/s2s/callback"
                 className="font-mono text-[12px]"
               />
             </Field>
 
-            <Field label="3. Master Data / Qualifications Endpoint:">
+            <Field label="3. Master Data / Qualifications URL (Optional)">
               <Input
                 value={v.master_data_url}
                 onChange={(e) => setV((p) => ({ ...p, master_data_url: e.target.value }))}
-                placeholder={getDefaultEndpoints(v.api_type, v.client_code).master}
+                placeholder="https://api.clientdomain.com/master-data"
                 className="font-mono text-[12px]"
               />
             </Field>
           </div>
         </div>
 
-        {/* Section D: Client Security & Access Tokens */}
+        {/* Section D: Client Security, Hashing & Access Tokens */}
         <div className="space-y-3">
-          <Field label="Client API Token / Bearer Key:">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Redirect URL Hashing Algorithm" hint="From client's Redirect Hashing Guide">
+              <Select
+                value={v.hash_algorithm}
+                onChange={(e) => setV((p) => ({ ...p, hash_algorithm: e.target.value }))}
+              >
+                <option value="none">None (No hashing)</option>
+                <option value="sha256">SHA-256</option>
+                <option value="sha3-256">SHA3-256</option>
+                <option value="hmac-sha256">HMAC-SHA256</option>
+                <option value="sha512">SHA-512</option>
+                <option value="md5">MD5</option>
+              </Select>
+            </Field>
+
+            <Field label="Hashing Secret Key / Salt" hint="Shared secret key for verifying hashed redirects">
+              <Input
+                value={v.secret_key}
+                onChange={(e) => setV((p) => ({ ...p, secret_key: e.target.value }))}
+                placeholder="Client shared secret key (optional)"
+                className="font-mono text-[12px]"
+              />
+            </Field>
+          </div>
+
+          <Field label="Client API Token / Bearer Key (Optional)">
             <Input
               value={v.api_token}
               onChange={(e) => setV((p) => ({ ...p, api_token: e.target.value }))}
-              placeholder="e.g. mx_token_live_2026"
+              placeholder="Paste token provided by this client"
               className="font-mono text-[12px]"
             />
           </Field>

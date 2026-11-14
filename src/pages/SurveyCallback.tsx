@@ -17,6 +17,9 @@ import {
   findNextAvailableStudy,
   recordStudyComplete,
   recordStudyDisqualify,
+  checkSpeederOnComplete,
+  verifyIncomingRedirectHash,
+  signUrlIfNeeded,
   type NextStudyCandidate,
 } from "../lib/waterfall";
 
@@ -32,18 +35,18 @@ export function SurveyCallback() {
   const params = useMemo(() => new URLSearchParams(queryStr), [queryStr]);
 
   // Determine status code: 10 = Complete, 20 = Terminate, 30 = Overquota, 40 = Security
-  let status = params.get("status") || "";
-  if (!status) {
-    if (hashRoute === "complete") status = "10";
-    else if (hashRoute === "terminate") status = "20";
-    else if (hashRoute === "overquota") status = "30";
+  let initialStatus = params.get("status") || "";
+  if (!initialStatus) {
+    if (hashRoute === "complete") initialStatus = "10";
+    else if (hashRoute === "terminate") initialStatus = "20";
+    else if (hashRoute === "overquota") initialStatus = "30";
     else if (
       hashRoute === "security" ||
       hashRoute === "security-notice" ||
       hashRoute === "security-terminate" ||
       hashRoute === "security-callback"
-    ) status = "40";
-    else status = "10"; // Default to complete
+    ) initialStatus = "40";
+    else initialStatus = "10"; // Default to complete
   }
 
   const pid = params.get("pid") || params.get("project_id") || params.get("study_id") || "SMR-STUDY-LIVE";
@@ -51,6 +54,19 @@ export function SurveyCallback() {
   const vid = params.get("vid") || params.get("vendor_code") || "";
   const customReason = params.get("reason") || "";
   const returnUrl = params.get("return_url") || params.get("redirect") || "";
+  const providedHash =
+    params.get("hash") ||
+    params.get("sig") ||
+    params.get("signature") ||
+    params.get("hmac") ||
+    "";
+  const isTest =
+    uid.toUpperCase().startsWith("TEST_") ||
+    params.get("test") === "1" ||
+    params.get("simulate") === "1";
+
+  const [status, setStatus] = useState<string>(initialStatus);
+  const [verifying, setVerifying] = useState<boolean>(initialStatus === "10");
 
   const isComplete = status === "10";
   const isTerm = status === "20";
@@ -61,25 +77,24 @@ export function SurveyCallback() {
   const [activePid, setActivePid] = useState<string>(pid);
   const [vendorCallbackUrl, setVendorCallbackUrl] = useState<string>("");
   const [vendorName, setVendorName] = useState<string>("");
-  const [countdown, setCountdown] = useState<number | null>(isComplete ? 5 : null);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const [nextCandidate, setNextCandidate] = useState<NextStudyCandidate | null>(null);
-  const [isRouting, setIsRouting] = useState<boolean>(!isComplete);
+  const [isRouting, setIsRouting] = useState<boolean>(true);
   const [noMoreSurveys, setNoMoreSurveys] = useState<boolean>(false);
 
   const hasProcessedRef = useRef(false);
 
-  // 1. Process Database records & Waterfall Reroute Lookup
+  // 1. Process Database records, Security Gate (Hash + Speeder), & Waterfall Reroute Lookup
   useEffect(() => {
     if (hasProcessedRef.current) return;
     hasProcessedRef.current = true;
 
-    // Browser tab title
     const prevTitle = document.title;
-    document.title = isComplete
-      ? "VMH GROUP • Survey Completed"
-      : "VMH GROUP • Connecting to Next Survey";
 
     const processOutcomeAndWaterfall = async () => {
+      let resolvedStatus = initialStatus;
+      let resolvedReason = customReason;
+
       // 1A. Recover Vendor & Project from smr_leads if not in URL (supports 100% static redirects)
       let resolvedVid = vid;
       let resolvedPid = pid;
@@ -124,7 +139,48 @@ export function SurveyCallback() {
       if (resolvedVid) setActiveVid(resolvedVid);
       if (resolvedPid) setActivePid(resolvedPid);
 
-      // 1B. Fetch Vendor details & Callback target
+      // 1B. Live Security Verification for Status 10 (Complete)
+      if (resolvedStatus === "10") {
+        // 1B-i. Verify Redirect URL Hash if provided & client configured hashing
+        if (providedHash) {
+          const hashCheck = await verifyIncomingRedirectHash({
+            pid: resolvedPid,
+            vid: resolvedVid,
+            uid,
+            fullUrl: window.location.href,
+            providedHash,
+          });
+          if (!hashCheck.valid) {
+            resolvedStatus = "40";
+            resolvedReason = hashCheck.reason || "hash_mismatch";
+          }
+        }
+
+        // 1B-ii. Speeder LOI Check against active security policy
+        if (resolvedStatus === "10") {
+          const speeder = await checkSpeederOnComplete({
+            pid: resolvedPid,
+            vid: resolvedVid,
+            uid,
+            isTest,
+          });
+          if (speeder.isSpeeder) {
+            resolvedStatus = "40";
+            resolvedReason = `speeder_${speeder.elapsedSec}s`;
+          }
+        }
+      }
+
+      setStatus(resolvedStatus);
+      const outcomeIsComplete = resolvedStatus === "10";
+      const outcomeIsTerm = resolvedStatus === "20";
+      const outcomeIsOverquota = resolvedStatus === "30";
+
+      document.title = outcomeIsComplete
+        ? "VMH GROUP • Survey Completed"
+        : "VMH GROUP • Connecting to Next Survey";
+
+      // 1C. Fetch Vendor details & Callback target
       let targetCallback = "";
       if (resolvedVid) {
         try {
@@ -137,10 +193,10 @@ export function SurveyCallback() {
           if (vData) {
             setVendorName(vData.vendor_name || resolvedVid);
             let rawTarget = "";
-            if (isComplete) rawTarget = vData.callback_complete;
-            else if (isTerm) rawTarget = vData.callback_terminate;
-            else if (isOverquota) rawTarget = vData.callback_overquota;
-            else if (isSecurity) rawTarget = vData.callback_security;
+            if (outcomeIsComplete) rawTarget = vData.callback_complete;
+            else if (outcomeIsTerm) rawTarget = vData.callback_terminate;
+            else if (outcomeIsOverquota) rawTarget = vData.callback_overquota;
+            else rawTarget = vData.callback_security;
 
             if (rawTarget) {
               targetCallback = rawTarget
@@ -157,6 +213,7 @@ export function SurveyCallback() {
                 .replace(/\[PID\]/gi, resolvedPid)
                 .replace(/\[pid\]/gi, resolvedPid)
                 .replace(/\[STUDY_ID\]/gi, resolvedPid);
+              targetCallback = await signUrlIfNeeded(targetCallback, resolvedPid, uid);
               setVendorCallbackUrl(targetCallback);
             }
           }
@@ -165,36 +222,38 @@ export function SurveyCallback() {
         }
       }
 
-      // 1C. Record Lead and Study Outcome in DB
-      if (isComplete) {
+      // 1D. Record Lead and Study Outcome in DB
+      if (outcomeIsComplete) {
         await recordStudyComplete(resolvedPid, resolvedVid, uid);
       } else {
         await recordStudyDisqualify(
           resolvedPid,
           resolvedVid,
           uid,
-          isTerm ? "20" : isOverquota ? "30" : "40",
-          customReason,
+          outcomeIsTerm ? "20" : outcomeIsOverquota ? "30" : "40",
+          resolvedReason,
         );
       }
 
-      // 1D. Smart Waterfall: Find the next live available survey for this respondent
+      // 1E. Smart Waterfall: Find the next live available survey for this respondent
       const candidate = await findNextAvailableStudy(resolvedPid, resolvedVid, uid);
       if (candidate) {
         setNextCandidate(candidate);
       }
 
-      // 1E. If this was a Terminate / Quota / Security outcome:
-      // Immediately redirect respondent to the next survey without showing terminate page!
-      if (!isComplete) {
+      setVerifying(false);
+
+      if (outcomeIsComplete) {
+        setIsRouting(false);
+        setCountdown(5);
+      } else {
+        // Immediately redirect respondent to next survey on Terminate / Quota / Security!
         if (candidate) {
-          // Found next study: redirect seamlessly to the next prescreener!
           const targetQuery = candidate.live_url ? `&target=${encodeURIComponent(candidate.live_url)}` : "";
           setTimeout(() => {
             window.location.hash = `#/prescreener?vid=${encodeURIComponent(resolvedVid)}&pid=${encodeURIComponent(candidate.project_id)}&uid=${encodeURIComponent(uid)}${targetQuery}&rerouted=1`;
           }, 350);
         } else {
-          // No more live studies available: redirect to vendor callback if exists
           const finalDest = returnUrl || targetCallback;
           if (finalDest) {
             setTimeout(() => {
@@ -208,17 +267,17 @@ export function SurveyCallback() {
       }
     };
 
-    processOutcomeAndWaterfall();
+    void processOutcomeAndWaterfall();
 
     return () => {
       document.title = prevTitle;
     };
-  }, [pid, vid, uid, status, isComplete, isTerm, isOverquota, isSecurity, customReason, returnUrl]);
+  }, [pid, vid, uid, initialStatus, customReason, returnUrl, providedHash, isTest]);
 
   // 2. Countdown Effect for Complete Page (Status 10)
   // Keeps the Complete page visible for exactly 5 seconds, then auto-redirects to another survey!
   useEffect(() => {
-    if (!isComplete || countdown === null) return;
+    if (verifying || !isComplete || countdown === null) return;
 
     if (countdown <= 0) {
       if (nextCandidate) {
@@ -242,7 +301,7 @@ export function SurveyCallback() {
     }, 1000);
 
     return () => clearTimeout(t);
-  }, [countdown, isComplete, nextCandidate, activeVid, uid, returnUrl, vendorCallbackUrl]);
+  }, [verifying, countdown, isComplete, nextCandidate, activeVid, uid, returnUrl, vendorCallbackUrl]);
 
   const effectiveReturnUrl = returnUrl || vendorCallbackUrl;
 
@@ -282,6 +341,25 @@ export function SurveyCallback() {
       window.history.back();
     }
   };
+
+  // -------------------------------------------------------------
+  // VIEW 0: Verifying Security Hash & Speeder LOI before crediting Status 10
+  // -------------------------------------------------------------
+  if (verifying) {
+    return (
+      <div className="min-h-screen w-full bg-[#f6f7f9] text-[#111317] flex flex-col items-center justify-center p-4 sm:p-6">
+        <div className="relative w-full max-w-[460px] bg-white rounded-2xl p-8 sm:p-9 shadow-[0_1px_3px_rgba(16,24,40,0.06),0_12px_32px_rgba(16,24,40,0.05)] border border-black/[0.08] flex flex-col items-center text-center">
+          <div className="w-12 h-12 rounded-full border-3 border-emerald-100 border-t-emerald-600 animate-spin mb-5" />
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight mb-1.5">
+            Verifying Completion...
+          </h2>
+          <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
+            Validating security signature and session integrity before crediting response.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // -------------------------------------------------------------
   // VIEW A: Seamless Matching Transition (When Terminated / Quota / Security)

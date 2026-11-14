@@ -338,13 +338,23 @@ export function ClientIntegrationModal({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-line bg-surface p-3.5 space-y-1 sm:col-span-2">
+            <div className="rounded-2xl border border-line bg-surface p-3.5 space-y-1">
               <span className="text-[11px] font-semibold uppercase text-ink-3">API Token</span>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="font-mono text-[12px] text-ink break-all">
-                  {client.api_token || `tok_${cCode.toLowerCase()}_2026`}
+                  {client.api_token || "Not configured"}
                 </span>
-                <CopyButton text={client.api_token || `tok_${cCode.toLowerCase()}_2026`} />
+                {client.api_token && <CopyButton text={client.api_token} />}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-line bg-surface p-3.5 space-y-1">
+              <span className="text-[11px] font-semibold uppercase text-ink-3">Redirect Hashing</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-[12px] font-semibold uppercase text-ink">
+                  {client.hash_algorithm || "none"}
+                </span>
+                {client.secret_key && <CopyButton text={client.secret_key} label="Copy Key" />}
               </div>
             </div>
           </div>

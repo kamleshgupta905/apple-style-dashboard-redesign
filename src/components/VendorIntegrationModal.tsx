@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Check, Copy, ExternalLink } from "lucide-react";
+import { ArrowRight, Check, Code2, Copy, ExternalLink, KeyRound } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { UID_TAGS } from "../lib/data";
 import { Badge, Button, CopyButton, Field, Input, Modal, Segmented } from "./ui";
@@ -15,7 +15,7 @@ export function VendorIntegrationModal({
   onSaved?: () => void;
 }) {
   const { toast } = useFeedback();
-  const [tab, setTab] = useState<"links" | "callbacks">("links");
+  const [tab, setTab] = useState<"links" | "callbacks" | "api">("links");
   const [busy, setBusy] = useState(false);
   const [copiedSpec, setCopiedSpec] = useState(false);
 
@@ -53,6 +53,9 @@ export function VendorIntegrationModal({
   const routerUrl = `${origin}/#/router?vid=${encodeURIComponent(vCode)}&uid=[RESPONDENT_ID]`;
   const testRouterUrl = `${origin}/#/router?vid=${encodeURIComponent(vCode)}&uid=TEST_USER_${Date.now().toString().slice(-4)}`;
   const campaignTemplate = `${origin}/#/prescreener?pid=[STUDY_ID]&vid=${encodeURIComponent(vCode)}&uid=[RESPONDENT_ID]`;
+  const feedUrl = `${origin}/#/vendor-feed?vid=${encodeURIComponent(vCode)}`;
+  const apiDocsUrl = `${origin}/#/api-docs`;
+  const accessKey = vendor?.api_key || vendor?.secret_key || vCode;
 
   const copyVendorOnboardingSpec = () => {
     const text =
@@ -66,7 +69,11 @@ export function VendorIntegrationModal({
       `• Complete (Status 10): https://yourdomain.com/complete?uid=[UID]\n` +
       `• Terminate / Screenout (Status 20): https://yourdomain.com/terminate?uid=[UID]\n` +
       `• Overquota / Quota Full (Status 30): https://yourdomain.com/overquota?uid=[UID]\n` +
-      `• Security / Fraud (Status 40 - Optional): https://yourdomain.com/security?uid=[UID]\n`;
+      `• Security / Fraud (Status 40 - Optional): https://yourdomain.com/security?uid=[UID]\n\n` +
+      `3. OPTIONAL SUPPLY API INTEGRATION (If pulling surveys via API):\n` +
+      `• Access Key (Header: access-key): ${accessKey}\n` +
+      `• Live JSON Inventory Feed: ${feedUrl}\n` +
+      `• API Docs: ${apiDocsUrl}\n`;
 
     navigator.clipboard.writeText(text);
     setCopiedSpec(true);
@@ -126,8 +133,9 @@ export function VendorIntegrationModal({
           value={tab}
           onChange={setTab as any}
           options={[
-            { value: "links", label: "Links to Give Vendor (1 Entry)" },
-            { value: "callbacks", label: "Links Vendor Gives Us (3–4 Return)" },
+            { value: "links", label: "Entry Links (1)" },
+            { value: "callbacks", label: "Return URLs (3–4)" },
+            { value: "api", label: "Supply API & Key" },
           ]}
         />
 
@@ -264,6 +272,81 @@ export function VendorIntegrationModal({
                 <Button loading={busy} onClick={saveCallbacks}>
                   Save Return Callback URLs
                 </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Supply API & Access Key */}
+        {tab === "api" && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-line bg-fill/50 p-4 text-xs text-ink-3 leading-relaxed">
+              For standard link traffic, vendors do <strong>not</strong> need an API key—their Vendor ID (<code>{vCode}</code>) in the entry link is enough. Only share these credentials if <strong>{vName}</strong> wants to pull live assigned studies automatically via API.
+            </div>
+
+            <div className="rounded-2xl border border-accent/25 bg-accent-soft/20 p-4 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <KeyRound size={15} className="text-accent" />
+                  <h4 className="text-sm font-semibold text-ink">Partner Access Key</h4>
+                </div>
+                <Badge tone="blue">Header: access-key</Badge>
+              </div>
+              <p className="text-xs text-ink-3">
+                Vendor passes this key in request header <code className="font-mono">access-key: {accessKey}</code> or query param <code className="font-mono">?vendor_id={accessKey}</code>.
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={accessKey}
+                  className="flex-1 rounded-xl border border-line bg-surface px-3 py-2.5 font-mono text-[13px] font-semibold text-ink select-all focus:outline-none"
+                />
+                <CopyButton text={accessKey} label="Copy Key" />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Code2 size={15} className="text-ink-2" />
+                  <h4 className="text-sm font-semibold text-ink">Live Inventory JSON Feed URL</h4>
+                </div>
+                <Badge tone="green">Live Feed</Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={feedUrl}
+                  className="flex-1 rounded-xl border border-line bg-fill px-3 py-2.5 font-mono text-[12px] text-ink select-all focus:outline-none"
+                />
+                <CopyButton text={feedUrl} label="Copy URL" />
+                <a
+                  href={feedUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 px-3 py-2.5 rounded-xl border border-line bg-surface hover:bg-fill text-ink text-xs font-medium transition"
+                >
+                  Open
+                  <ExternalLink size={12} />
+                </a>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-line bg-surface p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-sm font-semibold text-ink">REST API Endpoint &amp; Docs</h4>
+                <p className="text-xs text-ink-3 font-mono mt-0.5">GET /api/supplier/getAllSurveys?vendor_id={vCode}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <CopyButton text={apiDocsUrl} label="Copy Docs URL" />
+                <a
+                  href={apiDocsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-line bg-fill hover:bg-fill-2 text-ink text-xs font-medium transition"
+                >
+                  API Docs <ExternalLink size={12} />
+                </a>
               </div>
             </div>
           </div>
