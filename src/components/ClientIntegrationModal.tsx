@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Copy,
   Check,
@@ -33,6 +33,13 @@ export function ClientIntegrationModal({
   const [terminateRedirect, setTerminateRedirect] = useState(client?.terminate_redirect || "");
   const [overquotaRedirect, setOverquotaRedirect] = useState(client?.overquota_redirect || "");
   const [securityRedirect, setSecurityRedirect] = useState(client?.security_redirect || "");
+
+  useEffect(() => {
+    setCompleteRedirect(client?.complete_redirect || "");
+    setTerminateRedirect(client?.terminate_redirect || "");
+    setOverquotaRedirect(client?.overquota_redirect || "");
+    setSecurityRedirect(client?.security_redirect || "");
+  }, [client]);
 
   if (!client) return null;
 
@@ -159,10 +166,10 @@ export function ClientIntegrationModal({
 
           <div className="space-y-3">
             {/* 1. Complete */}
-            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2.5 transition-colors hover:border-line-hover">
+            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2.5 transition-colors hover:border-line-strong">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] shrink-0" />
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
                   <span className="text-[13px] font-semibold text-ink truncate">
                     1. Complete Redirect
                   </span>
@@ -192,10 +199,10 @@ export function ClientIntegrationModal({
             </div>
 
             {/* 2. Terminate */}
-            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2.5 transition-colors hover:border-line-hover">
+            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2.5 transition-colors hover:border-line-strong">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)] shrink-0" />
+                  <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0" />
                   <span className="text-[13px] font-semibold text-ink truncate">
                     2. Terminate / Screenout
                   </span>
@@ -225,10 +232,10 @@ export function ClientIntegrationModal({
             </div>
 
             {/* 3. Overquota */}
-            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2.5 transition-colors hover:border-line-hover">
+            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2.5 transition-colors hover:border-line-strong">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="h-2 w-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)] shrink-0" />
+                  <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
                   <span className="text-[13px] font-semibold text-ink truncate">
                     3. Overquota / Quota Full
                   </span>
@@ -258,10 +265,10 @@ export function ClientIntegrationModal({
             </div>
 
             {/* 4. Security */}
-            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2.5 transition-colors hover:border-line-hover">
+            <div className="rounded-2xl border border-line bg-surface p-4 space-y-2.5 transition-colors hover:border-line-strong">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="h-2 w-2 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)] shrink-0" />
+                  <span className="h-2 w-2 rounded-full bg-purple-500 shrink-0" />
                   <span className="text-[13px] font-semibold text-ink truncate">
                     4. Security / Fraud Screenout
                   </span>

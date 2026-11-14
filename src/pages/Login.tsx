@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BarChart3, Eye, EyeOff, Lock, User } from "lucide-react";
+import { Eye, EyeOff, Lock, User } from "lucide-react";
 import { login, type AuthUser } from "../lib/api";
 import { Button } from "../components/ui";
 
@@ -35,7 +35,7 @@ export function Login({ onSuccess }: { onSuccess: (u: AuthUser) => void }) {
     <div className="flex min-h-dvh items-center justify-center bg-bg px-4 py-10">
       <div className="w-full max-w-[400px]">
         <div className="anim-fade-up mb-8 flex flex-col items-center text-center">
-          <div className="mb-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-[24px] bg-white p-2.5 shadow-[var(--shadow-md)] ring-1 ring-line">
+          <div className="mb-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white p-2.5 shadow-[var(--shadow-md)] ring-1 ring-line">
             <img src="/vmh-logo.png" alt="VMH Group" className="h-full w-full object-contain" />
           </div>
           <h1 className="text-[28px] font-bold tracking-tight text-ink">Sign in to API Tool</h1>
@@ -45,7 +45,7 @@ export function Login({ onSuccess }: { onSuccess: (u: AuthUser) => void }) {
         <form
           key={shake}
           onSubmit={submit}
-          className="anim-fade-up rounded-[28px] border border-line bg-surface p-6 shadow-[var(--shadow-md)]"
+          className="anim-fade-up rounded-2xl border border-line bg-surface p-6 shadow-[var(--shadow-md)]"
           style={{ animationDelay: "90ms", animation: shake ? "fade-up .6s var(--ease) both" : undefined }}
         >
           <div className="space-y-3">

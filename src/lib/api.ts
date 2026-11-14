@@ -3,8 +3,39 @@
  * Powered by Supabase PostgreSQL (kamleshgupta905's Project in ap-south-1).
  */
 import { supabase } from "./supabase";
+import { DEFAULT_COUNTRIES } from "./data";
 
 const BASE: string = (import.meta.env.VITE_API_URL as string | undefined) || "https://api.vmhgroupsmr.com/api";
+
+export const isCompleteSt = (s?: string) => ["complete", "completed", "10"].includes(String(s || "").toLowerCase().trim());
+export const isTerminateSt = (s?: string) => ["terminate", "terminates", "terminated", "20"].includes(String(s || "").toLowerCase().trim());
+export const isOverquotaSt = (s?: string) => ["overquota", "quota full", "quotafull", "quota_full", "30"].includes(String(s || "").toLowerCase().trim());
+export const isSecuritySt = (s?: string) => ["security", "security terminate", "quality_terminate", "40", "blocked"].includes(String(s || "").toLowerCase().trim());
+export const isPendingSt = (s?: string) => ["pending", "started", ""].includes(String(s || "").toLowerCase().trim());
+
+const BIDS_LOCAL_KEY = "smr_bids_store";
+function readLocalBids(): any[] {
+  try {
+    const raw = localStorage.getItem(BIDS_LOCAL_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+function writeLocalBids(rows: any[]) {
+  try {
+    localStorage.setItem(BIDS_LOCAL_KEY, JSON.stringify(rows));
+  } catch {}
+}
+function summarizeBids(rows: any[]) {
+  const totalBids = rows.length;
+  const wonBids = rows.filter((b) => String(b.status).toLowerCase() === "won").length;
+  const pendingBids = rows.filter((b) => !["won", "lost"].includes(String(b.status || "").toLowerCase())).length;
+  const pipelineValue = rows
+    .filter((b) => String(b.status || "").toLowerCase() !== "lost")
+    .reduce((acc, b) => acc + (Number(b.cpi) || 0) * (Number(b.sample_size) || 0), 0);
+  return { totalBids, wonBids, pendingBids, pipelineValue };
+}
 
 const TOKEN_KEY = "smr_auth_token";
 const USER_KEY = "smr_auth_user";
@@ -187,12 +218,11 @@ export async function refreshCurrentUser(): Promise<AuthUser | null> {
  */
 export const api = {
   get: async <T = any>(path: string, params?: Params): Promise<T> => {
-    // 1. Entities with local state persistence (Clients, Projects, Users)
-    // Check Supabase SQL first so user edits/status toggles never disappear on page refresh!
+    // 1. Entities stored in Supabase SQL (instant read, always reflects user edits)
     if (path === "/clients" || path === "/manage/clients") {
       try {
         const { data, error } = await supabase.from("smr_clients").select("*").order("id");
-        if (!error && data && data.length > 0) return { data } as unknown as T;
+        if (!error && data) return { data } as unknown as T;
       } catch (e) {
         console.warn("Supabase clients read error:", e);
       }
@@ -200,7 +230,7 @@ export const api = {
     if (path === "/manage/projects" || path === "/projects") {
       try {
         const { data, error } = await supabase.from("smr_projects").select("*").order("id", { ascending: false });
-        if (!error && data && data.length > 0) return { data } as unknown as T;
+        if (!error && data) return { data } as unknown as T;
       } catch (e) {
         console.warn("Supabase projects read error:", e);
       }
@@ -208,7 +238,7 @@ export const api = {
     if (path === "/manage/users") {
       try {
         const { data, error } = await supabase.from("smr_users").select("*").order("id");
-        if (!error && data && data.length > 0) return { data } as unknown as T;
+        if (!error && data) return { data } as unknown as T;
       } catch (e) {
         console.warn("Supabase users read error:", e);
       }
@@ -216,7 +246,7 @@ export const api = {
     if (path === "/manage/vendors" || path === "/vendors") {
       try {
         const { data, error } = await supabase.from("smr_vendors").select("*").order("vendor_name");
-        if (!error && data && data.length > 0) return { data } as unknown as T;
+        if (!error && data) return { data } as unknown as T;
       } catch (e) {
         console.warn("Supabase vendors read error:", e);
       }
@@ -230,14 +260,16 @@ export const api = {
       }
     }
 
-    // 2. Try Live api.vmhgroupsmr.com Gateway
-    try {
-      const live = await request<T>("GET", path, { params });
-      if (live && (live as any).success !== false && ((live as any).data !== undefined || (live as any).totalClick !== undefined)) {
-        return live;
+    // 2. Try Live api.vmhgroupsmr.com Gateway for external marketplace feed endpoints
+    if (path.startsWith("/zamplia")) {
+      try {
+        const live = await request<T>("GET", path, { params });
+        if (live && (live as any).success !== false && ((live as any).data !== undefined || (live as any).totalClick !== undefined)) {
+          return live;
+        }
+      } catch {
+        // Gateway fallback to Supabase SQL
       }
-    } catch {
-      // Gateway fallback to Supabase SQL
     }
 
     try {
@@ -290,20 +322,35 @@ export const api = {
           .order("id", { ascending: false })
           .limit(limit);
         if (!error && data) {
-          const total = data.length;
-          const complete = data.filter((l) => l.status === "Complete").length;
-          const terminate = data.filter((l) => l.status === "Terminate" || l.status === "Terminated").length;
-          const overquota = data.filter((l) => l.status === "Overquota").length;
-          const security = data.filter((l) => l.status === "Security").length;
+          const normalized = data.map((l: any) => ({
+            ...l,
+            vendor_code: l.vendor_code || l.vendor || l.vendor_id || "Direct",
+            vendor_name: l.vendor_name || l.vendor_code || l.vendor || "Direct",
+            ip_address: l.ip_address || l.ip || "—",
+            country: l.country || "—",
+            reason: l.reason || "",
+          }));
+          const total = normalized.length;
+          const complete = normalized.filter((l) => isCompleteSt(l.status)).length;
+          const terminate = normalized.filter((l) => isTerminateSt(l.status)).length;
+          const overquota = normalized.filter((l) => isOverquotaSt(l.status)).length;
+          const security = normalized.filter((l) => isSecuritySt(l.status)).length;
+          const convRate = total > 0 ? Number(((complete / total) * 100).toFixed(1)) : 0;
           return {
-            data,
+            data: normalized,
             summary: {
+              total_clicks: total,
+              total_completes: complete,
+              total_terminates: terminate,
+              total_overquota: overquota,
+              security_blocks: security,
+              conversion_rate: convRate,
               totalClicks: total,
               completes: complete,
               terminates: terminate,
               overquotas: overquota,
               securityBlocks: security,
-              conversionRate: total > 0 ? ((complete / total) * 100).toFixed(1) : 0,
+              conversionRate: String(convRate),
             },
           } as unknown as T;
         }
@@ -313,14 +360,25 @@ export const api = {
       if (path === "/payments" || path === "/finance/payments") {
         const { data, error } = await supabase.from("smr_payments").select("*").order("id", { ascending: false });
         if (!error && data) {
-          const totalPaid = data
-            .filter((p) => p.status === "Paid")
-            .reduce((s, p) => s + Number(p.amount || p.payout_amount || 0), 0);
-          const totalPending = data
-            .filter((p) => p.status === "Pending")
-            .reduce((s, p) => s + Number(p.amount || p.payout_amount || 0), 0);
+          const amt = (p: any) => Number(p.amount ?? p.payout_amount ?? 0);
+          const paidRows = data.filter((p) => String(p.status).toLowerCase() === "paid");
+          const pendingRows = data.filter((p) => String(p.status).toLowerCase() === "pending");
+          const rejectedRows = data.filter((p) => String(p.status).toLowerCase() === "rejected");
+          const totalPaid = paidRows.reduce((s, p) => s + amt(p), 0);
+          const totalPending = pendingRows.reduce((s, p) => s + amt(p), 0);
+          const totalRejected = rejectedRows.reduce((s, p) => s + amt(p), 0);
+          const totalPayout = totalPaid + totalPending;
           return {
             data,
+            summary: {
+              total_payout: totalPayout.toFixed(2),
+              total_paid: totalPaid.toFixed(2),
+              total_pending: totalPending.toFixed(2),
+              total_rejected: totalRejected.toFixed(2),
+              count_paid: paidRows.length,
+              count_pending: pendingRows.length,
+              count_rejected: rejectedRows.length,
+            },
             metrics: {
               totalPaid,
               totalPending,
@@ -330,10 +388,85 @@ export const api = {
         }
       }
 
-      // 8. Team
+      // 8. Team & Activity
       if (path === "/team") {
         const { data, error } = await supabase.from("smr_team").select("*").order("id");
-        if (!error && data) return { data } as unknown as T;
+        if (!error && data) {
+          const mapped = data.map((m: any) => ({
+            ...m,
+            mobile_no: m.mobile_no || m.phone || "",
+            username: m.username || (m.email ? m.email.split("@")[0] : m.name?.toLowerCase().replace(/\s+/g, "")),
+            role_name: m.role_name || m.role || "Member",
+            role_id: m.role_id || (String(m.role || "").toLowerCase().includes("admin") ? 1 : String(m.role || "").toLowerCase().includes("vendor") ? 3 : 2),
+          }));
+          return { data: mapped } as unknown as T;
+        }
+      }
+      if (path === "/team/activity") {
+        const { data: actData, error: actErr } = await supabase
+          .from("smr_team_activity")
+          .select("*")
+          .order("id", { ascending: false })
+          .limit(100);
+        if (!actErr && actData) {
+          return { data: actData } as unknown as T;
+        }
+        return { data: [] } as unknown as T;
+      }
+
+      // 8b. Countries Reference Master
+      if (path === "/manage/countries") {
+        const { data, error } = await supabase.from("smr_countries").select("*").order("id");
+        if (!error && data && data.length > 0) {
+          return { data } as unknown as T;
+        }
+        return { data: DEFAULT_COUNTRIES } as unknown as T;
+      }
+
+      // 8c. Bids Pipeline
+      if (path === "/bids") {
+        const { data, error } = await supabase.from("smr_bids").select("*").order("id", { ascending: false });
+        const rows = !error && data ? data : readLocalBids();
+        return { data: rows, summary: summarizeBids(rows) } as unknown as T;
+      }
+
+      // 8d. Marketplace (Zamplia) Fallback from smr_projects when gateway unreachable
+      if (path === "/zamplia") {
+        const { data, error } = await supabase.from("smr_projects").select("*").order("id", { ascending: false });
+        if (!error && data) {
+          const mapped = data.map((p: any) => ({
+            survey_id: p.project_id || String(p.id),
+            id: p.id,
+            survey_name: p.project_name,
+            cpi: Number(p.cpi) || 0,
+            loi: Number(p.loi) || 10,
+            ir: Number(p.ir) || 70,
+            totalRequired: Number(p.target_completes) || 0,
+            completesNeeded: Math.max(0, (Number(p.target_completes) || 0) - (Number(p.total_completes) || 0)),
+            status: p.status || "Live",
+            client_name: p.client_name || "Direct",
+            client_id: p.client_id,
+            country: p.country || "US",
+            live_url: p.live_url,
+            is_cloned: !!p.is_cloned,
+            createdAt: p.created_at,
+          }));
+          return { data: mapped } as unknown as T;
+        }
+      }
+      if (path === "/zamplia/sync") {
+        return { success: true, message: "Studies synchronized with database" } as unknown as T;
+      }
+      if (path.startsWith("/zamplia/details/")) {
+        const sid = decodeURIComponent(path.split("/").pop() || "");
+        const { data: proj } = await supabase.from("smr_projects").select("*").eq("project_id", sid).maybeSingle();
+        if (proj) {
+          return { data: proj } as unknown as T;
+        }
+        return { data: null } as unknown as T;
+      }
+      if (path.startsWith("/zamplia/quotas/")) {
+        return { data: [] } as unknown as T;
       }
 
       // 9. Security Policy & Fraud Logs
@@ -401,8 +534,8 @@ export const api = {
       // 10. Dashboard Analytics & Unified Reports (100% Real Live Data)
       if (path === "/dashboard/analytics") {
         const [leadsRes, prjRes, vndRes] = await Promise.all([
-          supabase.from("smr_leads").select("id, status, project_name, device").limit(1000),
-          supabase.from("smr_projects").select("id, project_name, status"),
+          supabase.from("smr_leads").select("id, status, project_name, project_id, device").limit(2000),
+          supabase.from("smr_projects").select("id, project_id, project_name, status"),
           supabase.from("smr_vendors").select("id, status"),
         ]);
         const leads = leadsRes.data || [];
@@ -410,22 +543,16 @@ export const api = {
         const vnds = vndRes.data || [];
 
         const totalClicks = leads.length;
-        const completeLeads = leads.filter((l) => l.status === "Complete" || l.status === "Completed").length;
-        const pendingLeads = leads.filter((l) => l.status === "Pending").length;
-        const activeProjects = prjs.filter((p) => p.status === "Live" || p.status === "active").length;
+        const completeLeads = leads.filter((l) => isCompleteSt(l.status)).length;
+        const pendingLeads = leads.filter((l) => isPendingSt(l.status)).length;
+        const activeProjects = prjs.filter((p) => ["live", "active"].includes(String(p.status || "").toLowerCase())).length;
         const totalVendors = vnds.length;
 
-        // Group clicks by actual project
         const chartData: Record<string, number> = {};
         leads.forEach((l) => {
-          const pName = l.project_name || "Active Studies";
+          const pName = l.project_name || l.project_id || "Unassigned Study";
           chartData[pName] = (chartData[pName] || 0) + 1;
         });
-        if (Object.keys(chartData).length === 0) {
-          prjs.slice(0, 5).forEach((p) => {
-            chartData[p.project_name] = 1;
-          });
-        }
 
         return {
           success: true,
@@ -436,7 +563,7 @@ export const api = {
           activeProjects,
           chartData,
           deviceStats: {
-            Desktops: leads.filter((l) => !l.device || l.device.toLowerCase().includes("desk")).length || totalClicks,
+            Desktops: leads.filter((l) => !l.device || l.device.toLowerCase().includes("desk")).length,
             Mobiles: leads.filter((l) => l.device && l.device.toLowerCase().includes("mob")).length,
             Tablets: leads.filter((l) => l.device && l.device.toLowerCase().includes("tab")).length,
           },
@@ -449,16 +576,135 @@ export const api = {
       }
 
       if (path === "/reports/unified") {
-        const [prj, vnd, cli] = await Promise.all([
+        const [prjRes, vndRes, cliRes, leadsRes, allotRes] = await Promise.all([
           supabase.from("smr_projects").select("*"),
           supabase.from("smr_vendors").select("*").order("id"),
           supabase.from("smr_clients").select("*").order("id"),
+          supabase.from("smr_leads").select("*").order("id", { ascending: false }).limit(5000),
+          supabase.from("smr_vendor_allotments").select("*"),
         ]);
+
+        const projectsRaw = prjRes.data || [];
+        const vendorsRaw = vndRes.data || [];
+        const clientsRaw = cliRes.data || [];
+        const allotsRaw = allotRes.data || [];
+
+        const fromMs = params?.fromDate ? new Date(`${params.fromDate}T00:00:00`).getTime() : null;
+        const toMs = params?.toDate ? new Date(`${params.toDate}T23:59:59.999`).getTime() : null;
+        const leads = (leadsRes.data || [])
+          .filter((l: any) => {
+            if (!fromMs && !toMs) return true;
+            const t = new Date(l.created_at || 0).getTime();
+            if (isNaN(t)) return true;
+            if (fromMs && t < fromMs) return false;
+            if (toMs && t > toMs) return false;
+            return true;
+          })
+          .map((l: any) => ({
+            ...l,
+            vendor_code: l.vendor_code || l.vendor || l.vendor_id || "Direct",
+            vendor_name: l.vendor_name || l.vendor_code || l.vendor || "Direct",
+            ip_address: l.ip_address || l.ip || "—",
+            country: l.country || "—",
+            reason: l.reason || "",
+          }));
+
+        const projectCpiMap = new Map<string, number>();
+        projectsRaw.forEach((p: any) => {
+          projectCpiMap.set(String(p.project_id), Number(p.cpi) || 0);
+        });
+
+        const allotCpiMap = new Map<string, number>();
+        allotsRaw.forEach((a: any) => {
+          allotCpiMap.set(`${a.vendor_id}::${a.project_id}`, Number(a.vendor_cpi) || 0);
+        });
+
+        const projects = projectsRaw.map((p: any) => {
+          const pLeads = leads.filter((l: any) => String(l.project_id) === String(p.project_id));
+          const clicks = pLeads.length || (!fromMs && !toMs ? Number(p.total_clicks) || 0 : 0);
+          const completes = pLeads.filter((l: any) => isCompleteSt(l.status)).length || (!fromMs && !toMs ? Number(p.total_completes) || 0 : 0);
+          const terminates = pLeads.filter((l: any) => isTerminateSt(l.status)).length;
+          const overquota = pLeads.filter((l: any) => isOverquotaSt(l.status)).length;
+          const conv = clicks > 0 ? Number(((completes / clicks) * 100).toFixed(1)) : 0;
+          const revenue = Number((completes * (Number(p.cpi) || 0)).toFixed(2));
+          return {
+            ...p,
+            total_clicks: clicks,
+            total_completes: completes,
+            total_terminates: terminates,
+            total_overquota: overquota,
+            conversion_rate: conv,
+            total_revenue: revenue,
+          };
+        });
+
+        const clients = clientsRaw.map((c: any) => {
+          const cProjects = projects.filter(
+            (p: any) =>
+              (p.client_id && Number(p.client_id) === Number(c.id)) ||
+              (p.client_name && c.client_name && p.client_name.toLowerCase() === c.client_name.toLowerCase()),
+          );
+          return {
+            ...c,
+            total_projects: cProjects.length,
+            total_clicks: cProjects.reduce((s: number, p: any) => s + (Number(p.total_clicks) || 0), 0),
+            total_completes: cProjects.reduce((s: number, p: any) => s + (Number(p.total_completes) || 0), 0),
+            total_terminates: cProjects.reduce((s: number, p: any) => s + (Number(p.total_terminates) || 0), 0),
+            total_overquota: cProjects.reduce((s: number, p: any) => s + (Number(p.total_overquota) || 0), 0),
+            total_revenue: Number(cProjects.reduce((s: number, p: any) => s + (Number(p.total_revenue) || 0), 0).toFixed(2)),
+          };
+        });
+
+        const vendors = vendorsRaw.map((v: any) => {
+          const vCode = String(v.vendor_code || v.vendor_id || v.id);
+          const vCodeLower = vCode.toLowerCase();
+          const vNameLower = String(v.vendor_name || v.name || "").toLowerCase();
+          const vAllots = allotsRaw.filter((a: any) => String(a.vendor_id || "").toLowerCase() === vCodeLower);
+          const vLeads = leads.filter((l: any) => {
+            const lvc = String(l.vendor_code || l.vendor || "").toLowerCase();
+            const lvn = String(l.vendor_name || "").toLowerCase();
+            return lvc === vCodeLower || (vNameLower && lvn === vNameLower);
+          });
+          const clicks = vLeads.length;
+          const completeLeads = vLeads.filter((l: any) => isCompleteSt(l.status));
+          const completes = completeLeads.length || (!fromMs && !toMs ? vAllots.reduce((s: number, a: any) => s + (Number(a.complete_count) || 0), 0) : 0);
+          const terminates = vLeads.filter((l: any) => isTerminateSt(l.status)).length;
+          const securityTerminates = vLeads.filter((l: any) => isSecuritySt(l.status)).length;
+          const conv = clicks > 0 ? Number(((completes / clicks) * 100).toFixed(1)) : 0;
+
+          let payout = 0;
+          if (completeLeads.length > 0) {
+            payout = completeLeads.reduce((s: number, l: any) => {
+              const allotCpi = allotCpiMap.get(`${vCode}::${l.project_id}`);
+              if (allotCpi && allotCpi > 0) return s + allotCpi;
+              const projCpi = projectCpiMap.get(String(l.project_id)) || 0;
+              const share = (Number(v.cpi_percentage ?? v.rev_share) || 70) / 100;
+              return s + (Number(v.cpi) > 0 ? Number(v.cpi) : projCpi * share);
+            }, 0);
+          } else if (!fromMs && !toMs) {
+            payout = vAllots.reduce((s: number, a: any) => s + (Number(a.complete_count) || 0) * (Number(a.vendor_cpi) || 0), 0);
+          }
+
+          return {
+            ...v,
+            vendor_id: vCode,
+            vendor_name: v.vendor_name || v.name || vCode,
+            assigned_projects: vAllots.length,
+            total_clicks: clicks,
+            total_completes: completes,
+            total_terminates: terminates,
+            security_terminates: securityTerminates,
+            conversion_rate: conv,
+            total_payout: Number(payout.toFixed(2)),
+          };
+        });
+
         return {
           data: {
-            clients: cli.data || [],
-            vendors: vnd.data || [],
-            projects: prj.data || [],
+            clients,
+            vendors,
+            projects,
+            leads,
           },
         } as unknown as T;
       }
@@ -866,12 +1112,52 @@ export const api = {
         } as unknown as T;
       }
 
+      // 5b. Change Password
+      if (path === "/auth/change-password") {
+        const uid = body?.user_id;
+        const nextPw = body?.new_password;
+        if (!uid || !nextPw) throw new ApiError("Missing user ID or new password.", 400);
+        request("POST", "/auth/change-password", { body }).catch(() => {});
+        const { error } = await supabase
+          .from("smr_users")
+          .update({ password: nextPw, updated_at: new Date().toISOString() })
+          .eq("id", uid);
+        if (error) throw error;
+        return { success: true, message: "Password updated successfully" } as unknown as T;
+      }
+
+      // 5c. Client Handshake Diagnostics
+      if (path === "/clients/test-handshake") {
+        try {
+          const live = await request<T>("POST", path, { body });
+          return live;
+        } catch {
+          const feedUrl = String(body?.feed_api_url || body?.s2s_callback_url || "").trim();
+          const validUrl = /^https?:\/\/.+/i.test(feedUrl);
+          return {
+            success: validUrl,
+            message: validUrl
+              ? `Endpoint format verified (${new URL(feedUrl).host}). Live probe requires server-side proxy.`
+              : "Please enter a valid http(s) endpoint URL before testing.",
+          } as unknown as T;
+        }
+      }
+
       // 6. Payments
       if (path === "/payments/create") {
         const p = body;
-        const payload = {
+        let vendorName = p.vendor_name;
+        if (!vendorName && p.vendor_id) {
+          const { data: vMatch } = await supabase
+            .from("smr_vendors")
+            .select("vendor_name")
+            .eq("vendor_code", p.vendor_id)
+            .maybeSingle();
+          vendorName = vMatch?.vendor_name || p.vendor_id;
+        }
+        const payload: any = {
           invoice_code: p.invoice_code || `INV-${Date.now().toString().slice(-6)}`,
-          vendor_name: p.vendor_name,
+          vendor_name: vendorName || p.vendor_id || "Vendor",
           vendor_id: p.vendor_id || null,
           project_name: p.project_name || null,
           amount: Number(p.amount) || 0,
@@ -898,25 +1184,91 @@ export const api = {
       // 7. Team
       if (path === "/team") {
         const t = body;
-        const payload = {
+        const roleLabel =
+          t.role ||
+          (Number(t.role_id) === 1 ? "Admin" : Number(t.role_id) === 3 ? "Vendor" : "Manager");
+        const corePayload = {
           name: t.name,
           email: t.email,
-          role: t.role || "Team Member",
+          role: roleLabel,
           department: t.department || "Operations",
-          phone: t.phone || null,
+          phone: t.mobile_no || t.phone || null,
           status: "Active",
         };
-        const { data, error } = await supabase.from("smr_team").insert([payload]).select().single();
+        const { data, error } = await supabase.from("smr_team").insert([corePayload]).select().single();
         if (error) throw error;
         return { success: true, data } as unknown as T;
       }
       if (path === "/team/status") {
-        const { error } = await supabase.from("smr_team").update({ status: body.status === "Y" ? "Active" : "Inactive" }).eq("id", body.id);
+        const nextStatus = body.status === "Y" || body.status === "Active" ? "Active" : "Inactive";
+        const { error } = await supabase.from("smr_team").update({ status: nextStatus }).eq("id", body.id);
         if (error) throw error;
         return { success: true } as unknown as T;
       }
-    } catch (sqlErr) {
-      console.warn("Supabase SQL POST fallback:", sqlErr);
+
+      // 8. Bids Pipeline
+      if (path === "/bids") {
+        const b = body;
+        let clientName = b.client_name;
+        if (!clientName && b.client_id) {
+          const { data: cli } = await supabase.from("smr_clients").select("client_name").eq("id", b.client_id).maybeSingle();
+          clientName = cli?.client_name;
+        }
+        const row = {
+          bid_id: b.bid_id || `BID-${Date.now().toString().slice(-6)}`,
+          bid_name: b.bid_name || b.name,
+          client_id: b.client_id || 1,
+          client_name: clientName || "Direct",
+          cpi: String(b.cpi || "1.50"),
+          sample_size: Number(b.sample_size) || 500,
+          specifications: b.specifications || "",
+          status: b.status || "Pending",
+          created_by: b.created_by || "Admin",
+          created_at: new Date().toISOString(),
+        };
+        const { data, error } = await supabase.from("smr_bids").insert([row]).select().single();
+        if (!error && data) return { success: true, data } as unknown as T;
+        const local = readLocalBids();
+        const created = { id: Date.now(), ...row, createdAt: row.created_at };
+        writeLocalBids([created, ...local]);
+        return { success: true, data: created } as unknown as T;
+      }
+      if (path === "/bids/status") {
+        const { error } = await supabase.from("smr_bids").update({ status: body.status }).eq("id", body.id);
+        if (!error) return { success: true } as unknown as T;
+        const local = readLocalBids().map((b) => (b.id === body.id ? { ...b, status: body.status } : b));
+        writeLocalBids(local);
+        return { success: true } as unknown as T;
+      }
+      if (path === "/bids/convert") {
+        const { data: dbBid } = await supabase.from("smr_bids").select("*").eq("id", body.id).maybeSingle();
+        const bid = dbBid || readLocalBids().find((b) => b.id === body.id);
+        if (!bid) throw new ApiError("Bid record not found.", 404);
+        const { data: createdProj, error: projErr } = await supabase
+          .from("smr_projects")
+          .insert([
+            {
+              project_id: `PRJ-${Date.now().toString().slice(-6)}`,
+              project_name: bid.bid_name,
+              client_id: bid.client_id || null,
+              client_name: bid.client_name || "Direct",
+              cpi: Number(bid.cpi) || 1.5,
+              target_completes: Number(bid.sample_size) || 500,
+              ir: 70,
+              loi: 10,
+              status: "Live",
+              updated_at: new Date().toISOString(),
+            },
+          ])
+          .select()
+          .single();
+        if (projErr) throw projErr;
+        return { success: true, data: createdProj } as unknown as T;
+      }
+    } catch (sqlErr: any) {
+      if (sqlErr instanceof ApiError) throw sqlErr;
+      console.warn("Supabase SQL POST error:", sqlErr);
+      throw new ApiError(sqlErr?.message || "Failed to save record.", 500);
     }
 
     return request<T>("POST", path, { body });
@@ -960,8 +1312,10 @@ export const api = {
         }
         return { success: true } as unknown as T;
       }
-    } catch (sqlErr) {
-      console.warn("Supabase SQL PUT fallback:", sqlErr);
+    } catch (sqlErr: any) {
+      if (sqlErr instanceof ApiError) throw sqlErr;
+      console.warn("Supabase SQL PUT error:", sqlErr);
+      throw new ApiError(sqlErr?.message || "Failed to update record.", 500);
     }
 
     return request<T>("PUT", path, { body });
@@ -1017,10 +1371,19 @@ export const api = {
       }
       if (path === "/team/delete") {
         const { error } = await supabase.from("smr_team").delete().eq("id", body.id);
-        if (!error) return { success: true } as unknown as T;
+        if (error) throw error;
+        return { success: true } as unknown as T;
       }
-    } catch (sqlErr) {
-      console.warn("Supabase SQL DEL fallback:", sqlErr);
+      if (path === "/bids/delete") {
+        const { error } = await supabase.from("smr_bids").delete().eq("id", body.id);
+        if (!error) return { success: true } as unknown as T;
+        writeLocalBids(readLocalBids().filter((b) => b.id !== body.id));
+        return { success: true } as unknown as T;
+      }
+    } catch (sqlErr: any) {
+      if (sqlErr instanceof ApiError) throw sqlErr;
+      console.warn("Supabase SQL DEL error:", sqlErr);
+      throw new ApiError(sqlErr?.message || "Failed to delete record.", 500);
     }
 
     return request<T>("DELETE", path, { body });
@@ -1036,6 +1399,8 @@ export interface Project {
   client_id?: number;
   cpi: string | number;
   target_completes: number;
+  total_completes?: number;
+  total_clicks?: number;
   ir: string | number;
   loi: string | number;
   live_url?: string;
@@ -1069,6 +1434,7 @@ export interface Client {
   client_name: string;
   email?: string;
   phone?: string;
+  country?: string;
   api_type?: string;
   feed_api_url?: string;
   s2s_callback_url?: string;

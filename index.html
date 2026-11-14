@@ -5,14 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#f5f5f7" />
     <title>VMH GROUP'S · API TOOL</title>
+    <meta
+      name="description"
+      content="VMH GROUP'S API Tool — Survey routing, supply partner allotments, S2S callbacks, and traffic analytics platform."
+    />
+    <meta property="og:title" content="VMH GROUP'S · API TOOL" />
+    <meta
+      property="og:description"
+      content="Survey routing, supply partner allotments, S2S callbacks, and traffic analytics platform."
+    />
     <link rel="icon" type="image/png" href="/vmh-logo.png" />
     <link rel="apple-touch-icon" href="/vmh-logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <script>
+      (function () {
+        try {
+          var ownDesc = Object.getOwnPropertyDescriptor(window, "fetch");
+          var protoDesc = window.Window ? Object.getOwnPropertyDescriptor(window.Window.prototype, "fetch") : null;
+          var isGetterOnly = (ownDesc && ownDesc.get && !ownDesc.set) || (!ownDesc && protoDesc && protoDesc.get && !protoDesc.set);
+          if (isGetterOnly && (!ownDesc || ownDesc.configurable)) {
+            var origFetch = window.fetch.bind(window);
+            Object.defineProperty(window, "fetch", {
+              value: origFetch,
+              writable: true,
+              configurable: true,
+              enumerable: true,
+            });
+          }
+        } catch (e) {}
+
+        window.addEventListener(
+          "error",
+          function (event) {
+            var src = event && (event.filename || (event.error && event.error.stack) || "");
+            if (typeof src === "string" && (src.indexOf("chrome-extension://") !== -1 || src.indexOf("moz-extension://") !== -1)) {
+              event.preventDefault();
+              if (typeof event.stopImmediatePropagation === "function") {
+                event.stopImmediatePropagation();
+              }
+            }
+          },
+          true,
+        );
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

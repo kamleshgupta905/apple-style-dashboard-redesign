@@ -125,8 +125,8 @@ export function Dashboard({ userName }: { userName: string }) {
     if (!d) return null;
     if (isVendor) {
       const clicks = vendorLeads.length;
-      const completes = vendorLeads.filter((l) => l.status === "Complete" || String(l.status) === "10").length;
-      const payout = myAllots.reduce((acc, a) => acc + (num(a.complete_count) * num(a.vendor_cpi)), 0) || (completes * 2.50);
+      const completes = vendorLeads.filter((l) => ["complete", "completed", "10"].includes(String(l.status).toLowerCase())).length;
+      const payout = myAllots.reduce((acc, a) => acc + (num(a.complete_count) * num(a.vendor_cpi)), 0);
       const rate = clicks > 0 ? Number(((completes / clicks) * 100).toFixed(1)) : 0;
       return {
         revenue: 0,
@@ -140,20 +140,18 @@ export function Dashboard({ userName }: { userName: string }) {
 
     const projectsList = d.u?.projects || [];
     const vendorsList = d.u?.vendors || [];
-    let revenue = projectsList.reduce((s, p) => s + num(p.total_revenue), 0);
-    let payout = vendorsList.reduce((s, v) => s + num(v.total_payout), 0);
-    const clicks = num(d.a?.totalClick) || (d.leads?.length ? d.leads.length : 102);
-    const completes = num(d.a?.completeLeads) || 11;
-    if (!revenue || revenue === 0) revenue = 13.20;
-    if (!payout || payout === 0) payout = 7.80;
-    const margin = revenue - payout > 0 ? revenue - payout : 5.40;
+    const revenue = projectsList.reduce((s, p) => s + num(p.total_revenue), 0);
+    const payout = vendorsList.reduce((s, v) => s + num(v.total_payout), 0);
+    const clicks = num(d.a?.totalClick);
+    const completes = num(d.a?.completeLeads);
+    const margin = revenue - payout;
     return {
       revenue,
       payout,
       margin,
       clicks,
       completes,
-      rate: clicks ? Number(((completes / clicks) * 100).toFixed(1)) : 10.8,
+      rate: clicks > 0 ? Number(((completes / clicks) * 100).toFixed(1)) : 0,
     };
   }, [d, isVendor, vendorLeads, myAllots]);
 
@@ -170,7 +168,7 @@ export function Dashboard({ userName }: { userName: string }) {
   ] : [
     { label: "Gross revenue", value: stats.revenue, prefix: "$", decimals: 2, icon: CircleDollarSign, tone: "text-green bg-green-soft", sub: "From delivered completes" },
     { label: "Net margin", value: stats.margin, prefix: "$", decimals: 2, icon: TrendingUp, tone: "text-accent bg-accent-soft", sub: `Vendor payout ${money(stats.payout)}` },
-    { label: "Routed clicks", value: stats.clicks, icon: MousePointerClick, tone: "text-purple bg-purple-soft", sub: `${num(d?.a?.pendingLeads) || 59} pending` },
+    { label: "Routed clicks", value: stats.clicks, icon: MousePointerClick, tone: "text-purple bg-purple-soft", sub: `${num(d?.a?.pendingLeads)} pending` },
     { label: "Conversion", value: stats.rate, suffix: "%", decimals: 1, icon: Target, tone: "text-orange bg-orange-soft", sub: `${stats.completes} completes` },
   ]);
 
@@ -194,7 +192,7 @@ export function Dashboard({ userName }: { userName: string }) {
       const filtered = Object.entries(raw).filter(([, v]) => num(v) > 0);
       if (filtered.length > 0) return filtered;
     }
-    return [["Desktops", 102]];
+    return [["Desktops", 0]];
   }, [d, isVendor, vendorLeads]);
   const devColors = ["var(--accent)", "var(--green)", "var(--orange)"];
 
@@ -215,29 +213,26 @@ export function Dashboard({ userName }: { userName: string }) {
     }
     const raw = d?.a?.chartData;
     if (raw && Object.keys(raw).length > 0) {
-      return Object.entries(raw).map(([label, value]) => ({ label, value: num(value) }));
+      return Object.entries(raw)
+        .map(([label, value]) => ({ label, value: num(value) }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 6);
     }
-    return [
-      { label: "2141504327 (Clone) (Clone)", value: 23 },
-      { label: "E2E Cloned Study 1793618963", value: 11 },
-      { label: "Study #VMHPI000052026", value: 9 },
-      { label: "Study #2127265254", value: 9 },
-      { label: "2141504327 (Clone)", value: 8 },
-      { label: "Study #2042481293", value: 8 },
-    ];
+    return [];
   }, [d, isVendor, myAllots, vendorLeads]);
 
   const leadStatus = useMemo(() => {
     const m: Record<string, number> = {};
-    (d?.leads || []).forEach((l) => (m[l.status] = (m[l.status] || 0) + 1));
+    const source = isVendor ? vendorLeads : (d?.leads || []);
+    source.forEach((l) => (m[l.status] = (m[l.status] || 0) + 1));
     return m;
-  }, [d]);
+  }, [d, isVendor, vendorLeads]);
 
   return (
     <div>
       <PageHeader
         title={`${greet}, ${userName.split(" ")[0]}`}
-        subtitle="Here's how your marketplace is performing right now."
+        subtitle={isVendor ? "Here's how your panel traffic and assigned studies are performing." : "Here's how your marketplace is performing right now."}
         actions={
           <Button variant="secondary" icon={<RefreshCw size={15} className={q.refreshing ? "anim-spin" : ""} />} onClick={q.reload}>
             Refresh
@@ -249,7 +244,7 @@ export function Dashboard({ userName }: { userName: string }) {
       {can(PERMS.OVERVIEW_KPIS) && (
         <div className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
           {!kpis
-            ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[132px] rounded-3xl" />)
+            ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[132px] rounded-2xl" />)
             : kpis.map((k) => (
                 <Card key={k.label} hover className="p-4 sm:p-5">
                   <div className="mb-4 flex items-center justify-between">
@@ -258,7 +253,7 @@ export function Dashboard({ userName }: { userName: string }) {
                     </span>
                   </div>
                   <p className="text-[13px] font-medium text-ink-3">{k.label}</p>
-                  <p className="mt-0.5 text-[26px] font-bold leading-tight tracking-tight text-ink sm:text-[30px]">
+                  <p className="mt-0.5 text-[26px] font-bold leading-tight tracking-tight text-ink sm:text-[30px] tabular">
                     <CountUp value={k.value} prefix={k.prefix} suffix={k.suffix} decimals={k.decimals} />
                   </p>
                   <p className="mt-1 truncate text-[12px] text-ink-3">{k.sub}</p>
@@ -276,7 +271,7 @@ export function Dashboard({ userName }: { userName: string }) {
               hint={isVendor ? "Assigned studies & respondent traffic" : "Routed respondents per study"}
               action={
                 <Badge tone="blue">
-                  {isVendor ? `${myAllots.length} assigned` : `${num(d?.a?.activeProjects) || 4} live`}
+                  {isVendor ? `${myAllots.length} assigned` : `${num(d?.a?.activeProjects)} live`}
                 </Badge>
               }
             />
@@ -299,12 +294,12 @@ export function Dashboard({ userName }: { userName: string }) {
             ) : (
               <div className="flex flex-col items-center gap-6">
                 <Donut
-                  segments={devices.map(([label, value], i) => ({ label, value: num(value), color: devColors[i % 3] }))}
+                  segments={devices.map(([label, value], i) => ({ label: String(label), value: num(value), color: devColors[i % 3] }))}
                   centerValue={compact(devices.reduce((s, [, v]) => s + num(v), 0))}
                   centerLabel="sessions"
                 />
                 <div className="w-full">
-                  <Legend items={devices.map(([label, value], i) => ({ label, value: num(value), color: devColors[i % 3] }))} />
+                  <Legend items={devices.map(([label, value], i) => ({ label: String(label), value: num(value), color: devColors[i % 3] }))} />
                 </div>
               </div>
             )}
@@ -427,7 +422,7 @@ export function Dashboard({ userName }: { userName: string }) {
                               icon={<ExternalLink size={11} />}
                               onClick={() =>
                                 window.open(
-                                  `https://api.vmhgroupsmr.com/#/prescreener?pid=${encodeURIComponent(a.project_id)}&vid=${encodeURIComponent(activeVendorCode)}&uid=TEST_${Date.now()}`,
+                                  `${window.location.origin}/#/prescreener?pid=${encodeURIComponent(a.project_id)}&vid=${encodeURIComponent(activeVendorCode)}&uid=TEST_${Date.now()}`,
                                   "_blank"
                                 )
                               }
@@ -473,9 +468,11 @@ export function Dashboard({ userName }: { userName: string }) {
             )}
 
             <Card className="anim-fade-up p-5 sm:p-6" style={{ animationDelay: "300ms" }}>
-              <SectionTitle title="Recent outcomes" hint="Last 12 sessions" />
+              <SectionTitle title="Recent outcomes" hint="Last 25 sessions" />
               {!d ? (
                 <Skeleton className="h-16" />
+              ) : Object.keys(leadStatus).length === 0 ? (
+                <p className="py-4 text-center text-[13px] text-ink-3">No sessions recorded yet.</p>
               ) : (
                 <Legend
                   items={Object.entries(leadStatus).map(([label, value]) => ({
@@ -491,7 +488,7 @@ export function Dashboard({ userName }: { userName: string }) {
       )}
 
       {!can(PERMS.OVERVIEW_KPIS) && !can(PERMS.OVERVIEW_CHARTS) && !can(PERMS.OVERVIEW_ACTIVITY) && (
-        <div className="mt-8 rounded-3xl border border-line bg-surface p-8 text-center shadow-sm">
+        <div className="mt-8 rounded-2xl border border-line bg-surface p-8 text-center shadow-sm">
           <p className="text-[16px] font-medium text-ink">Welcome to VMH GROUP'S API Tool</p>
           <p className="mt-1 text-[13px] text-ink-3">Your account is active. Use the navigation menu on the left to access your authorized modules.</p>
         </div>

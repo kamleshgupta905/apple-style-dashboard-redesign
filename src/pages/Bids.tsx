@@ -94,7 +94,7 @@ export function Bids() {
       </div>
 
       {q.loading ? (
-        <Skeleton className="h-64 rounded-3xl" />
+        <Skeleton className="h-64 rounded-2xl" />
       ) : list.length === 0 ? (
         <Card>
           <EmptyState title="No bids yet" message="Track every proposal from pending to won." action={<Button onClick={() => setCreating(true)}>Create a bid</Button>} />
@@ -104,7 +104,7 @@ export function Bids() {
           {COLUMNS.map((col) => {
             const items = list.filter((b) => (COLUMNS.includes(b.status) ? b.status : "Pending") === col);
             return (
-              <div key={col} className="rounded-3xl bg-fill/60 p-3">
+              <div key={col} className="rounded-2xl bg-fill/60 p-3 border border-line/60">
                 <div className="mb-3 flex items-center justify-between px-2 pt-1">
                   <Badge tone={statusTone(col)} dot>{col}</Badge>
                   <span className="text-[13px] font-semibold text-ink-3 tabular">{items.length}</span>
@@ -134,7 +134,7 @@ export function Bids() {
                         </div>
                       </div>
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[12px] text-ink-3">{formatDate(b.createdAt, false)}</span>
+                        <span className="text-[12px] text-ink-3">{formatDate(b.createdAt || (b as any).created_at, false)}</span>
                         <div className="flex gap-1.5">
                           {col !== "Won" && <Button size="sm" variant="tinted" onClick={() => move(b, "Won")}>Won</Button>}
                           {col !== "Lost" && <Button size="sm" variant="secondary" onClick={() => move(b, "Lost")}>Lost</Button>}

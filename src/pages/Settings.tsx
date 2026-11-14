@@ -1,17 +1,66 @@
-import { useState } from "react";
-import { KeyRound, LogOut, Moon, Sun, Layers, ShieldCheck, Zap } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Eye, EyeOff, KeyRound, Layers, LogOut, Moon, RotateCcw, Sun, Zap } from "lucide-react";
 import { api, type AuthUser } from "../lib/api";
-import { Button, Card, Field, Input, PageHeader, SectionTitle, Segmented } from "../components/ui";
+import { Button, Card, Field, Input, PageHeader, SectionTitle, Segmented, Toggle } from "../components/ui";
 import { useFeedback } from "../components/feedback";
 import { PERMS, usePermissions } from "../lib/permissions";
+import { NAV } from "../components/Shell";
+import { saveHiddenNavItems, useHiddenNavItems } from "../lib/navConfig";
 import { initials } from "../lib/utils";
 
 export function Settings({ user, dark, onSetDark, onLogout }: { user: AuthUser; dark: boolean; onSetDark: (d: boolean) => void; onLogout: () => void }) {
   const { toast } = useFeedback();
   const { can } = usePermissions();
   const isVendor = user.role_id === 3 || user.role_name === "Vendor" || user.role_name?.toLowerCase().includes("vendor");
+  const isSuperOrAdmin =
+    !isVendor &&
+    (user.role_id === 4 ||
+      user.role_id === 1 ||
+      user.role_name === "Super Admin" ||
+      user.role_name === "Admin" ||
+      user.role_name?.toLowerCase().includes("admin"));
+
+  const hiddenNavIds = useHiddenNavItems();
+  const [navSaving, setNavSaving] = useState(false);
+
   const [f, setF] = useState({ next: "", confirm: "" });
   const [busy, setBusy] = useState(false);
+
+  const configurableNavGroups = useMemo(() => {
+    const groups = new Map<string, typeof NAV>();
+    NAV.filter((n) => n.id !== "settings").forEach((n) => {
+      groups.set(n.group, [...(groups.get(n.group) || []), n]);
+    });
+    return [...groups.entries()];
+  }, []);
+
+  const toggleNavVisibility = async (id: string, visible: boolean) => {
+    const nextHidden = visible
+      ? hiddenNavIds.filter((x) => x !== id)
+      : Array.from(new Set([...hiddenNavIds, id]));
+    setNavSaving(true);
+    try {
+      await saveHiddenNavItems(nextHidden);
+      const item = NAV.find((n) => n.id === id);
+      toast(`${item?.label || id} ${visible ? "shown in" : "hidden from"} navbar`);
+    } catch {
+      toast("Saved locally (Supabase sync failed)", "error");
+    } finally {
+      setNavSaving(false);
+    }
+  };
+
+  const resetNavVisibility = async () => {
+    setNavSaving(true);
+    try {
+      await saveHiddenNavItems([]);
+      toast("All navbar items restored");
+    } catch {
+      toast("Restored locally", "error");
+    } finally {
+      setNavSaving(false);
+    }
+  };
 
   const strength = (() => {
     const p = f.next;
@@ -43,7 +92,7 @@ export function Settings({ user, dark, onSetDark, onLogout }: { user: AuthUser; 
 
   return (
     <div className="mx-auto max-w-2xl">
-      <PageHeader title="Settings" subtitle="Your account and appearance." />
+      <PageHeader title="Settings" subtitle="Your account, navigation and appearance." />
 
       <div className="stagger space-y-5">
         <Card className="flex items-center gap-4 p-5 sm:p-6">
@@ -65,14 +114,73 @@ export function Settings({ user, dark, onSetDark, onLogout }: { user: AuthUser; 
             onChange={(v) => onSetDark(v === "dark")}
             className="w-full sm:w-auto"
             options={[
-              { value: "light", label: "☀︎  Light" },
-              { value: "dark", label: "☾  Dark" },
+              { value: "light", label: "Light" },
+              { value: "dark", label: "Dark" },
             ]}
           />
           <p className="mt-3 flex items-center gap-2 text-[13px] text-ink-3">
             {dark ? <Moon size={14} /> : <Sun size={14} />} Currently using the {dark ? "dark" : "light"} theme.
           </p>
         </Card>
+
+        {isSuperOrAdmin && (
+          <Card className="p-5 sm:p-6">
+            <SectionTitle
+              title="Navbar Visibility (Super Admin)"
+              hint="Hide or show sidebar & navigation pages across the workspace. Settings always stays visible."
+              action={
+                hiddenNavIds.length > 0 ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<RotateCcw size={13} />}
+                    disabled={navSaving}
+                    onClick={resetNavVisibility}
+                  >
+                    Show all ({hiddenNavIds.length} hidden)
+                  </Button>
+                ) : undefined
+              }
+            />
+            <div className="space-y-4">
+              {configurableNavGroups.map(([group, items]) => (
+                <div key={group} className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">{group}</p>
+                  <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+                    {items.map((item) => {
+                      const visible = !hiddenNavIds.includes(item.id);
+                      return (
+                        <div key={item.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span className={visible ? "text-ink-2" : "text-ink-3/50"}>{item.icon}</span>
+                            <div className="min-w-0">
+                              <p className={`truncate text-[13.5px] font-medium ${visible ? "text-ink" : "text-ink-3 line-through"}`}>
+                                {item.label}
+                              </p>
+                              <p className="truncate text-[11.5px] text-ink-3">{item.hint}</p>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2.5">
+                            <span className="hidden items-center gap-1 text-[11.5px] text-ink-3 sm:inline-flex">
+                              {visible ? <Eye size={13} className="text-green" /> : <EyeOff size={13} />}
+                              {visible ? "Visible" : "Hidden"}
+                            </span>
+                            <Toggle
+                              checked={visible}
+                              disabled={navSaving}
+                              label={`Toggle ${item.label} in navbar`}
+                              onChange={(next) => toggleNavVisibility(item.id, next)}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {!isVendor && (
           <Card className="p-5 sm:p-6">
@@ -81,39 +189,35 @@ export function Settings({ user, dark, onSetDark, onLogout }: { user: AuthUser; 
               hint="Global rules applied to incoming respondents & study conversions"
             />
             <div className="space-y-4 pt-1">
-              <div className="rounded-2xl border border-line p-4 space-y-3">
+              <div className="rounded-xl border border-line p-4 space-y-2.5">
                 <div className="flex items-start gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500">
                     <Zap size={18} />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-[14px] font-semibold text-ink">Auto-Pause Inactive Studies</p>
-                    <p className="text-[12px] text-ink-3">
-                      If a study receives 50 clicks (or your customized click limit) without delivering a single complete (0 completes), the system automatically pauses routing to prevent traffic loss.
+                    <p className="text-[12px] text-ink-3 leading-relaxed">
+                      If a study receives 50 clicks (or your customized click limit) without delivering a single complete, the router automatically pauses traffic to prevent spend loss.
                     </p>
                   </div>
                 </div>
-                <p className="text-[11px] text-ink-3 font-mono bg-fill px-3 py-2 rounded-xl">
-                  Configurable per study in Surveys → Edit Study (e.g. 10, 30, 50 clicks).
+                <p className="text-[11px] text-ink-3 font-mono bg-fill px-3 py-2 rounded-lg">
+                  Configurable per study in Surveys → Edit Study (default: 50 clicks).
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-line p-4 space-y-3">
+              <div className="rounded-xl border border-line p-4">
                 <div className="flex items-start gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-500">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
                     <Layers size={18} />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[14px] font-semibold text-ink">Smart Waterfall Auto-Reroute</p>
-                    <p className="text-[12px] text-ink-3">
-                      • <strong>Screenout / Quota / Security:</strong> Instantly connects respondent to another live survey without showing any negative terminate screen.<br />
-                      • <strong>Complete:</strong> Verified Complete page is shown for exactly 5 seconds, then auto-redirects respondent to another available paid study.
-                    </p>
+                    <p className="text-[14px] font-semibold text-ink">Waterfall Rerouting</p>
+                    <ul className="mt-1 space-y-1 text-[12px] text-ink-3 leading-relaxed">
+                      <li><strong className="text-ink-2">Screenout / Quota / Security:</strong> Routes respondents directly to the next eligible live survey.</li>
+                      <li><strong className="text-ink-2">Complete:</strong> Displays confirmation for 5 seconds before forwarding to the next open study or partner callback.</li>
+                    </ul>
                   </div>
-                </div>
-                <div className="flex items-center justify-between text-[11px] font-mono text-emerald-600 bg-emerald-500/10 px-3 py-2 rounded-xl">
-                  <span>Waterfall Router: Active</span>
-                  <span className="font-semibold">Seamless Transition Enabled</span>
                 </div>
               </div>
             </div>

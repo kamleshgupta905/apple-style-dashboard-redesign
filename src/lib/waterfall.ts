@@ -94,18 +94,36 @@ export async function recordStudyClickAndCheckAutoPause(
     // 3. Record click in smr_leads for live lead stream & analytics
     try {
       const isMobile = /mobile|android|iphone|ipad/i.test(navigator.userAgent || "");
-      await supabase.from("smr_leads").insert([
+      const dev = isMobile ? "Mobile" : "Desktop";
+      const now = new Date().toISOString();
+      const { error: leadInsertErr } = await supabase.from("smr_leads").insert([
         {
           project_id: pid,
           project_name: proj.project_name || pid,
-          vendor: vid || "Direct",
+          vendor_code: vid || "Direct",
+          vendor_name: vid || "Direct",
           uid,
           status: "Pending",
-          device: isMobile ? "Mobile" : "Desktop",
-          ip: "Live Session",
-          created_at: new Date().toISOString(),
+          device: dev,
+          ip_address: "Live Session",
+          country: "—",
+          created_at: now,
         },
       ]);
+      if (leadInsertErr) {
+        await supabase.from("smr_leads").insert([
+          {
+            project_id: pid,
+            project_name: proj.project_name || pid,
+            vendor: vid || "Direct",
+            uid,
+            status: "Pending",
+            device: dev,
+            ip: "Live Session",
+            created_at: now,
+          },
+        ]);
+      }
     } catch (leadErr) {
       console.warn("Could not insert smr_lead record:", leadErr);
     }

@@ -97,7 +97,7 @@ function PolicyTab() {
   }, [q.data]);
 
   if (q.error && !q.data) return <ErrorState message={q.error} onRetry={q.reset} />;
-  if (!p) return <Skeleton className="h-96 rounded-3xl" />;
+  if (!p) return <Skeleton className="h-96 rounded-2xl" />;
 
   const dirty = JSON.stringify(p) !== JSON.stringify(q.data);
   const enabled = GROUPS.flatMap((g) => g.items).filter((i) => p[i.key]).length;

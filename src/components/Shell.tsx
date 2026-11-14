@@ -28,6 +28,7 @@ import { initials } from "../lib/utils";
 import type { AuthUser } from "../lib/api";
 import { IconButton, Modal } from "./ui";
 import { PERMS, usePermissions } from "../lib/permissions";
+import { useHiddenNavItems } from "../lib/navConfig";
 
 export const NAV_PERMISSION_MAP: Record<string, number> = {
   dashboard: PERMS.OVERVIEW,
@@ -56,10 +57,12 @@ const s = 18;
 export const NAV: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={s} />, group: "Main", hint: "KPIs, live traffic & performance" },
   { id: "surveys", label: "Surveys", icon: <ListChecks size={s} />, group: "Main", hint: "Live inventory, allocation & links" },
+  { id: "bids", label: "Bids", icon: <Gavel size={s} />, group: "Main", hint: "Proposals & sales pipeline" },
   { id: "clients", label: "Clients", icon: <Building2 size={s} />, group: "Partners", hint: "Demand partners & S2S redirects" },
   { id: "vendors", label: "Vendors", icon: <Truck size={s} />, group: "Partners", hint: "Supply partners & allotments" },
   { id: "payments", label: "Vendor Payments", icon: <BadgeDollarSign size={s} />, group: "Operations", hint: "Vendor payouts & vouchers" },
   { id: "leads", label: "Traffic Leads Stream", icon: <Radio size={s} />, group: "Operations", hint: "Live respondent routing log" },
+  { id: "reports", label: "Reports", icon: <FileBarChart2 size={s} />, group: "Operations", hint: "Consolidated client, vendor & study analytics" },
   { id: "security", label: "Security & Fraud Gate", icon: <ShieldCheck size={s} />, group: "Operations", hint: "Policies, blocks & simulator" },
   { id: "users", label: "User Management", icon: <UserCog size={s} />, group: "Management", hint: "Accounts, roles, permissions" },
   { id: "team", label: "Team Directory", icon: <Users size={s} />, group: "Management", hint: "Directory & login activity" },
@@ -70,27 +73,48 @@ export const NAV: NavItem[] = [
 function Logo() {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1.5 shadow-sm ring-1 ring-line">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1.5 shadow-sm ring-1 ring-line">
         <img src="/vmh-logo.png" alt="VMH Group" className="h-full w-full object-contain" />
       </div>
       <div className="leading-tight">
         <p className="text-[14px] font-bold tracking-tight text-ink">VMH GROUP'S</p>
-        <p className="text-[9.5px] font-semibold tracking-wider text-ink-3">API TOOL</p>
+        <p className="text-[10px] font-semibold tracking-wider text-ink-3">API TOOL</p>
       </div>
     </div>
   );
 }
 
+const VENDOR_ALLOWED_ROUTES = new Set(["dashboard", "surveys", "leads", "payments", "reports", "settings"]);
+
+function canSeeNavItem(id: string, canModule: (p: number) => boolean, isVendor: boolean, hiddenSet: Set<string>) {
+  if (id === "settings") return true;
+  if (hiddenSet.has(id)) return false;
+  if (isVendor && !VENDOR_ALLOWED_ROUTES.has(id)) return false;
+  if (id === "reports") {
+    return (
+      canModule(PERMS.OVERVIEW) ||
+      canModule(PERMS.SURVEYS) ||
+      canModule(PERMS.PAYMENTS) ||
+      canModule(PERMS.CLIENTS) ||
+      canModule(PERMS.VENDORS)
+    );
+  }
+  if (id === "bids") {
+    return canModule(PERMS.SURVEYS) || canModule(PERMS.CLIENTS);
+  }
+  const permId = NAV_PERMISSION_MAP[id];
+  return permId ? canModule(permId) : true;
+}
+
 function NavList({ route, onNavigate }: { route: string; onNavigate: (id: string) => void }) {
-  const { canModule } = usePermissions();
+  const { canModule, user } = usePermissions();
+  const hiddenIds = useHiddenNavItems();
+  const isVendor = !!(user?.role_id === 3 || user?.role_name === "Vendor" || user?.role_name?.toLowerCase().includes("vendor"));
 
   const visibleNav = useMemo(() => {
-    return NAV.filter((n) => {
-      if (n.id === "settings") return true;
-      const permId = NAV_PERMISSION_MAP[n.id];
-      return permId ? canModule(permId) : true;
-    });
-  }, [canModule]);
+    const hiddenSet = new Set(hiddenIds);
+    return NAV.filter((n) => canSeeNavItem(n.id, canModule, isVendor, hiddenSet));
+  }, [canModule, isVendor, hiddenIds]);
 
   const groups = useMemo(() => {
     const m = new Map<string, NavItem[]>();
@@ -131,16 +155,13 @@ function NavList({ route, onNavigate }: { route: string; onNavigate: (id: string
 }
 
 function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { canModule } = usePermissions();
+  const { canModule, user } = usePermissions();
+  const hiddenIds = useHiddenNavItems();
+  const isVendor = !!(user?.role_id === 3 || user?.role_name === "Vendor" || user?.role_name?.toLowerCase().includes("vendor"));
   const visibleNav = useMemo(() => {
-    return NAV.filter((n) => {
-      if (n.id === "settings") return true;
-      if (n.id === "reports") return canModule(PERMS.OVERVIEW) || canModule(PERMS.SURVEYS) || canModule(PERMS.PAYMENTS) || canModule(PERMS.CLIENTS) || canModule(PERMS.VENDORS);
-      if (n.id === "bids") return canModule(PERMS.SURVEYS) || canModule(PERMS.CLIENTS);
-      const permId = NAV_PERMISSION_MAP[n.id];
-      return permId ? canModule(permId) : true;
-    });
-  }, [canModule]);
+    const hiddenSet = new Set(hiddenIds);
+    return NAV.filter((n) => canSeeNavItem(n.id, canModule, isVendor, hiddenSet));
+  }, [canModule, isVendor, hiddenIds]);
 
   const [q, setQ] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -263,22 +284,20 @@ export function Shell({
   }, [route]);
 
   const { canModule } = usePermissions();
+  const hiddenIds = useHiddenNavItems();
+  const isVendor = !!(user?.role_id === 3 || user?.role_name === "Vendor" || user?.role_name?.toLowerCase().includes("vendor"));
   const tabs = useMemo(() => {
-    const list = ["dashboard", "surveys", "leads", "payments"].filter((id) => {
-      const p = NAV_PERMISSION_MAP[id];
-      return p ? canModule(p) : true;
-    });
+    const hiddenSet = new Set(hiddenIds);
+    const list = ["dashboard", "surveys", "leads", "payments"].filter((id) =>
+      canSeeNavItem(id, canModule, isVendor, hiddenSet),
+    );
     if (list.length === 0) {
-      return NAV.filter((n) => {
-        if (n.id === "settings") return true;
-        const p = NAV_PERMISSION_MAP[n.id];
-        return p ? canModule(p) : true;
-      })
+      return NAV.filter((n) => canSeeNavItem(n.id, canModule, isVendor, hiddenSet))
         .slice(0, 4)
         .map((n) => n.id);
     }
     return list;
-  }, [canModule]);
+  }, [canModule, isVendor, hiddenIds]);
 
   return (
     <div className="min-h-dvh">
@@ -327,27 +346,12 @@ export function Shell({
             <Command size={10} />K
           </kbd>
         </button>
-        <div className="ml-auto flex items-center gap-1">
-          <span className="mr-2 hidden items-center gap-2 rounded-full bg-green-soft px-3 py-1.5 text-[12px] font-semibold text-green sm:flex">
-            <span className="relative flex h-2 w-2">
-              <span className="anim-ping absolute inline-flex h-full w-full rounded-full bg-green" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
-            </span>
-            Gateway online
-          </span>
+        <div className="ml-auto flex items-center gap-1.5">
           <IconButton label="Search" onClick={() => setPalette(true)} className="lg:hidden">
             <Search size={19} />
           </IconButton>
           <IconButton label={dark ? "Switch to light mode" : "Switch to dark mode"} onClick={onToggleTheme}>
             {dark ? <Sun size={18} /> : <Moon size={18} />}
-          </IconButton>
-          {/* Sign out shortcut button in top bar header */}
-          <IconButton
-            label="Sign out"
-            onClick={onLogout}
-            className="text-ink-3 hover:text-red hover:bg-red-soft transition-colors"
-          >
-            <LogOut size={17} />
           </IconButton>
 
           {/* User profile dropdown in top bar */}
@@ -355,7 +359,7 @@ export function Shell({
             <button
               type="button"
               onClick={() => setUserMenuOpen((v) => !v)}
-              className="press flex items-center gap-2 rounded-full border border-line bg-surface/80 py-1 pl-2.5 pr-1.5 shadow-sm hover:border-line-strong hover:bg-surface transition-all cursor-pointer"
+              className="press flex items-center gap-2 rounded-xl border border-line bg-surface py-1 pl-2.5 pr-2 hover:border-line-strong transition-colors cursor-pointer"
               title="User profile & options"
             >
               <div className="hidden text-right leading-tight sm:block pr-1">

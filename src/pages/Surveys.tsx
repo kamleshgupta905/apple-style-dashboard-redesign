@@ -112,14 +112,15 @@ function VendorAssignedSurveys() {
         const pId = String(allot.project_id);
         const name = p?.project_name || `Study #${pId}`;
         const st = allot.status || p?.status || "Live";
-        const cpi = num(allot.vendor_cpi) || (p ? num(p.cpi) : 2.5);
-        const target = num(allot.quota_limit) || (p ? num(p.target_completes) : 100);
-        const completes = num(allot.complete_count) || (p ? num(p.total_completes) : 0);
+        const cpi = num(allot.vendor_cpi);
+        const target = num(allot.quota_limit);
+        const completes = num(allot.complete_count);
         const loi = p?.loi || 15;
         const ir = p?.ir || 75;
+        const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
         const link =
           allot.entry_link ||
-          `https://api.vmhgroupsmr.com/#/prescreener?pid=${encodeURIComponent(pId)}&vid=${encodeURIComponent(activeVendorCode)}&uid=[YOUR_UID]`;
+          `${origin}/#/prescreener?pid=${encodeURIComponent(pId)}&vid=${encodeURIComponent(activeVendorCode)}&uid=[YOUR_UID]`;
 
         return {
           id: pId,
@@ -217,12 +218,13 @@ function VendorAssignedSurveys() {
             size="sm"
             variant="ghost"
             icon={<ExternalLink size={12} />}
-            onClick={() =>
+            onClick={() => {
+              const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
               window.open(
-                `https://api.vmhgroupsmr.com/#/prescreener?pid=${encodeURIComponent(s.id)}&vid=${encodeURIComponent(activeVendorCode)}&uid=TEST_${Date.now()}`,
-                "_blank"
-              )
-            }
+                `${origin}/#/prescreener?pid=${encodeURIComponent(s.id)}&vid=${encodeURIComponent(activeVendorCode)}&uid=TEST_${Date.now()}`,
+                "_blank",
+              );
+            }}
             title="Test link in new tab"
           >
             Test
@@ -237,6 +239,20 @@ function VendorAssignedSurveys() {
       <PageHeader
         title="Assigned Surveys"
         subtitle={`Live studies provided to your panel (${activeVendorCode}) with active tracking links.`}
+        actions={
+          <Button
+            variant="secondary"
+            icon={<Link2 size={15} />}
+            onClick={() => {
+              const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
+              const routerUrl = `${origin}/#/router?vid=${encodeURIComponent(activeVendorCode)}&uid=[YOUR_UID]`;
+              navigator.clipboard?.writeText?.(routerUrl);
+              toast("Universal Router Link copied to clipboard!", "success");
+            }}
+          >
+            Copy Router Link
+          </Button>
+        }
       />
 
       <DataTable
@@ -277,15 +293,21 @@ function VendorAssignedSurveys() {
 }
 
 export function Surveys() {
-  const { can, user } = usePermissions();
+  const { user } = usePermissions();
   const isVendor = user?.role_id === 3 || user?.role_name === "Vendor" || user?.role_name?.toLowerCase().includes("vendor");
-  const [tab, setTab] = useState<"market" | "mine">("market");
-  const { toast } = useFeedback();
-  const [syncing, setSyncing] = useState(false);
 
   if (isVendor) {
     return <VendorAssignedSurveys />;
   }
+
+  return <AdminSurveys />;
+}
+
+function AdminSurveys() {
+  const { can } = usePermissions();
+  const [tab, setTab] = useState<"market" | "mine">("market");
+  const { toast } = useFeedback();
+  const [syncing, setSyncing] = useState(false);
 
   const market = useQuery(async () => {
     const [surveysRes, clientsRes] = await Promise.all([
@@ -1284,7 +1306,7 @@ function StudyDetailDrawer({
               <p className="text-[12px] text-ink-3 mb-3">Share this link with your respondents</p>
               <div className="rounded-2xl border border-line bg-surface p-4 space-y-3">
                 <p className="font-mono text-[11.5px] text-ink-2 break-all bg-fill p-2.5 rounded-xl select-all">
-                  {`https://api.vmhgroupsmr.com/#/prescreener?pid=${study.project_id}&vid=${user?.username || "VND"}&uid=[YOUR_UID]`}
+                  {`${typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com"}/#/prescreener?pid=${study.project_id}&vid=${user?.vendor_code || user?.username || "VND"}&uid=[YOUR_UID]`}
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -1292,8 +1314,9 @@ function StudyDetailDrawer({
                     variant="secondary"
                     icon={<Copy size={13} />}
                     onClick={() => {
+                      const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
                       navigator.clipboard?.writeText?.(
-                        `https://api.vmhgroupsmr.com/#/prescreener?pid=${study.project_id}&vid=${user?.username || "VND"}&uid=[YOUR_UID]`
+                        `${origin}/#/prescreener?pid=${study.project_id}&vid=${user?.vendor_code || user?.username || "VND"}&uid=[YOUR_UID]`
                       );
                       toast("Tracking link copied!", "success");
                     }}
@@ -1304,12 +1327,13 @@ function StudyDetailDrawer({
                     size="sm"
                     variant="ghost"
                     icon={<ExternalLink size={13} />}
-                    onClick={() =>
+                    onClick={() => {
+                      const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
                       window.open(
-                        `https://api.vmhgroupsmr.com/#/prescreener?pid=${study.project_id}&vid=${user?.username || "VND"}&uid=TEST_${Date.now()}`,
+                        `${origin}/#/prescreener?pid=${study.project_id}&vid=${user?.vendor_code || user?.username || "VND"}&uid=TEST_${Date.now()}`,
                         "_blank"
-                      )
-                    }
+                      );
+                    }}
                   >
                     Test Link
                   </Button>

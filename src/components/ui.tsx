@@ -103,7 +103,7 @@ export function Card({
     <div
       {...rest}
       className={cn(
-        "rounded-3xl border border-line bg-surface shadow-[var(--shadow-sm)]",
+        "rounded-2xl border border-line bg-surface shadow-[var(--shadow-sm)]",
         hover && "lift cursor-default",
         className,
       )}
@@ -138,7 +138,7 @@ export function SectionTitle({ title, action, hint }: { title: string; hint?: st
 }
 
 /* ───────────── Badge ───────────── */
-export type Tone = "green" | "blue" | "orange" | "red" | "gray" | "purple";
+export type Tone = "green" | "blue" | "orange" | "red" | "gray" | "purple" | "amber" | "sky";
 export function Badge({ tone = "gray", children, dot }: { tone?: Tone; children: ReactNode; dot?: boolean }) {
   const t: Record<Tone, string> = {
     green: "bg-green-soft text-green",
@@ -147,6 +147,8 @@ export function Badge({ tone = "gray", children, dot }: { tone?: Tone; children:
     red: "bg-red-soft text-red",
     gray: "bg-fill text-ink-2",
     purple: "bg-purple-soft text-purple",
+    amber: "bg-amber-500/15 text-amber-500",
+    sky: "bg-sky-500/15 text-sky-500",
   };
   return (
     <span
@@ -401,9 +403,9 @@ export function Modal({
         className={cn(
           "relative flex max-h-[92dvh] w-full flex-col bg-surface text-ink shadow-[var(--shadow-lg)] transition-all duration-200",
           drawer
-            ? cn("h-full max-h-none rounded-none sm:max-w-xl sm:rounded-l-3xl", closing ? "translate-x-full" : "anim-slide-left")
+            ? cn("h-full max-h-none rounded-none sm:max-w-xl sm:rounded-l-2xl", closing ? "translate-x-full" : "anim-slide-left")
             : cn(
-                "rounded-t-[28px] sm:rounded-[28px]",
+                "rounded-t-2xl sm:rounded-2xl",
                 widths[size],
                 closing ? "translate-y-6 opacity-0" : "anim-sheet-up sm:anim-scale-in",
               ),

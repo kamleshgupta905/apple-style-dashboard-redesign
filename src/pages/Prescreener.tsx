@@ -196,12 +196,12 @@ export function Prescreener() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#f8fafc] text-slate-800 flex flex-col items-center justify-center p-4 sm:p-6 font-[-apple-system,BlinkMacSystemFont,'Segoe_UI','Inter',sans-serif]">
+    <div className="min-h-screen w-full bg-[#f6f7f9] text-[#111317] flex flex-col items-center justify-center p-4 sm:p-6">
       {/* Centered White Card (VMH Group Research Screener) */}
-      <div className="relative w-full max-w-[560px] bg-white rounded-[32px] p-7 sm:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.06)] border border-slate-100">
+      <div className="relative w-full max-w-[540px] bg-white rounded-2xl p-6 sm:p-9 shadow-[0_1px_3px_rgba(16,24,40,0.06),0_12px_32px_rgba(16,24,40,0.05)] border border-black/[0.08]">
         
         {/* VMH GROUP Top Branding Header */}
-        <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
+        <div className="flex items-center justify-between pb-4 mb-6 border-b border-black/[0.07]">
           <div className="flex items-center gap-2.5">
             <img
               src="/vmh-logo.png"
@@ -215,13 +215,13 @@ export function Prescreener() {
               <div className="text-[13px] font-bold tracking-tight text-slate-900 uppercase">
                 VMH GROUP
               </div>
-              <div className="text-[10px] text-slate-400 font-medium">
+              <div className="text-[11px] text-slate-500 font-medium">
                 Research Pre-Screener Gate
               </div>
             </div>
           </div>
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             Verified Session
           </span>
         </div>
@@ -229,8 +229,8 @@ export function Prescreener() {
         {/* State 1: Verification Check */}
         {status === "checking" && (
           <div className="py-14 text-center flex flex-col items-center">
-            <div className="w-10 h-10 rounded-full border-2 border-emerald-500/20 border-t-emerald-600 animate-spin mb-4" />
-            <h3 className="text-base font-semibold text-slate-800 mb-1">Verifying session security...</h3>
+            <div className="w-9 h-9 rounded-full border-2 border-emerald-500/20 border-t-emerald-600 animate-spin mb-4" />
+            <h3 className="text-base font-semibold text-slate-900 mb-1">Verifying session security...</h3>
             <p className="text-xs text-slate-500">Checking study parameters and device security</p>
           </div>
         )}
@@ -254,10 +254,10 @@ export function Prescreener() {
             {/* Step 0: Age (Manual numeric entry) */}
             {step === 0 && (
               <div>
-                <h2 className="text-[17px] sm:text-[18px] font-bold text-[#1e293b] text-center leading-snug mb-2 max-w-md mx-auto">
+                <h2 className="text-[18px] font-bold text-slate-900 text-center leading-snug mb-1.5 max-w-md mx-auto">
                   What is your age?
                 </h2>
-                <p className="text-xs text-slate-400 text-center mb-6">
+                <p className="text-xs text-slate-500 text-center mb-6">
                   Please enter your age in years
                 </p>
 
@@ -274,10 +274,10 @@ export function Prescreener() {
                         setAgeError("");
                       }}
                       placeholder="Enter age (e.g. 28)"
-                      className="w-full text-center text-2xl font-bold tracking-tight py-3.5 px-5 rounded-2xl border border-slate-200 bg-white text-slate-900 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 outline-none transition-all shadow-sm placeholder:text-slate-300 placeholder:font-normal placeholder:text-base"
+                      className="w-full text-center text-2xl font-bold tracking-tight tabular-nums py-3 px-4 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-indigo-600 focus:ring-3 focus:ring-indigo-500/15 outline-none transition-all placeholder:text-slate-300 placeholder:font-normal placeholder:text-base"
                     />
                     {ageError && (
-                      <p className="text-xs text-rose-500 font-medium text-center mt-2.5">
+                      <p className="text-xs text-rose-600 font-medium text-center mt-2">
                         {ageError}
                       </p>
                     )}
@@ -286,7 +286,7 @@ export function Prescreener() {
                   <button
                     type="submit"
                     disabled={!ageInput.trim()}
-                    className="mt-6 w-full max-w-xs py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    className="mt-5 w-full max-w-xs py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     Continue
                     <ArrowRight className="w-4 h-4" />
@@ -298,10 +298,10 @@ export function Prescreener() {
             {/* Step 1: Gender (Dropdown box) */}
             {step === 1 && (
               <div>
-                <h2 className="text-[17px] sm:text-[18px] font-bold text-[#1e293b] text-center leading-snug mb-2 max-w-md mx-auto">
+                <h2 className="text-[18px] font-bold text-slate-900 text-center leading-snug mb-1.5 max-w-md mx-auto">
                   What is your gender?
                 </h2>
-                <p className="text-xs text-slate-400 text-center mb-6">
+                <p className="text-xs text-slate-500 text-center mb-6">
                   Please select your gender from the dropdown
                 </p>
 
@@ -315,21 +315,21 @@ export function Prescreener() {
                           setGenderInput(e.target.value);
                           setGenderError("");
                         }}
-                        className="w-full text-base font-medium py-3.5 px-4 rounded-2xl border border-slate-200 bg-white text-slate-800 focus:border-indigo-600 focus:ring-4 focus:ring-indigo-100 outline-none transition-all shadow-sm cursor-pointer appearance-none"
+                        className="w-full text-sm font-medium py-3 px-4 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-indigo-600 focus:ring-3 focus:ring-indigo-500/15 outline-none transition-all cursor-pointer appearance-none"
                       >
                         <option value="">-- Select Gender --</option>
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
                         <option value="Other">Other / Prefer not to say</option>
                       </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-500">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                         </svg>
                       </div>
                     </div>
                     {genderError && (
-                      <p className="text-xs text-rose-500 font-medium text-center mt-2.5">
+                      <p className="text-xs text-rose-600 font-medium text-center mt-2">
                         {genderError}
                       </p>
                     )}
@@ -338,7 +338,7 @@ export function Prescreener() {
                   <button
                     type="submit"
                     disabled={!genderInput}
-                    className="mt-6 w-full max-w-xs py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    className="mt-5 w-full max-w-xs py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     Continue
                     <ArrowRight className="w-4 h-4" />
@@ -350,14 +350,14 @@ export function Prescreener() {
             {/* Step 2: Device (Which device are you using) */}
             {step === 2 && (
               <div>
-                <h2 className="text-[17px] sm:text-[18px] font-bold text-[#1e293b] text-center leading-snug mb-2 max-w-md mx-auto">
+                <h2 className="text-[18px] font-bold text-slate-900 text-center leading-snug mb-1.5 max-w-md mx-auto">
                   Which device are you using to take this survey?
                 </h2>
-                <p className="text-xs text-slate-400 text-center mb-6">
+                <p className="text-xs text-slate-500 text-center mb-6">
                   Select your current device to begin
                 </p>
 
-                <div className="space-y-3 max-w-md mx-auto">
+                <div className="space-y-2.5 max-w-md mx-auto">
                   {DEVICE_OPTIONS.map((opt) => {
                     const isSelected = selectedDevice === opt.id;
                     const IconComponent = opt.icon;
@@ -366,21 +366,21 @@ export function Prescreener() {
                         type="button"
                         key={opt.id}
                         onClick={() => handleDeviceSelect(opt.id)}
-                        className={`w-full flex items-center gap-3.5 px-4.5 py-3.5 rounded-2xl border transition-all cursor-pointer text-left ${
+                        className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl border transition-all cursor-pointer text-left ${
                           isSelected
-                            ? "border-indigo-500 bg-indigo-50/30 shadow-sm"
-                            : "border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/50 bg-white"
+                            ? "border-indigo-600 bg-indigo-50/40"
+                            : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/70 bg-white"
                         }`}
                       >
                         <div
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
                             isSelected ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"
                           }`}
                         >
                           <IconComponent className="w-5 h-5" />
                         </div>
                         <div className="flex-1">
-                          <span className="text-[14.5px] font-semibold text-slate-800 leading-snug block">
+                          <span className="text-[14px] font-semibold text-slate-900 leading-snug block">
                             {opt.label}
                           </span>
                         </div>
@@ -403,20 +403,20 @@ export function Prescreener() {
         {/* State 3: Qualified & Redirecting */}
         {status === "connecting" && (
           <div className="py-10 text-center flex flex-col items-center">
-            <div className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4">
-              <CheckCircle2 className="w-8 h-8" />
+            <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-200/60 text-emerald-600 flex items-center justify-center mb-4">
+              <CheckCircle2 className="w-7 h-7" />
             </div>
-            <h3 className="text-lg font-bold text-slate-800 mb-1">Pre-Screening Complete!</h3>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">Pre-Screening Complete</h3>
             <p className="text-xs text-slate-500 mb-6 max-w-sm">
-              You match the requirements for this study. Transferring you to the research survey now...
+              You match the requirements for this study. Transferring you to the survey in <span className="tabular-nums font-semibold">{redirectCountdown}s</span>...
             </p>
 
-            <div className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-150 text-left">
+            <div className="w-full p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-left">
               <div className="text-xs font-semibold text-indigo-600 mb-1 flex items-center gap-2">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                 Connecting to study...
               </div>
-              <div className="text-[11px] text-slate-400 truncate font-mono">
+              <div className="text-[11px] text-slate-500 truncate font-mono">
                 {finalUrl || "Preparing secure survey link..."}
               </div>
             </div>
@@ -426,17 +426,17 @@ export function Prescreener() {
         {/* State 4: Disqualified (Status 20) */}
         {status === "disqualified" && (
           <div className="py-10 text-center flex flex-col items-center">
-            <div className="w-14 h-14 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mb-4">
-              <AlertTriangle className="w-8 h-8" />
+            <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-200/60 text-amber-600 flex items-center justify-center mb-4">
+              <AlertTriangle className="w-7 h-7" />
             </div>
-            <h3 className="text-lg font-bold text-slate-800 mb-1">Survey Screening Notice</h3>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">Survey Screening Notice</h3>
             <p className="text-xs text-slate-500 mb-6 max-w-sm">
               {blockReason || "Thank you for your time. Unfortunately, the demographic profile needed for this specific survey has already been fulfilled or does not match."}
             </p>
 
             <a
               href={`#/callback?status=20&uid=${encodeURIComponent(uid)}&vid=${encodeURIComponent(vid)}&pid=${encodeURIComponent(pid)}&reason=demographic_screenout`}
-              className="inline-flex items-center justify-center px-8 py-3 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold shadow-sm transition-all"
+              className="inline-flex items-center justify-center px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold transition-colors"
             >
               View Screening Notice
             </a>
@@ -446,17 +446,17 @@ export function Prescreener() {
         {/* State 5: Security Block (Status 40) */}
         {status === "blocked" && (
           <div className="py-10 text-center flex flex-col items-center">
-            <div className="w-14 h-14 rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-4">
-              <AlertTriangle className="w-8 h-8" />
+            <div className="w-12 h-12 rounded-xl bg-rose-50 border border-rose-200/60 text-rose-600 flex items-center justify-center mb-4">
+              <AlertTriangle className="w-7 h-7" />
             </div>
-            <h3 className="text-lg font-bold text-slate-800 mb-1">Verification Unsuccessful</h3>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">Verification Unsuccessful</h3>
             <p className="text-xs text-slate-500 mb-6 max-w-sm">
               {blockReason || "This session could not be verified by the security screening gate."}
             </p>
 
             <a
               href={`#/callback?status=40&uid=${encodeURIComponent(uid)}&vid=${encodeURIComponent(vid)}&pid=${encodeURIComponent(pid)}&reason=security_risk`}
-              className="inline-flex items-center justify-center px-8 py-3 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold shadow-sm transition-all"
+              className="inline-flex items-center justify-center px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold transition-colors"
             >
               View Security Notice
             </a>

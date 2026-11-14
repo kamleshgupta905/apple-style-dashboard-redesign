@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, CheckSquare, Copy, Eye, EyeOff, MinusSquare, Pencil, Plus, Search, Square, Store, Trash2 } from "lucide-react";
 import { api, auth } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
@@ -179,7 +179,7 @@ export function Users() {
             </Badge>
             {isVnd && (
               <span className={cn("text-[11px] font-mono", vCode ? "text-ink-3" : "text-amber-500 font-medium")}>
-                {matchedV ? `${matchedV.vendor_name} (${vCode})` : (vCode ? `Code: ${vCode}` : "⚠️ No vendor linked (Click Edit)")}
+                {matchedV ? `${matchedV.vendor_name} (${vCode})` : (vCode ? `Code: ${vCode}` : "No vendor linked (Click Edit)")}
               </span>
             )}
           </div>
@@ -334,7 +334,6 @@ function UserForm({
   const [permFilter, setPermFilter] = useState("");
   const [tab, setTab] = useState<"profile" | "access">("profile");
   const [busy, setBusy] = useState(false);
-  const [key, setKey] = useState<unknown>(null);
   const u = state?.user;
 
   const sanitizedRoles = useMemo(() => {
@@ -363,8 +362,8 @@ function UserForm({
     });
   }, [roles]);
 
-  if (state && key !== state) {
-    setKey(state);
+  useEffect(() => {
+    if (!state) return;
     setTab("profile");
     setPermFilter("");
     setRevealCurrent(false);
@@ -388,7 +387,7 @@ function UserForm({
       VENDOR_DEFAULT_PERMISSIONS.forEach((id) => initSet.add(id));
     }
     setCheckedIds(initSet);
-  }
+  }, [state, u]);
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const val = e.target.value;

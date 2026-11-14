@@ -39,16 +39,49 @@ export function Leads() {
   const vendorsQuery = useQuery(async () => (await api.get<{ data: any[] }>("/vendors")).data || [], []);
   const uName = (user?.username || "").toLowerCase().trim();
   const rName = (user?.name || "").toLowerCase().trim();
+  const uEmail = (user?.email || "").toLowerCase().trim();
+  const uVendorCode = (user?.vendor_code || user?.vendor_id || user?.supplier_id || "").toLowerCase().trim();
 
-  const activeVendorCode = useMemo(() => {
-    if (!isVendor) return "";
-    const found = (vendorsQuery.data || []).find((v: any) => {
-      const vc = (v.vendor_code || "").toLowerCase().trim();
-      const vn = (v.vendor_name || "").toLowerCase().trim();
-      return vc === uName || vc === rName || vn === uName || vn === rName;
-    });
-    return found?.vendor_code || user?.username || "VND";
-  }, [isVendor, vendorsQuery.data, uName, rName, user]);
+  const matchedVendor = useMemo(() => {
+    if (!isVendor) return null;
+    return (vendorsQuery.data || []).find((v: any) => {
+      const vc = (v.vendor_code || v.vendor_id || "").toLowerCase().trim();
+      const vn = (v.vendor_name || v.name || "").toLowerCase().trim();
+      const ve = (v.email || "").toLowerCase().trim();
+      const vid = String(v.id || "").toLowerCase().trim();
+      return (
+        (uVendorCode && (vc === uVendorCode || vid === uVendorCode || vn === uVendorCode)) ||
+        (vc && (vc === uName || vc === rName)) ||
+        (vn && (vn === uName || vn === rName)) ||
+        (ve && uEmail && ve === uEmail)
+      );
+    }) || null;
+  }, [isVendor, vendorsQuery.data, uVendorCode, uName, rName, uEmail]);
+
+  const vendorIdentifiers = useMemo(() => {
+    const set = new Set<string>();
+    if (uVendorCode) set.add(uVendorCode);
+    if (user?.vendor_code) set.add(user.vendor_code.toLowerCase().trim());
+    if (user?.vendor_id) set.add(String(user.vendor_id).toLowerCase().trim());
+    if (user?.supplier_id) set.add(user.supplier_id.toLowerCase().trim());
+    if (matchedVendor) {
+      if (matchedVendor.vendor_code) set.add(matchedVendor.vendor_code.toLowerCase().trim());
+      if (matchedVendor.vendor_id) set.add(String(matchedVendor.vendor_id).toLowerCase().trim());
+      if (matchedVendor.vendor_name) set.add(matchedVendor.vendor_name.toLowerCase().trim());
+      if (matchedVendor.name) set.add(matchedVendor.name.toLowerCase().trim());
+      if (matchedVendor.id != null) set.add(String(matchedVendor.id).toLowerCase().trim());
+    }
+    if (uName) set.add(uName);
+    if (rName) set.add(rName);
+    return set;
+  }, [uVendorCode, user, matchedVendor, uName, rName]);
+
+  const activeVendorCode =
+    user?.vendor_code ||
+    matchedVendor?.vendor_code ||
+    user?.supplier_id ||
+    user?.username ||
+    "VND";
 
   const q = useQuery(
     async () => {
@@ -67,26 +100,22 @@ export function Leads() {
   const [vendor, setVendor] = useState("all");
   const [open, setOpen] = useState<Lead | null>(null);
 
-  // Filter leads specifically for this vendor if isVendor is true
+  // Filter leads strictly for this vendor if isVendor is true
   const filteredLeads = useMemo(() => {
     const raw = q.data?.leads || [];
     if (!isVendor) return raw;
-    const vc = activeVendorCode.toLowerCase();
-    const un = uName;
-    const rn = rName;
-    return raw.filter((l) => {
+    if (vendorsQuery.loading && !vendorsQuery.data) return [];
+    return raw.filter((l: any) => {
       const lvc = (l.vendor_code || "").toLowerCase().trim();
       const lvn = (l.vendor_name || "").toLowerCase().trim();
+      const lvid = (l.vendor_id || "").toLowerCase().trim();
       return (
-        lvc === vc ||
-        lvn === vc ||
-        lvc === un ||
-        lvn === rn ||
-        (vc && lvc.includes(vc)) ||
-        (rn && lvn.includes(rn))
+        (lvc && vendorIdentifiers.has(lvc)) ||
+        (lvn && vendorIdentifiers.has(lvn)) ||
+        (lvid && vendorIdentifiers.has(lvid))
       );
     });
-  }, [q.data?.leads, isVendor, activeVendorCode, uName, rName]);
+  }, [q.data?.leads, isVendor, vendorsQuery.loading, vendorsQuery.data, vendorIdentifiers]);
 
   const vendors = useMemo(() => [...new Set(q.data?.leads?.map((l) => l.vendor_code) || [])], [q.data?.leads]);
   const statuses = useMemo(() => [...new Set(filteredLeads.map((l) => l.status))], [filteredLeads]);
@@ -142,7 +171,16 @@ export function Leads() {
     ];
   }, [isVendor, s, filteredLeads]);
 
-  const counts = (st: string) => filteredLeads.filter((l) => l.status === st).length;
+  const counts = (bucket: string) => {
+    return filteredLeads.filter((l) => {
+      const s = String(l.status || "").toLowerCase().trim();
+      if (bucket === "Complete") return ["complete", "completed", "10"].includes(s);
+      if (bucket === "Pending") return ["pending", "started", ""].includes(s);
+      if (bucket === "Terminates") return ["terminate", "terminates", "terminated", "overquota", "quota full", "quotafull", "20", "30"].includes(s);
+      if (bucket === "Security") return ["security", "security terminate", "quality_terminate", "40", "blocked"].includes(s);
+      return l.status === bucket;
+    }).length;
+  };
 
   return (
     <div>
@@ -181,7 +219,7 @@ export function Leads() {
         {tiles.map((t) => (
           <Card key={t.label} className="p-4 sm:p-5">
             <p className="text-[13px] font-medium text-ink-3">{t.label}</p>
-            <p className={cn("mt-0.5 text-[28px] font-bold tracking-tight", t.tone)}>
+            <p className={cn("mt-0.5 text-[28px] font-bold tracking-tight tabular", t.tone)}>
               <CountUp value={t.value} suffix={t.suffix} />
             </p>
           </Card>
@@ -193,13 +231,8 @@ export function Leads() {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-[14px] font-semibold">Outcome mix</p>
             <div className="flex items-center gap-1.5 text-[12px] text-ink-3">
-              {live && (
-                <span className="relative mr-1 flex h-2 w-2">
-                  <span className="anim-ping absolute inline-flex h-full w-full rounded-full bg-green" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
-                </span>
-              )}
-              {live ? "Live · every 10s" : "Paused"}
+              <span className={cn("h-2 w-2 rounded-full", live ? "bg-green" : "bg-ink-3/40")} />
+              {live ? "Auto-refresh · 10s" : "Paused"}
             </div>
           </div>
           <Stacked
@@ -207,7 +240,7 @@ export function Leads() {
               { label: "Complete", value: counts("Complete"), color: "var(--green)" },
               { label: "Pending", value: counts("Pending"), color: "var(--orange)" },
               { label: "Terminates", value: counts("Terminates"), color: "var(--red)" },
-              { label: "Security", value: counts("Security Terminate"), color: "var(--purple)" },
+              { label: "Security", value: counts("Security"), color: "var(--purple)" },
             ]}
           />
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-ink-2">
@@ -215,7 +248,7 @@ export function Leads() {
               ["Complete", "var(--green)"],
               ["Pending", "var(--orange)"],
               ["Terminates", "var(--red)"],
-              ["Security Terminate", "var(--purple)"],
+              ["Security", "var(--purple)"],
             ].map(([k, c]) => (
               <span key={k} className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full" style={{ background: c }} />

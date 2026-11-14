@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Building2, Eye, EyeOff, Pencil, Plug, Plus, ShieldCheck, Trash2, Link2, Copy, Check, Sparkles, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Building2, Eye, EyeOff, Pencil, Plug, Plus, ShieldCheck, Trash2, Link2, Copy, Check, RefreshCw } from "lucide-react";
 import { api, type Client } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { initials, mask } from "../lib/utils";
@@ -245,7 +245,7 @@ export function Clients() {
       {q.loading ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-44 rounded-3xl" />
+            <Skeleton key={i} className="h-44 rounded-2xl" />
           ))}
         </div>
       ) : rows.length === 0 ? (
@@ -597,16 +597,16 @@ function ClientForm({
   const { toast } = useFeedback();
   const [v, setV] = useState(blank);
   const [busy, setBusy] = useState(false);
-  const [key, setKey] = useState<unknown>(null);
   const [manualCode, setManualCode] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
 
-  if (state && key !== state) {
-    setKey(state);
-    setV(state.values);
-    setManualCode(!!state.id);
-    setCopiedAll(false);
-  }
+  useEffect(() => {
+    if (state) {
+      setV(state.values);
+      setManualCode(!!state.id);
+      setCopiedAll(false);
+    }
+  }, [state]);
 
   const handleClientNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const name = e.target.value;
@@ -647,12 +647,12 @@ function ClientForm({
 
   const handleCopyAll = () => {
     const text =
-      `🎯 *VMH GROUP API Tool Inbound Redirect URLs for ${v.client_name || previewCode}*\n` +
+      `*VMH GROUP API Tool Inbound Redirect URLs for ${v.client_name || previewCode}*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `1. ✅ COMPLETE / SUCCESS:\n${compUrl}\n\n` +
-      `2. ❌ TERMINATE / SCREENOUT:\n${termUrl}\n\n` +
-      `3. ⚠️ OVERQUOTA / QUOTA FULL:\n${oqUrl}\n\n` +
-      `4. 🚫 SECURITY / QUALITY SCREENOUT:\n${secUrl}\n\n` +
+      `1. COMPLETE / SUCCESS:\n${compUrl}\n\n` +
+      `2. TERMINATE / SCREENOUT:\n${termUrl}\n\n` +
+      `3. OVERQUOTA / QUOTA FULL:\n${oqUrl}\n\n` +
+      `4. SECURITY / QUALITY SCREENOUT:\n${secUrl}\n\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
     navigator.clipboard?.writeText?.(text);
     setCopiedAll(true);

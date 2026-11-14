@@ -90,7 +90,7 @@ function useTheme() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
     localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#000000" : "#f5f5f7");
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#0b0c0e" : "#f6f7f9");
   }, [dark]);
   return [dark, setDark] as const;
 }
@@ -115,7 +115,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode; route: string }
     if (this.state.hasError) {
       return (
         <div className="flex min-h-[50vh] flex-col items-center justify-center p-6 text-center">
-          <div className="max-w-md rounded-3xl border border-line bg-surface p-6 shadow-sm">
+          <div className="max-w-md rounded-2xl border border-line bg-surface p-6 shadow-sm">
             <h3 className="text-[17px] font-semibold text-ink">Something went wrong on this page</h3>
             <p className="mt-2 text-[13px] text-ink-3">
               {this.state.error?.message || "An unexpected error occurred while rendering this module."}
@@ -151,10 +151,10 @@ class RootErrorBoundary extends Component<{ children: ReactNode }, { hasError: b
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center bg-[#000000] text-white font-[-apple-system,BlinkMacSystemFont,'Segoe_UI','Inter',sans-serif]">
-          <div className="w-full max-w-md rounded-[28px] border border-white/10 bg-[#1c1c1e] p-8 shadow-2xl">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-400">
-              <Lock size={26} />
+        <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center bg-[#0b0c0e] text-white">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15171b] p-8 shadow-2xl">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/15 text-amber-400">
+              <Lock size={22} />
             </div>
             <h2 className="text-xl font-bold tracking-tight text-white">VMH GROUP · API Tool</h2>
             <p className="mt-2 text-sm text-slate-400">
@@ -162,7 +162,7 @@ class RootErrorBoundary extends Component<{ children: ReactNode }, { hasError: b
             </p>
             <button
               type="button"
-              className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-blue-500 transition-all cursor-pointer"
+              className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-colors cursor-pointer"
               onClick={() => {
                 window.location.hash = "/dashboard";
                 window.location.reload();
@@ -183,14 +183,30 @@ export default function App() {
   const route = useRoute();
   const [dark, setDark] = useTheme();
 
-  // Refresh latest permissions from MySQL / server on mount
+  // Refresh latest permissions once per signed-in user session
+  const userId = user?.id;
   useEffect(() => {
-    if (user) {
-      refreshCurrentUser().then((fresh) => {
-        if (fresh) setUser(fresh);
+    if (!userId) return;
+    let active = true;
+    refreshCurrentUser().then((fresh) => {
+      if (!active || !fresh) return;
+      setUser((prev) => {
+        if (!prev) return fresh;
+        const same =
+          prev.id === fresh.id &&
+          prev.name === fresh.name &&
+          prev.role_id === fresh.role_id &&
+          prev.role_name === fresh.role_name &&
+          prev.vendor_code === fresh.vendor_code &&
+          JSON.stringify(prev.menu_permissions || []) === JSON.stringify(fresh.menu_permissions || []) &&
+          JSON.stringify(prev.granular_permissions || {}) === JSON.stringify(fresh.granular_permissions || {});
+        return same ? prev : fresh;
       });
-    }
-  }, [user]);
+    });
+    return () => {
+      active = false;
+    };
+  }, [userId]);
 
   const logout = useCallback(() => {
     try {
@@ -256,13 +272,17 @@ export default function App() {
   const page = () => {
     if (!user) return null;
 
+    const isVendorUser = user.role_id === 3 || user.role_name === "Vendor" || user.role_name?.toLowerCase().includes("vendor");
+    const vendorBlockedRoutes = new Set(["bids", "clients", "vendors", "security", "users", "team", "reference"]);
+
     // Check module permission for the route
     const reqPerm = ROUTE_PERM[route];
     const allowed =
-      !reqPerm ||
-      (Array.isArray(reqPerm)
-        ? reqPerm.some((p) => hasModuleAccess(user, p))
-        : hasModuleAccess(user, reqPerm));
+      (!isVendorUser || !vendorBlockedRoutes.has(route)) &&
+      (!reqPerm ||
+        (Array.isArray(reqPerm)
+          ? reqPerm.some((p) => hasModuleAccess(user, p))
+          : hasModuleAccess(user, reqPerm)));
     if (!allowed) {
       return (
         <div className="flex min-h-[55vh] flex-col items-center justify-center text-center px-4">

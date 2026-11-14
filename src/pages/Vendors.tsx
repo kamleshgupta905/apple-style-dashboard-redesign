@@ -42,57 +42,9 @@ import { EditAllotmentModal } from "../components/EditAllotmentModal";
 import { VendorIntegrationModal } from "../components/VendorIntegrationModal";
 import { PERMS, usePermissions } from "../lib/permissions";
 import { useRealtime } from "../lib/useRealtime";
+import { DEFAULT_COUNTRIES } from "../lib/data";
 
-export const DEFAULT_COUNTRIES = [
-  { id: 1, name: "United States", code: "US" },
-  { id: 2, name: "United Kingdom", code: "GB" },
-  { id: 3, name: "Canada", code: "CA" },
-  { id: 4, name: "Australia", code: "AU" },
-  { id: 5, name: "India", code: "IN" },
-  { id: 6, name: "Germany", code: "DE" },
-  { id: 7, name: "France", code: "FR" },
-  { id: 8, name: "Italy", code: "IT" },
-  { id: 9, name: "Spain", code: "ES" },
-  { id: 10, name: "Japan", code: "JP" },
-  { id: 11, name: "Brazil", code: "BR" },
-  { id: 12, name: "Mexico", code: "MX" },
-  { id: 13, name: "Netherlands", code: "NL" },
-  { id: 14, name: "Sweden", code: "SE" },
-  { id: 15, name: "Switzerland", code: "CH" },
-  { id: 16, name: "Singapore", code: "SG" },
-  { id: 17, name: "New Zealand", code: "NZ" },
-  { id: 18, name: "South Africa", code: "ZA" },
-  { id: 19, name: "United Arab Emirates", code: "AE" },
-  { id: 20, name: "Saudi Arabia", code: "SA" },
-  { id: 21, name: "Poland", code: "PL" },
-  { id: 22, name: "Turkey", code: "TR" },
-  { id: 23, name: "Indonesia", code: "ID" },
-  { id: 24, name: "Philippines", code: "PH" },
-  { id: 25, name: "Vietnam", code: "VN" },
-  { id: 26, name: "Thailand", code: "TH" },
-  { id: 27, name: "Malaysia", code: "MY" },
-  { id: 28, name: "Argentina", code: "AR" },
-  { id: 29, name: "Chile", code: "CL" },
-  { id: 30, name: "Colombia", code: "CO" },
-  { id: 31, name: "Peru", code: "PE" },
-  { id: 32, name: "Egypt", code: "EG" },
-  { id: 33, name: "Nigeria", code: "NG" },
-  { id: 34, name: "Kenya", code: "KE" },
-  { id: 35, name: "South Korea", code: "KR" },
-  { id: 36, name: "Ireland", code: "IE" },
-  { id: 37, name: "Belgium", code: "BE" },
-  { id: 38, name: "Austria", code: "AT" },
-  { id: 39, name: "Portugal", code: "PT" },
-  { id: 40, name: "Denmark", code: "DK" },
-  { id: 41, name: "Norway", code: "NO" },
-  { id: 42, name: "Finland", code: "FI" },
-  { id: 43, name: "Czech Republic", code: "CZ" },
-  { id: 44, name: "Romania", code: "RO" },
-  { id: 45, name: "Israel", code: "IL" },
-  { id: 46, name: "Greece", code: "GR" },
-  { id: 47, name: "Hungary", code: "HU" },
-  { id: 48, name: "Hong Kong", code: "HK" },
-];
+export { DEFAULT_COUNTRIES };
 
 interface VRow {
   code: string;
@@ -740,10 +692,9 @@ function VendorForm({
     contacts: [] as Array<{ name: string; email: string; phone?: string; role?: string }>,
   });
   const [busy, setBusy] = useState(false);
-  const [key, setKey] = useState<unknown>(null);
 
-  if (state && key !== state) {
-    setKey(state);
+  useEffect(() => {
+    if (!state) return;
     setTab("general");
     setShowRedirects(false);
     setCountryFilter("");
@@ -776,7 +727,7 @@ function VendorForm({
     } else {
       setManualCode(false);
       setV({
-        code: "",
+        code: getNextVendorCode(existingVendors),
         name: "",
         email: "",
         phone: "",
@@ -793,24 +744,18 @@ function VendorForm({
         contacts: [],
       });
     }
-  }
+  }, [state, existingVendors]);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const name = e.target.value;
-    setV((prev) => {
-      const next = { ...prev, name };
-      if (!manualCode && !state?.vendor) {
-        next.code = name.toLowerCase().replace(/[^a-z0-9]/g, "-").slice(0, 20);
-      }
-      return next;
-    });
+    setV((prev) => ({ ...prev, name }));
   };
 
   const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setManualCode(true);
     setV((prev) => ({
       ...prev,
-      code: e.target.value.toLowerCase().replace(/\s+/g, "-"),
+      code: e.target.value.toUpperCase().replace(/\s+/g, "-"),
     }));
   };
 
@@ -824,12 +769,8 @@ function VendorForm({
 
   const save = async () => {
     if (!v.name.trim()) return toast("Vendor name is required.", "error");
-    const code = (
-      v.code ||
-      v.name.toLowerCase().replace(/[^a-z0-9]/g, "-").slice(0, 20) ||
-      getNextVendorCode(existingVendors)
-    ).trim();
-    if (!code) return toast("Vendor code/slug is required.", "error");
+    const code = (v.code.trim() || getNextVendorCode(existingVendors)).trim();
+    if (!code) return toast("Vendor ID is required.", "error");
 
     const share = num(v.share, 70);
     const cpiVal = parseFloat(v.cpi) || 0;
@@ -885,7 +826,7 @@ function VendorForm({
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button loading={busy} onClick={save} icon={<Plus size={16} />}>
+          <Button loading={busy} onClick={save} icon={state?.vendor ? undefined : <Plus size={16} />}>
             {state?.vendor ? "Save Vendor Panel" : "Create Vendor"}
           </Button>
         </>
@@ -963,16 +904,36 @@ function VendorForm({
             </Field>
 
             <Field
-              label="Unique Vendor Code / Slug *"
-              hint={!state?.vendor ? "Unique identifier for traffic routing and entry links" : undefined}
+              label="Vendor ID / Code (Auto-generated)"
+              hint={!state?.vendor ? "Automatically assigned sequential ID for traffic routing and entry links" : undefined}
             >
-              <Input
-                required
-                value={v.code}
-                onChange={handleCodeChange}
-                placeholder="e.g. VND-DYN-01, pure-spectrum"
-                className="font-mono"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  required
+                  value={v.code}
+                  readOnly={!state?.vendor && !manualCode}
+                  onChange={handleCodeChange}
+                  placeholder="VND001"
+                  className="font-mono font-semibold"
+                />
+                {!state?.vendor && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      if (!manualCode) {
+                        setManualCode(true);
+                      } else {
+                        setManualCode(false);
+                        setV((p) => ({ ...p, code: getNextVendorCode(existingVendors) }));
+                      }
+                    }}
+                  >
+                    {manualCode ? "Auto ID" : "Edit"}
+                  </Button>
+                )}
+              </div>
             </Field>
 
             <Field label="Contact Email">
