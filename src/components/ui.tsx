@@ -620,8 +620,8 @@ export function DataTable<T>({
         onClick();
       }}
       className={cn(
-        "flex h-5 w-5 cursor-pointer items-center justify-center rounded-md border transition-all duration-200",
-        on ? "border-accent bg-accent text-white" : "border-line-strong bg-surface",
+        "flex h-5 w-5 cursor-pointer items-center justify-center rounded-md border transition-all duration-200 active:scale-90",
+        on ? "border-accent bg-accent text-white shadow-xs" : "border-line-strong bg-surface hover:border-accent/60",
       )}
     >
       {on && <Check_ />}

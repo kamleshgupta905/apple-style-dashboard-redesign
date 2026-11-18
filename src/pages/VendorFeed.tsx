@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Copy, Check, Database, BookOpen } from "lucide-react";
-import { supabase } from "../lib/supabase";
+import { api } from "../lib/api";
+import { getPublicOrigin } from "../lib/data";
 import { usePermissions } from "../lib/permissions";
 import { num } from "../lib/utils";
 
@@ -18,13 +19,18 @@ export function VendorFeed() {
     : "";
   const params = useMemo(() => new URLSearchParams(queryStr), [queryStr]);
   const paramVid =
-    params.get("vid") || params.get("vendor_code") || params.get("vendor_id") || params.get("v") || params.get("access_key") || "";
+    params.get("vid") ||
+    params.get("vendor_code") ||
+    params.get("vendor_id") ||
+    params.get("v") ||
+    params.get("access_key") ||
+    "";
   const activeVid = (paramVid || user?.vendor_code || user?.supplier_id || (user?.role_id === 3 ? user?.username : "") || "").trim();
 
   useEffect(() => {
     const fetchFeed = async () => {
       setLoading(true);
-      const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
+      const origin = getPublicOrigin();
 
       if (!activeVid) {
         setFeedData({
@@ -40,50 +46,51 @@ export function VendorFeed() {
       }
 
       try {
-        const { data: allotments } = await supabase
-          .from("smr_vendor_allotments")
-          .select("*")
-          .ilike("vendor_id", activeVid);
+        const [allotsRes, projectsRes, marketRes] = await Promise.all([
+          api.get<{ data: any[] }>("/vendor/allotments").catch(() => ({ data: [] })),
+          api.get<{ data: any[] }>("/manage/projects").catch(() => ({ data: [] })),
+          api.get<{ data: any[] }>("/zamplia").catch(() => ({ data: [] })),
+        ]);
 
-        const activeAllots = (allotments || []).filter(
-          (a: any) => !a.status || ["active", "live"].includes(String(a.status).toLowerCase()),
+        const vidLower = activeVid.toLowerCase();
+        const activeAllots = (allotsRes.data || []).filter((a: any) => {
+          const avid = String(a.vendor_id || "").toLowerCase().trim();
+          const avname = String(a.vendor_name || "").toLowerCase().trim();
+          const isActive = !a.status || ["active", "live"].includes(String(a.status).toLowerCase());
+          return isActive && (avid === vidLower || avname === vidLower);
+        });
+
+        const projMap = new Map<string, any>(
+          (projectsRes.data || []).map((p: any) => [String(p.project_id || "").trim(), p]),
         );
-
-        const projectIds = activeAllots.map((a: any) => String(a.project_id));
-        const { data: projects } = await supabase
-          .from("smr_projects")
-          .select("project_id, project_name, cpi, loi, ir, country, status, target_completes")
-          .in("project_id", projectIds.length > 0 ? projectIds : ["__none__"]);
-
-        const projMap = new Map((projects || []).map((p: any) => [String(p.project_id), p]));
+        const marketMap = new Map<string, any>(
+          (marketRes.data || []).map((m: any) => [String(m.survey_id ?? m.SurveyId ?? m.project_id ?? m.id ?? "").trim(), m]),
+        );
 
         const studies = activeAllots
           .filter((a: any) => {
-            const p = projMap.get(String(a.project_id));
-            if (p) {
-              return ["live", "active"].includes(String(p.status || "").toLowerCase());
-            }
-            // Include uncloned Marketplace numeric IDs directly allotted to this vendor
-            return /^\d{8,12}$/.test(String(a.project_id || "").trim());
+            const pid = String(a.project_id || "").trim();
+            const p = projMap.get(pid);
+            if (p) return !p.status || ["live", "active"].includes(String(p.status).toLowerCase());
+            return true;
           })
           .map((a: any) => {
-            const pid = String(a.project_id);
+            const pid = String(a.project_id || "").trim();
             const p = projMap.get(pid);
+            const m = marketMap.get(pid);
             const quotaLimit = num(a.quota_limit, 100);
             const completesRecorded = num(a.complete_count, 0);
             const remainingQuota = Math.max(0, quotaLimit - completesRecorded);
             return {
               survey_id: pid,
-              survey_name: p?.project_name || `Study #${pid}`,
+              survey_name: p?.project_name || m?.survey_name || m?.name || m?.Name || `Study #${pid}`,
               brand: "VMH GROUP",
               cpi: Number(num(a.vendor_cpi).toFixed(2)),
               currency: "USD",
-              loi_minutes: num(p?.loi, 10),
-              ir_percentage: num(p?.ir, 70),
-              quota_limit: quotaLimit,
-              completes_recorded: completesRecorded,
+              loi_minutes: num(p?.loi ?? m?.loi ?? m?.LOI, 10),
+              ir_percentage: num(p?.ir ?? m?.ir ?? m?.IR, 70),
               remaining_quota: remainingQuota,
-              country: p?.country || "US",
+              country: p?.country || m?.country || "US",
               status: "Live",
               entry_link: `${origin}/#/prescreener?pid=${encodeURIComponent(pid)}&vid=${encodeURIComponent(activeVid)}&uid=[RESPONDENT_ID]`,
             };
@@ -92,8 +99,7 @@ export function VendorFeed() {
         setFeedData({
           success: true,
           brand: "VMH GROUP",
-          endpoint: "VMH GROUP Partner Supply Inventory Feed",
-          partner_code: activeVid,
+          partner_id: activeVid,
           total_active_surveys: studies.length,
           generated_at: new Date().toISOString(),
           universal_router_url: `${origin}/#/router?vid=${encodeURIComponent(activeVid)}&uid=[RESPONDENT_ID]`,
@@ -126,18 +132,18 @@ export function VendorFeed() {
             </div>
             <div>
               <div className="text-sm font-semibold text-white flex items-center gap-2 font-sans">
-                VMH GROUP · Partner Live Survey Feed
+                VMH GROUP · Partner Survey Feed
                 <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                   {feedData?.total_active_surveys ?? 0} Allotted
                 </span>
               </div>
               <div className="text-[11px] text-white/50">
-                Partner: <span className="text-indigo-400">{activeVid || "REQUIRED"}</span> · Strictly scoped JSON inventory
+                Partner ID: <span className="text-indigo-400">{activeVid || "REQUIRED"}</span> · Assigned surveys only
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={copyJson}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition cursor-pointer"
@@ -146,17 +152,11 @@ export function VendorFeed() {
               {copied ? "Copied JSON" : "Copy JSON Feed"}
             </button>
             <a
-              href="#/api-docs"
+              href={`#/api-docs?vid=${encodeURIComponent(activeVid)}&section=supply`}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 text-xs transition font-sans"
             >
               <BookOpen className="w-3.5 h-3.5" />
               API Docs
-            </a>
-            <a
-              href="#/surveys"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 text-xs transition font-sans"
-            >
-              My Surveys
             </a>
           </div>
         </div>

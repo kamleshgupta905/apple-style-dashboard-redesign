@@ -114,9 +114,16 @@ export async function fetchVendorOptions(): Promise<VendorOption[]> {
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export function getPublicOrigin(): string {
+  if (typeof window === "undefined") return "https://api.vmhgroupsmr.com";
+  const host = window.location.hostname || "";
+  if (host.includes("vmhgroupsmr.com")) return window.location.origin;
+  return "https://api.vmhgroupsmr.com";
+}
+
 export const entryLink = (vendorOrProject: string, maybeProject?: string) => {
   if (maybeProject) {
-    return `https://api.vmhgroupsmr.com/vendor/auth/${encodeURIComponent(vendorOrProject)}/project/${encodeURIComponent(maybeProject)}?uid=[RESPONDENT_ID]`;
+    return `${getPublicOrigin()}/vendor/auth/${encodeURIComponent(vendorOrProject)}/project/${encodeURIComponent(maybeProject)}?uid=[RESPONDENT_ID]`;
   }
   // Single argument passed: project/study ID -> route via default inhouse vendor VI010032025
   return `https://api.vmhgroupsmr.com/vendor/auth/VI010032025/project/${encodeURIComponent(vendorOrProject)}?uid=[RESPONDENT_ID]`;

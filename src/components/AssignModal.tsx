@@ -328,26 +328,36 @@ export function AssignModal({
                 filteredVendors.map((v) => {
                   const isChecked = selectedVendors.includes(v.code);
                   return (
-                    <label
+                    <div
                       key={v.code}
+                      role="checkbox"
+                      aria-checked={isChecked}
+                      tabIndex={0}
                       onClick={() => toggleVendor(v.code)}
+                      onKeyDown={(e) => {
+                        if (e.key === " " || e.key === "Enter") {
+                          e.preventDefault();
+                          toggleVendor(v.code);
+                        }
+                      }}
                       className={cn(
-                        "flex items-center gap-3 rounded-xl px-3 py-2 cursor-pointer transition select-none",
-                        isChecked ? "bg-accent-soft/40 text-accent font-medium" : "hover:bg-fill text-ink",
+                        "flex items-center gap-3 rounded-xl px-3 py-2 cursor-pointer transition-all duration-150 select-none active:scale-[0.99]",
+                        isChecked ? "bg-accent-soft/45 text-accent font-medium" : "hover:bg-fill text-ink",
                       )}
                     >
                       <input
                         type="checkbox"
                         checked={isChecked}
-                        onChange={() => {}} // handled by parent onClick
-                        className="h-4 w-4 rounded accent-accent cursor-pointer"
+                        readOnly
+                        tabIndex={-1}
+                        className="h-4 w-4 rounded accent-accent pointer-events-none"
                       />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[13px]">{v.name}</p>
                         <p className="font-mono text-[11px] text-ink-3">{v.code}</p>
                       </div>
                       <Badge tone="gray">{v.sharePct}% share</Badge>
-                    </label>
+                    </div>
                   );
                 })
               )}

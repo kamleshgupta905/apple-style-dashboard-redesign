@@ -3,6 +3,7 @@
  * Powered by Supabase PostgreSQL (kamleshgupta905's Project in ap-south-1).
  */
 import { supabase } from "./supabase";
+import { emitRealtimeEvent } from "./useRealtime";
 import { DEFAULT_COUNTRIES } from "./data";
 
 const BASE: string = (import.meta.env.VITE_API_URL as string | undefined) || "https://api.vmhgroupsmr.com/api";
@@ -899,12 +900,25 @@ export const api = {
         request("POST", path, { body: p }).catch(() => {});
 
         if (p.id && !isDuplicate) {
-          const { data, error } = await supabase.from("smr_projects").update(payload).eq("id", p.id).select().single();
-          if (error) throw error;
-          return { success: true, data } as unknown as T;
+          const { data: updated, error: updErr } = await supabase
+            .from("smr_projects")
+            .update(payload)
+            .eq("project_id", payload.project_id)
+            .select()
+            .maybeSingle();
+          if (updErr) throw updErr;
+          if (updated) {
+            emitRealtimeEvent("smr_projects", { eventType: "UPDATE", new: updated });
+            return { success: true, data: updated } as unknown as T;
+          }
+          const { data: inserted, error: insErr } = await supabase.from("smr_projects").insert([payload]).select().single();
+          if (insErr) throw insErr;
+          emitRealtimeEvent("smr_projects", { eventType: "INSERT", new: inserted });
+          return { success: true, data: inserted } as unknown as T;
         } else {
           const { data, error } = await supabase.from("smr_projects").insert([payload]).select().single();
           if (error) throw error;
+          emitRealtimeEvent("smr_projects", { eventType: "INSERT", new: data });
           return { success: true, data } as unknown as T;
         }
       }
@@ -937,10 +951,12 @@ export const api = {
         if (c.id) {
           const { data, error } = await supabase.from("smr_clients").update(payload).eq("id", c.id).select().single();
           if (error) throw error;
+          emitRealtimeEvent("smr_clients", { eventType: "UPDATE", new: data });
           return { success: true, data } as unknown as T;
         } else {
           const { data, error } = await supabase.from("smr_clients").insert([payload]).select().single();
           if (error) throw error;
+          emitRealtimeEvent("smr_clients", { eventType: "INSERT", new: data });
           return { success: true, data } as unknown as T;
         }
       }
@@ -950,6 +966,7 @@ export const api = {
           .update({ security_enabled: body.security_enabled })
           .eq("id", body.client_id);
         if (error) throw error;
+        emitRealtimeEvent("smr_clients", { eventType: "UPDATE" });
         return { success: true } as unknown as T;
       }
       if (path === "/clients/toggle-status" || path === "/clients/status") {
@@ -959,6 +976,7 @@ export const api = {
           .update({ status: statusVal, updated_at: new Date().toISOString() })
           .eq("id", body.client_id || body.id);
         if (error) throw error;
+        emitRealtimeEvent("smr_clients", { eventType: "UPDATE" });
         return { success: true, status: statusVal } as unknown as T;
       }
 
@@ -1005,6 +1023,7 @@ export const api = {
           const id = v.id || v.dbId;
           const { data, error } = await supabase.from("smr_vendors").update(payload).eq("id", id).select().single();
           if (error) throw error;
+          emitRealtimeEvent("smr_vendors", { eventType: "UPDATE", new: data });
           return { success: true, data } as unknown as T;
         } else {
           const { data: existing } = await supabase
@@ -1021,6 +1040,7 @@ export const api = {
               .select()
               .single();
             if (error) throw error;
+            emitRealtimeEvent("smr_vendors", { eventType: "UPDATE", new: data });
             return { success: true, data } as unknown as T;
           } else {
             payload.created_at = new Date().toISOString();
@@ -1030,6 +1050,7 @@ export const api = {
               .select()
               .single();
             if (error) throw error;
+            emitRealtimeEvent("smr_vendors", { eventType: "INSERT", new: data });
             return { success: true, data } as unknown as T;
           }
         }
@@ -1070,6 +1091,7 @@ export const api = {
             .select()
             .single();
           if (error) throw error;
+          emitRealtimeEvent("smr_vendor_allotments", { eventType: "UPDATE", new: data });
           return { success: true, data, entry_link: link } as unknown as T;
         } else {
           payload.complete_count = 0;
@@ -1080,6 +1102,7 @@ export const api = {
             .select()
             .single();
           if (error) throw error;
+          emitRealtimeEvent("smr_vendor_allotments", { eventType: "INSERT", new: data });
           return { success: true, data, entry_link: link } as unknown as T;
         }
       }
@@ -1284,16 +1307,19 @@ export const api = {
         };
         const { data, error } = await supabase.from("smr_payments").insert([payload]).select().single();
         if (error) throw error;
+        emitRealtimeEvent("smr_payments", { eventType: "INSERT", new: data });
         return { success: true, data } as unknown as T;
       }
       if (path === "/payments/update-status") {
         const { error } = await supabase.from("smr_payments").update({ status: body.status }).eq("id", body.id);
         if (error) throw error;
+        emitRealtimeEvent("smr_payments", { eventType: "UPDATE" });
         return { success: true } as unknown as T;
       }
       if (path === "/payments/delete") {
         const { error } = await supabase.from("smr_payments").delete().eq("id", body.id);
         if (error) throw error;
+        emitRealtimeEvent("smr_payments", { eventType: "DELETE" });
         return { success: true } as unknown as T;
       }
 
@@ -1449,8 +1475,12 @@ export const api = {
       if (path.startsWith("/manage/projects/")) {
         const id = path.split("/").pop();
         if (id) {
+          request("DELETE", path).catch(() => {});
           const { error } = await supabase.from("smr_projects").delete().eq("id", id);
-          if (!error) return { success: true } as unknown as T;
+          if (!error) {
+            emitRealtimeEvent("smr_projects", { eventType: "DELETE" });
+            return { success: true } as unknown as T;
+          }
         }
       }
       if (path.startsWith("/clients/") || path === "/clients" || path === "/manage/clients") {
@@ -1461,6 +1491,7 @@ export const api = {
             console.error("Delete client error:", error);
             throw error;
           }
+          emitRealtimeEvent("smr_clients", { eventType: "DELETE" });
           return { success: true } as unknown as T;
         }
       }
@@ -1474,16 +1505,23 @@ export const api = {
             ? supabase.from("smr_vendors").delete().eq("id", Number(idOrCode))
             : supabase.from("smr_vendors").delete().eq("vendor_code", String(idOrCode));
           const { error } = await query;
-          if (!error) return { success: true } as unknown as T;
+          if (!error) {
+            emitRealtimeEvent("smr_vendors", { eventType: "DELETE" });
+            return { success: true } as unknown as T;
+          }
         }
       }
       if (path === "/vendor/allot") {
+        request("DELETE", "/vendor/allot", { body }).catch(() => {});
         const { error } = await supabase
           .from("smr_vendor_allotments")
           .delete()
           .eq("project_id", body.project_id)
           .eq("vendor_id", body.vendor_id);
-        if (!error) return { success: true } as unknown as T;
+        if (!error) {
+          emitRealtimeEvent("smr_vendor_allotments", { eventType: "DELETE" });
+          return { success: true } as unknown as T;
+        }
       }
       if (path === "/team/delete") {
         const { error } = await supabase.from("smr_team").delete().eq("id", body.id);

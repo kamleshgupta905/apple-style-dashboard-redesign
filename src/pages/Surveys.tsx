@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, ChevronDown, Copy, Download, ExternalLink, Link2, Pencil, Plus, RefreshCw, Share2, Trash2, Users } from "lucide-react";
 import { api, type Client, type Project } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
-import { entryLink, normalizeSurvey, type NSurvey } from "../lib/data";
+import { entryLink, getPublicOrigin, normalizeSurvey, type NSurvey } from "../lib/data";
 import { exportCSV, formatDate, money, num } from "../lib/utils";
 import { cn } from "../utils/cn";
 import { useRealtime } from "../lib/useRealtime";
@@ -123,7 +123,7 @@ function VendorAssignedSurveys() {
         const completes = num(allot.complete_count);
         const loi = num(p?.loi ?? m?.loi ?? m?.LOI, 15);
         const ir = num(p?.ir ?? m?.ir ?? m?.IR, 75);
-        const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
+        const origin = getPublicOrigin();
         const link =
           allot.entry_link ||
           `${origin}/#/prescreener?pid=${encodeURIComponent(pId)}&vid=${encodeURIComponent(activeVendorCode)}&uid=[YOUR_UID]`;
@@ -250,7 +250,7 @@ function VendorAssignedSurveys() {
             variant="secondary"
             icon={<Link2 size={15} />}
             onClick={() => {
-              const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
+              const origin = getPublicOrigin();
               const routerUrl = `${origin}/#/router?vid=${encodeURIComponent(activeVendorCode)}&uid=[YOUR_UID]`;
               navigator.clipboard?.writeText?.(routerUrl);
               toast("Universal Router Link copied to clipboard!", "success");
@@ -352,9 +352,10 @@ function AdminSurveys() {
   }, []);
   const mine = useQuery(async () => (await api.get<{ data: Project[] }>("/manage/projects")).data || [], []);
 
-  // Live Supabase Realtime for Projects, Allotments & Leads
-  useRealtime(["smr_projects", "smr_vendor_allotments", "smr_leads"], () => {
+  // Live Supabase Realtime + local mutation sync for Studies, Clients, Allotments & Leads
+  useRealtime(["smr_projects", "smr_vendor_allotments", "smr_leads", "smr_clients"], () => {
     mine.reload();
+    market.reload();
   });
 
   const sync = async () => {
@@ -399,18 +400,20 @@ function AdminSurveys() {
           { value: "mine", label: "My studies", count: mine.data?.length },
         ]}
       />
-      {tab === "market" ? (
-        <Marketplace
-          q={market}
-          onCloned={() => {
-            mine.reload();
-            market.reload();
-            setTab("mine");
-          }}
-        />
-      ) : (
-        <MyStudies q={mine} onNew={() => setCreating(true)} />
-      )}
+      <div key={tab} className="anim-fade-up">
+        {tab === "market" ? (
+          <Marketplace
+            q={market}
+            onCloned={() => {
+              mine.reload();
+              market.reload();
+              setTab("mine");
+            }}
+          />
+        ) : (
+          <MyStudies q={mine} onNew={() => setCreating(true)} />
+        )}
+      </div>
       <StudyForm
         open={creating}
         onClose={() => setCreating(false)}
@@ -685,23 +688,23 @@ function Marketplace({
         onRowClick={setDetail}
         empty={<EmptyState title="No surveys match" message="Try clearing a filter or syncing the marketplace." />}
         toolbar={
-          <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
-            <SearchInput value={search} onChange={setSearch} placeholder="Search by ID or name" className="lg:w-72" />
-            <div className="grid flex-1 grid-cols-3 gap-2 lg:flex lg:flex-none">
+          <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center">
+            <SearchInput value={search} onChange={setSearch} placeholder="Search by ID or name" className="w-full xl:w-64" />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 xl:flex xl:flex-none">
               {!isVendor && (
-                <Select value={client} onChange={(e) => setClient(e.target.value)} className="!h-10 !text-[14px] lg:w-44" aria-label="Client">
+                <Select value={client} onChange={(e) => setClient(e.target.value)} className="!h-10 !text-[14px] xl:w-40" aria-label="Client">
                   <option value="all">All clients</option>
                   {clients.map((c) => (
                     <option key={c}>{c}</option>
                   ))}
                 </Select>
               )}
-              <Select value={status} onChange={(e) => setStatus(e.target.value)} className="!h-10 !text-[14px] lg:w-32" aria-label="Status">
+              <Select value={status} onChange={(e) => setStatus(e.target.value)} className="!h-10 !text-[14px] xl:w-32" aria-label="Status">
                 <option value="all">Any status</option>
                 <option>Live</option>
                 <option>Pause</option>
               </Select>
-              <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="!h-10 !text-[14px] lg:w-40" aria-label="Sort">
+              <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="!h-10 !text-[14px] xl:w-36" aria-label="Sort">
                 <option value="newest">Newest</option>
                 <option value="cpi">Highest CPI</option>
                 <option value="ir">Highest IR</option>
@@ -709,24 +712,10 @@ function Marketplace({
                 <option value="target">Largest target</option>
               </Select>
             </div>
-            <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-              <p className="text-[13px] text-ink-3">{rows.length.toLocaleString()} surveys</p>
-              {can(PERMS.SURVEYS_ASSIGN) && rows.length > 0 && (
-                <Button
-                  size="sm"
-                  variant={rows.length > 0 && rows.every((r) => selected.has(r.id)) ? "tinted" : "secondary"}
-                  onClick={() => {
-                    const allSelected = rows.every((r) => selected.has(r.id));
-                    if (allSelected) {
-                      setSelected(new Set());
-                    } else {
-                      setSelected(new Set(rows.map((r) => r.id)));
-                    }
-                  }}
-                >
-                  {rows.every((r) => selected.has(r.id)) ? `Deselect all (${rows.length})` : `Select all (${rows.length})`}
-                </Button>
-              )}
+            <div className="flex items-center justify-between gap-2.5 whitespace-nowrap sm:justify-end xl:ml-auto shrink-0">
+              <span className="inline-flex items-center rounded-full bg-fill px-2.5 py-1 text-[12px] font-medium text-ink-3 tabular">
+                {rows.length.toLocaleString()} surveys
+              </span>
               <Button
                 size="sm"
                 variant="secondary"
@@ -746,27 +735,37 @@ function Marketplace({
         }
       />
 
-      {/* Floating bulk bar */}
+      {/* Responsive Animated Floating Bulk Bar */}
       {can(PERMS.SURVEYS_ASSIGN) && selected.size > 0 && (
-        <div className="anim-sheet-up fixed inset-x-0 bottom-20 z-40 flex justify-center px-4 lg:bottom-6 lg:pl-[264px]">
-          <div className="glass flex items-center gap-2.5 rounded-full border border-line py-2 pl-5 pr-2 shadow-[var(--shadow-lg)]">
-            <span className="text-[14px] font-semibold tabular">{selected.size} selected</span>
-            {selected.size < rows.length && (
-              <Button size="sm" variant="secondary" className="!rounded-full" onClick={() => setSelected(new Set(rows.map((r) => r.id)))}>
-                Select all {rows.length}
+        <div className="anim-float-bar pointer-events-none fixed inset-x-0 bottom-20 z-40 flex justify-center px-3 sm:px-4 lg:bottom-6 lg:pl-[264px]">
+          <div className="glass pointer-events-auto flex w-full max-w-md flex-wrap items-center justify-between gap-2 rounded-2xl border border-line/90 px-3.5 py-2.5 shadow-[var(--shadow-lg)] transition-all duration-200 sm:w-auto sm:max-w-none sm:flex-nowrap sm:justify-center sm:gap-2.5 sm:rounded-full sm:py-2 sm:pl-4 sm:pr-2">
+            <span className="inline-flex items-center gap-2 text-[13px] sm:text-[14px] font-semibold text-ink tabular">
+              <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+              {selected.size} selected
+            </span>
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              {selected.size < rows.length && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="!rounded-full press"
+                  onClick={() => setSelected(new Set(rows.map((r) => r.id)))}
+                >
+                  Select all {rows.length}
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" className="!rounded-full press" onClick={() => setSelected(new Set())}>
+                Clear
               </Button>
-            )}
-            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-              Clear
-            </Button>
-            <Button
-              size="sm"
-              className="!rounded-full"
-              icon={<Share2 size={14} />}
-              onClick={() => setAssign(selectedSurveys)}
-            >
-              Bulk assign ({selected.size})
-            </Button>
+              <Button
+                size="sm"
+                className="!rounded-full press"
+                icon={<Share2 size={14} />}
+                onClick={() => setAssign(selectedSurveys)}
+              >
+                Bulk assign ({selected.size})
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -950,8 +949,12 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
   const [editStudy, setEditStudy] = useState<Project | null>(null);
   const [detailStudy, setDetailStudy] = useState<Project | null>(null);
 
-  // Load allotments count for each study
+  // Load allotments count for each study and refresh in real time
   const allots = useQuery(async () => (await api.get<{ data: any[] }>("/vendor/allotments")).data || [], []);
+
+  useRealtime(["smr_projects", "smr_vendor_allotments", "smr_leads"], () => {
+    allots.reload();
+  });
 
   const rows = useMemo(() => {
     const t = search.toLowerCase();
@@ -1144,22 +1147,10 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
         onRowClick={(p) => setDetailStudy(p)}
         toolbar={
           <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-            <SearchInput value={search} onChange={setSearch} placeholder="Search your studies" className="sm:max-w-sm" />
-            {can(PERMS.SURVEYS_ASSIGN) && rows.length > 0 && (
-              <div className="flex items-center gap-2">
-                <p className="text-[13px] text-ink-3">{rows.length.toLocaleString()} studies</p>
-                <Button
-                  size="sm"
-                  variant={rows.every((r) => selected.has(r.id)) ? "tinted" : "secondary"}
-                  onClick={() => {
-                    const allSelected = rows.every((r) => selected.has(r.id));
-                    setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)));
-                  }}
-                >
-                  {rows.every((r) => selected.has(r.id)) ? `Deselect all (${rows.length})` : `Select all (${rows.length})`}
-                </Button>
-              </div>
-            )}
+            <SearchInput value={search} onChange={setSearch} placeholder="Search your studies" className="w-full sm:max-w-sm" />
+            <span className="inline-flex w-fit items-center rounded-full bg-fill px-2.5 py-1 text-[12px] font-medium text-ink-3 tabular">
+              {rows.length.toLocaleString()} {rows.length === 1 ? "study" : "studies"}
+            </span>
           </div>
         }
         empty={
@@ -1171,27 +1162,37 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
         }
       />
 
-      {/* Floating bulk assign bar for My Studies */}
+      {/* Responsive Animated Floating Bulk Assign Bar for My Studies */}
       {can(PERMS.SURVEYS_ASSIGN) && selected.size > 0 && (
-        <div className="anim-sheet-up fixed inset-x-0 bottom-20 z-40 flex justify-center px-4 lg:bottom-6 lg:pl-[264px]">
-          <div className="glass flex items-center gap-2.5 rounded-full border border-line py-2 pl-5 pr-2 shadow-[var(--shadow-lg)]">
-            <span className="text-[14px] font-semibold tabular">{selected.size} selected</span>
-            {selected.size < rows.length && (
-              <Button size="sm" variant="secondary" className="!rounded-full" onClick={() => setSelected(new Set(rows.map((r) => r.id)))}>
-                Select all {rows.length}
+        <div className="anim-float-bar pointer-events-none fixed inset-x-0 bottom-20 z-40 flex justify-center px-3 sm:px-4 lg:bottom-6 lg:pl-[264px]">
+          <div className="glass pointer-events-auto flex w-full max-w-md flex-wrap items-center justify-between gap-2 rounded-2xl border border-line/90 px-3.5 py-2.5 shadow-[var(--shadow-lg)] transition-all duration-200 sm:w-auto sm:max-w-none sm:flex-nowrap sm:justify-center sm:gap-2.5 sm:rounded-full sm:py-2 sm:pl-4 sm:pr-2">
+            <span className="inline-flex items-center gap-2 text-[13px] sm:text-[14px] font-semibold text-ink tabular">
+              <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+              {selected.size} selected
+            </span>
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              {selected.size < rows.length && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="!rounded-full press"
+                  onClick={() => setSelected(new Set(rows.map((r) => r.id)))}
+                >
+                  Select all {rows.length}
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" className="!rounded-full press" onClick={() => setSelected(new Set())}>
+                Clear
               </Button>
-            )}
-            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-              Clear
-            </Button>
-            <Button
-              size="sm"
-              className="!rounded-full"
-              icon={<Share2 size={14} />}
-              onClick={() => setAssign((q.data || []).filter((p) => selected.has(p.id)).map(asSurvey))}
-            >
-              Bulk assign ({selected.size})
-            </Button>
+              <Button
+                size="sm"
+                className="!rounded-full press"
+                icon={<Share2 size={14} />}
+                onClick={() => setAssign((q.data || []).filter((p) => selected.has(p.id)).map(asSurvey))}
+              >
+                Bulk assign ({selected.size})
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -1271,6 +1272,10 @@ function StudyDetailDrawer({
     const all = res.data || [];
     return all.filter((a) => a.project_id === study.project_id);
   }, [study?.project_id]);
+
+  useRealtime(["smr_vendor_allotments", "smr_leads"], () => {
+    allotmentsQuery.reload();
+  }, !!study);
 
   if (!study) return null;
 
@@ -1383,7 +1388,7 @@ function StudyDetailDrawer({
               <p className="text-[12px] text-ink-3 mb-3">Share this link with your respondents</p>
               <div className="rounded-2xl border border-line bg-surface p-4 space-y-3">
                 <p className="font-mono text-[11.5px] text-ink-2 break-all bg-fill p-2.5 rounded-xl select-all">
-                  {`${typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com"}/#/prescreener?pid=${study.project_id}&vid=${user?.vendor_code || user?.username || "VND"}&uid=[YOUR_UID]`}
+                  {`${getPublicOrigin()}/#/prescreener?pid=${study.project_id}&vid=${user?.vendor_code || user?.username || "VND"}&uid=[YOUR_UID]`}
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -1391,7 +1396,7 @@ function StudyDetailDrawer({
                     variant="secondary"
                     icon={<Copy size={13} />}
                     onClick={() => {
-                      const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
+                      const origin = getPublicOrigin();
                       navigator.clipboard?.writeText?.(
                         `${origin}/#/prescreener?pid=${study.project_id}&vid=${user?.vendor_code || user?.username || "VND"}&uid=[YOUR_UID]`
                       );
@@ -1571,9 +1576,16 @@ function StudyForm({
         const liveUrl = isProject
           ? (base as Project).live_url || ""
           : (base as NSurvey).liveUrl || entryLink((base as NSurvey).id);
+        const baseClientName = isProject ? (base as Project).client_name : (base as NSurvey).client;
+        const matchedClient =
+          (clients.data || []).find(
+            (c) =>
+              (isProject && (base as Project).client_id && Number(c.id) === Number((base as Project).client_id)) ||
+              (baseClientName && c.client_name?.toLowerCase() === baseClientName.toLowerCase()),
+          ) || null;
         const clientId = isProject
-          ? String((base as Project).client_id || "")
-          : String((base as NSurvey).clientId || "");
+          ? String((base as Project).client_id || matchedClient?.id || "")
+          : String((base as NSurvey).clientId || matchedClient?.id || "");
         const status = isProject ? (base as Project).status || "Live" : (base as NSurvey).status || "Live";
 
         setF({
@@ -1592,7 +1604,7 @@ function StudyForm({
         setF(blank);
       }
     }
-  }, [open, edit, duplicate]);
+  }, [open, edit, duplicate, base]);
 
   const set = (k: keyof typeof blank) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setF((p) => ({ ...p, [k]: e.target.value }));
@@ -1604,12 +1616,15 @@ function StudyForm({
     const isProject = base && "project_name" in base;
     const baseId = isProject ? (base as Project).id : undefined;
     const baseProjectId = isProject ? (base as Project).project_id : (base as NSurvey)?.id;
+    const fallbackClientName = base
+      ? (isProject ? (base as Project).client_name : (base as NSurvey).client)
+      : undefined;
 
     const body: any = {
       project_name: f.name.trim(),
       target_name: f.name.trim(),
       client_id: client?.id ?? (f.client_id ? Number(f.client_id) : undefined),
-      client_name: client?.client_name,
+      client_name: client?.client_name || fallbackClientName,
       cpi: num(f.cpi),
       cost_per_complete: num(f.cpi),
       loi: num(f.loi),

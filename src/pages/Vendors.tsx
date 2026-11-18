@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { api, type Allotment, type Vendor, type Project } from "../lib/api";
+import { getPublicOrigin } from "../lib/data";
 import { useQuery } from "../lib/useQuery";
 import { exportCSV, formatDate, initials, money, num } from "../lib/utils";
 import { cn } from "../utils/cn";
@@ -587,7 +588,7 @@ function AssignStudyToVendorModal({
 
     setBusy(true);
     try {
-      const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
+      const origin = getPublicOrigin();
       const links: string[] = [];
       const CHUNK = 10;
 

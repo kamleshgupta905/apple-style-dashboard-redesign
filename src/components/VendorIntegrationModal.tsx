@@ -49,37 +49,36 @@ export function VendorIntegrationModal({
 
   if (!vendor) return null;
 
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
-  const routerUrl = `${origin}/#/router?vid=${encodeURIComponent(vCode)}&uid=[RESPONDENT_ID]`;
-  const testRouterUrl = `${origin}/#/router?vid=${encodeURIComponent(vCode)}&uid=TEST_USER_${Date.now().toString().slice(-4)}`;
-  const campaignTemplate = `${origin}/#/prescreener?pid=[STUDY_ID]&vid=${encodeURIComponent(vCode)}&uid=[RESPONDENT_ID]`;
-  const feedUrl = `${origin}/#/vendor-feed?vid=${encodeURIComponent(vCode)}`;
-  const apiDocsUrl = `${origin}/#/api-docs`;
+  const publicOrigin =
+    typeof window !== "undefined" && window.location.hostname.includes("vmhgroupsmr.com")
+      ? window.location.origin
+      : "https://api.vmhgroupsmr.com";
+  const localOrigin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
+  const routerUrl = `${publicOrigin}/#/router?vid=${encodeURIComponent(vCode)}&uid=[RESPONDENT_ID]`;
+  const testRouterUrl = `${localOrigin}/#/router?vid=${encodeURIComponent(vCode)}&uid=TEST_USER_${Date.now().toString().slice(-4)}`;
+  const campaignTemplate = `${publicOrigin}/#/prescreener?pid=[STUDY_ID]&vid=${encodeURIComponent(vCode)}&uid=[RESPONDENT_ID]`;
+  const feedUrl = `${publicOrigin}/#/vendor-feed?vid=${encodeURIComponent(vCode)}`;
+  const supplyDocUrl = `${publicOrigin}/#/api-docs?vid=${encodeURIComponent(vCode)}&section=supply`;
+  const hashingDocUrl = `${publicOrigin}/#/api-docs?vid=${encodeURIComponent(vCode)}&section=hashing`;
+  const s2sDocUrl = `${publicOrigin}/#/api-docs?vid=${encodeURIComponent(vCode)}&section=s2s`;
+  const apiDocsUrl = supplyDocUrl;
   const accessKey = vendor?.api_key || vendor?.secret_key || vCode;
 
   const copyVendorOnboardingSpec = () => {
     const text =
-      `*VMH GROUP · Supply Partner Integration Spec (${vName} · ${vCode})*\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-      `1. Supply API Documentation (VMH GROUP Branded)\n` +
-      `• Partner Access Key (Header: access-key): ${accessKey}\n` +
-      `• Live Survey Inventory JSON Feed: ${feedUrl}\n` +
-      `• Universal Survey Router Link (1 Link for All Assigned Studies): ${routerUrl}\n` +
-      `• Per-Study Entry Link Format: ${campaignTemplate}\n` +
-      `• Full Partner API & Integration Docs: ${apiDocsUrl}\n\n` +
-      `2. Redirect URL Hashing & Security Guide\n` +
-      `• Optional Tamper-Proof Hash Parameter: &hash=[HASH] (SHA-256 / HMAC-SHA256 using Partner Access Key)\n` +
-      `• Automatic Quality & Fraud Gate: Duplicate UID/IP blocking, Bot detection & Speeder protection run automatically before redirect.\n\n` +
-      `3. S2S (Server-to-Server) & Return Redirect Guide\n` +
-      `Please share your 3 (+1 optional) Return Callback URLs with [UID] macro:\n` +
-      `• Complete (Status 10): https://yourdomain.com/complete?uid=[UID]\n` +
-      `• Terminate / Screenout (Status 20): https://yourdomain.com/terminate?uid=[UID]\n` +
-      `• Overquota / Quota Full (Status 30): https://yourdomain.com/overquota?uid=[UID]\n` +
-      `• Security / Fraud (Status 40 · Optional): https://yourdomain.com/security?uid=[UID]\n`;
+      `VMH GROUP · Partner API Integration\n\n` +
+      `Please find below the relevant documentation and credentials for the VMH GROUP API integration:\n\n` +
+      `Partner Access Key (vid): ${accessKey}\n` +
+      `Live Assigned Surveys Feed: ${feedUrl}\n` +
+      `Entry Router Link: ${routerUrl}\n\n` +
+      `Supply API Documentation :- ${supplyDocUrl}\n` +
+      `Redirect URL Hashing Guide :- ${hashingDocUrl}\n` +
+      `S2S (Server-to-Server) Integration Guide :- ${s2sDocUrl}\n\n` +
+      `Please share your 3 Return Redirect URLs (Complete 10, Terminate 20, Overquota 30) with [UID] macro.\n`;
 
     navigator.clipboard.writeText(text);
     setCopiedSpec(true);
-    toast("VMH GROUP 3-Part Partner Integration Spec copied!");
+    toast("Clean 3-Guide Partner Integration Spec copied!");
     setTimeout(() => setCopiedSpec(false), 2500);
   };
 

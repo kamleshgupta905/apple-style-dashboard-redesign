@@ -68,6 +68,7 @@ function useRoute() {
       "security-callback",
       "router",
       "feed",
+      "vendor-feed",
       "api-docs",
     ];
     if (PUBLIC_SURVEY_ROUTES.includes(h)) return h;
@@ -238,7 +239,7 @@ export default function App() {
       </RootErrorBoundary>
     );
   }
-  if (route === "feed") {
+  if (route === "feed" || route === "vendor-feed") {
     return (
       <RootErrorBoundary>
         <VendorFeed />
