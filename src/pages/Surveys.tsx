@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowUpRight, ChevronDown, Copy, Download, ExternalLink, Link2, Pencil, Plus, RefreshCw, Share2, Trash2, Users } from "lucide-react";
 import { api, type Client, type Project } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
@@ -400,7 +401,7 @@ function AdminSurveys() {
           { value: "mine", label: "My studies", count: mine.data?.length },
         ]}
       />
-      <div key={tab} className="anim-fade-up">
+      <div key={tab} className="anim-fade-in">
         {tab === "market" ? (
           <Marketplace
             q={market}
@@ -675,7 +676,7 @@ function Marketplace({
   const selectedSurveys = list.filter((s) => selected.has(s.id));
 
   return (
-    <>
+    <div className={cn(selected.size > 0 && "pb-16")}>
       <DataTable
         columns={cols}
         rows={rows}
@@ -735,40 +736,48 @@ function Marketplace({
         }
       />
 
-      {/* Responsive Animated Floating Bulk Bar */}
-      {can(PERMS.SURVEYS_ASSIGN) && selected.size > 0 && (
-        <div className="anim-float-bar pointer-events-none fixed inset-x-0 bottom-20 z-40 flex justify-center px-3 sm:px-4 lg:bottom-6 lg:pl-[264px]">
-          <div className="glass pointer-events-auto flex w-full max-w-md flex-wrap items-center justify-between gap-2 rounded-2xl border border-line/90 px-3.5 py-2.5 shadow-[var(--shadow-lg)] transition-all duration-200 sm:w-auto sm:max-w-none sm:flex-nowrap sm:justify-center sm:gap-2.5 sm:rounded-full sm:py-2 sm:pl-4 sm:pr-2">
-            <span className="inline-flex items-center gap-2 text-[13px] sm:text-[14px] font-semibold text-ink tabular">
-              <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
-              {selected.size} selected
-            </span>
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              {selected.size < rows.length && (
+      {/* Responsive Animated Floating Bulk Bar (portaled to body so viewport-fixed) */}
+      {can(PERMS.SURVEYS_ASSIGN) &&
+        selected.size > 0 &&
+        assign.length === 0 &&
+        !detail &&
+        !cloneStudy &&
+        !activeLink &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="anim-float-bar pointer-events-none fixed inset-x-0 bottom-20 z-40 flex justify-center px-3 sm:px-4 lg:bottom-6 lg:pl-[264px]">
+            <div className="glass pointer-events-auto flex w-full max-w-md flex-wrap items-center justify-between gap-2 rounded-2xl border border-line/90 px-3.5 py-2.5 shadow-[var(--shadow-lg)] transition-all duration-200 sm:w-auto sm:max-w-none sm:flex-nowrap sm:justify-center sm:gap-2.5 sm:rounded-full sm:py-2 sm:pl-4 sm:pr-2">
+              <span className="inline-flex items-center gap-2 text-[13px] sm:text-[14px] font-semibold text-ink tabular">
+                <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+                {selected.size} selected
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                {selected.size < rows.length && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="!rounded-full press"
+                    onClick={() => setSelected(new Set(rows.map((r) => r.id)))}
+                  >
+                    Select all {rows.length}
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" className="!rounded-full press" onClick={() => setSelected(new Set())}>
+                  Clear
+                </Button>
                 <Button
                   size="sm"
-                  variant="secondary"
                   className="!rounded-full press"
-                  onClick={() => setSelected(new Set(rows.map((r) => r.id)))}
+                  icon={<Share2 size={14} />}
+                  onClick={() => setAssign(selectedSurveys)}
                 >
-                  Select all {rows.length}
+                  Bulk assign ({selected.size})
                 </Button>
-              )}
-              <Button size="sm" variant="ghost" className="!rounded-full press" onClick={() => setSelected(new Set())}>
-                Clear
-              </Button>
-              <Button
-                size="sm"
-                className="!rounded-full press"
-                icon={<Share2 size={14} />}
-                onClick={() => setAssign(selectedSurveys)}
-              >
-                Bulk assign ({selected.size})
-              </Button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
       <SurveyDrawer survey={detail} onClose={() => setDetail(null)} onAssign={(s) => setAssign([s])} />
       <AssignModal
@@ -838,7 +847,7 @@ function Marketplace({
           </div>
         </div>
       </Modal>
-    </>
+    </div>
   );
 }
 
@@ -1134,7 +1143,7 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
   ];
 
   return (
-    <>
+    <div className={cn(selected.size > 0 && "pb-16")}>
       <DataTable
         columns={cols}
         rows={rows}
@@ -1162,40 +1171,48 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
         }
       />
 
-      {/* Responsive Animated Floating Bulk Assign Bar for My Studies */}
-      {can(PERMS.SURVEYS_ASSIGN) && selected.size > 0 && (
-        <div className="anim-float-bar pointer-events-none fixed inset-x-0 bottom-20 z-40 flex justify-center px-3 sm:px-4 lg:bottom-6 lg:pl-[264px]">
-          <div className="glass pointer-events-auto flex w-full max-w-md flex-wrap items-center justify-between gap-2 rounded-2xl border border-line/90 px-3.5 py-2.5 shadow-[var(--shadow-lg)] transition-all duration-200 sm:w-auto sm:max-w-none sm:flex-nowrap sm:justify-center sm:gap-2.5 sm:rounded-full sm:py-2 sm:pl-4 sm:pr-2">
-            <span className="inline-flex items-center gap-2 text-[13px] sm:text-[14px] font-semibold text-ink tabular">
-              <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
-              {selected.size} selected
-            </span>
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              {selected.size < rows.length && (
+      {/* Responsive Animated Floating Bulk Assign Bar for My Studies (portaled to body so viewport-fixed) */}
+      {can(PERMS.SURVEYS_ASSIGN) &&
+        selected.size > 0 &&
+        assign.length === 0 &&
+        !cloneOf &&
+        !editStudy &&
+        !detailStudy &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="anim-float-bar pointer-events-none fixed inset-x-0 bottom-20 z-40 flex justify-center px-3 sm:px-4 lg:bottom-6 lg:pl-[264px]">
+            <div className="glass pointer-events-auto flex w-full max-w-md flex-wrap items-center justify-between gap-2 rounded-2xl border border-line/90 px-3.5 py-2.5 shadow-[var(--shadow-lg)] transition-all duration-200 sm:w-auto sm:max-w-none sm:flex-nowrap sm:justify-center sm:gap-2.5 sm:rounded-full sm:py-2 sm:pl-4 sm:pr-2">
+              <span className="inline-flex items-center gap-2 text-[13px] sm:text-[14px] font-semibold text-ink tabular">
+                <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+                {selected.size} selected
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                {selected.size < rows.length && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="!rounded-full press"
+                    onClick={() => setSelected(new Set(rows.map((r) => r.id)))}
+                  >
+                    Select all {rows.length}
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" className="!rounded-full press" onClick={() => setSelected(new Set())}>
+                  Clear
+                </Button>
                 <Button
                   size="sm"
-                  variant="secondary"
                   className="!rounded-full press"
-                  onClick={() => setSelected(new Set(rows.map((r) => r.id)))}
+                  icon={<Share2 size={14} />}
+                  onClick={() => setAssign((q.data || []).filter((p) => selected.has(p.id)).map(asSurvey))}
                 >
-                  Select all {rows.length}
+                  Bulk assign ({selected.size})
                 </Button>
-              )}
-              <Button size="sm" variant="ghost" className="!rounded-full press" onClick={() => setSelected(new Set())}>
-                Clear
-              </Button>
-              <Button
-                size="sm"
-                className="!rounded-full press"
-                icon={<Share2 size={14} />}
-                onClick={() => setAssign((q.data || []).filter((p) => selected.has(p.id)).map(asSurvey))}
-              >
-                Bulk assign ({selected.size})
-              </Button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
       {/* Assign Modal */}
       <AssignModal
@@ -1243,7 +1260,7 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
           allots.reload();
         }}
       />
-    </>
+    </div>
   );
 }
 

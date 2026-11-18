@@ -9,6 +9,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertCircle,
   Check,
@@ -382,13 +383,13 @@ export function Modal({
     };
   }, [open, onClose]);
 
-  if (!mounted) return null;
+  if (!mounted || typeof document === "undefined") return null;
   const widths = { sm: "sm:max-w-sm", md: "sm:max-w-lg", lg: "sm:max-w-2xl", xl: "sm:max-w-4xl" };
 
-  return (
+  return createPortal(
     <div
       className={cn(
-        "fixed inset-0 z-50 flex",
+        "fixed inset-0 z-[60] flex",
         drawer ? "items-stretch justify-end" : "items-end justify-center sm:items-center sm:p-6",
       )}
     >
@@ -430,7 +431,8 @@ export function Modal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -555,6 +557,7 @@ export function DataTable<T>({
   rowKey,
   onRowClick,
   pageSize = 10,
+  pageSizeOptions = [10, 25, 50, 100, 250, 500],
   empty,
   loading,
   selectable,
@@ -567,6 +570,7 @@ export function DataTable<T>({
   rowKey: (row: T) => string | number;
   onRowClick?: (row: T) => void;
   pageSize?: number;
+  pageSizeOptions?: number[];
   empty?: ReactNode;
   loading?: boolean;
   selectable?: boolean;
@@ -575,7 +579,18 @@ export function DataTable<T>({
   toolbar?: ReactNode;
 }) {
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(pageSize);
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
+
+  useEffect(() => {
+    setPerPage(pageSize);
+  }, [pageSize]);
+
+  const sizeOptions = useMemo(() => {
+    const set = new Set(pageSizeOptions.filter((n) => n > 0));
+    if (pageSize > 0) set.add(pageSize);
+    return Array.from(set).sort((a, b) => a - b);
+  }, [pageSizeOptions, pageSize]);
 
   const sorted = useMemo(() => {
     if (!sort) return rows;
@@ -589,13 +604,14 @@ export function DataTable<T>({
     });
   }, [rows, sort, columns]);
 
-  const pages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const effectiveSize = perPage <= 0 ? Math.max(1, sorted.length) : perPage;
+  const pages = perPage <= 0 ? 1 : Math.max(1, Math.ceil(sorted.length / effectiveSize));
   useEffect(() => {
     if (page > pages) setPage(pages);
   }, [pages, page]);
-  useEffect(() => setPage(1), [rows.length]);
+  useEffect(() => setPage(1), [rows.length, perPage]);
 
-  const slice = sorted.slice((page - 1) * pageSize, page * pageSize);
+  const slice = perPage <= 0 ? sorted : sorted.slice((page - 1) * effectiveSize, page * effectiveSize);
   const primary = columns.find((c) => c.primary) || columns[0];
   const allOnPage = slice.length > 0 && slice.every((r) => selected?.has(rowKey(r)));
 
@@ -766,22 +782,46 @@ export function DataTable<T>({
 
       {!loading && rows.length === 0 && (empty ?? <EmptyState title="Nothing here yet" />)}
 
-      {rows.length > pageSize && (
-        <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-3 sm:px-5">
-          <p className="text-[13px] text-ink-3 tabular">
-            {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, rows.length)} of {rows.length.toLocaleString()}
-          </p>
-          <div className="flex items-center gap-1">
-            <IconButton label="Previous page" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
-              <ChevronLeft size={18} />
-            </IconButton>
-            <span className="min-w-[64px] text-center text-[13px] font-medium text-ink-2 tabular">
-              {page} / {pages}
-            </span>
-            <IconButton label="Next page" disabled={page === pages} onClick={() => setPage((p) => p + 1)}>
-              <ChevronRight size={18} />
-            </IconButton>
+      {!loading && rows.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 sm:px-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-[13px] text-ink-3 tabular">
+              {perPage <= 0 ? 1 : (page - 1) * effectiveSize + 1}–
+              {perPage <= 0 ? rows.length : Math.min(page * effectiveSize, rows.length)} of {rows.length.toLocaleString()}
+            </p>
+            <label className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-3">
+              <span>Rows</span>
+              <select
+                aria-label="Rows per page"
+                value={perPage}
+                onChange={(e) => {
+                  setPerPage(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="h-8 cursor-pointer rounded-lg border border-line bg-surface px-2 text-[12.5px] font-medium text-ink outline-none transition hover:border-line-strong focus:border-accent"
+              >
+                {sizeOptions.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+                <option value={0}>All</option>
+              </select>
+            </label>
           </div>
+          {pages > 1 && (
+            <div className="flex items-center gap-1">
+              <IconButton label="Previous page" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+                <ChevronLeft size={18} />
+              </IconButton>
+              <span className="min-w-[64px] text-center text-[13px] font-medium text-ink-2 tabular">
+                {page} / {pages}
+              </span>
+              <IconButton label="Next page" disabled={page === pages} onClick={() => setPage((p) => p + 1)}>
+                <ChevronRight size={18} />
+              </IconButton>
+            </div>
+          )}
         </div>
       )}
     </Card>
