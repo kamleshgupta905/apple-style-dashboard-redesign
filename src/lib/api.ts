@@ -463,10 +463,29 @@ export const api = {
         }
       }
 
-      // 7. Payments
+      // 7. Payments (Supabase + Gateway merged)
       if (path === "/payments" || path === "/finance/payments") {
-        const { data, error } = await supabase.from("smr_payments").select("*").order("id", { ascending: false });
-        if (!error && data) {
+        const [supaRes, gwRes] = await Promise.all([
+          supabase.from("smr_payments").select("*").order("id", { ascending: false }),
+          request<{ data?: any[] }>("GET", "/payments").catch(() => null),
+        ]);
+        const supaRows = !supaRes.error && Array.isArray(supaRes.data) ? supaRes.data : [];
+        const gwRows = Array.isArray(gwRes?.data) ? gwRes!.data : [];
+
+        const mergedMap = new Map<string, any>();
+        gwRows.forEach((p: any, idx: number) => {
+          const key = String(p.invoice_code || p.id || `gw-${idx}`).toLowerCase().trim();
+          mergedMap.set(key, p);
+        });
+        supaRows.forEach((p: any, idx: number) => {
+          const key = String(p.invoice_code || p.id || `supa-${idx}`).toLowerCase().trim();
+          mergedMap.set(key, p);
+        });
+        const data = Array.from(mergedMap.values()).sort(
+          (a, b) => Date.parse(b.created_at || "") - Date.parse(a.created_at || ""),
+        );
+
+        if (data.length > 0 || !supaRes.error) {
           const amt = (p: any) => Number(p.amount ?? p.payout_amount ?? 0);
           const paidRows = data.filter((p) => String(p.status).toLowerCase() === "paid");
           const pendingRows = data.filter((p) => String(p.status).toLowerCase() === "pending");

@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
-import { Check, Download, Pause, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, Download, Pause, Plus, Receipt, Trash2, X } from "lucide-react";
 import { api, type Payment, type Project, type Vendor } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { useRealtime } from "../lib/useRealtime";
 import { fetchVendorOptions } from "../lib/data";
 import { exportCSV, formatDate, money, num } from "../lib/utils";
 import {
+  Badge,
   Button,
   Card,
   CountUp,
@@ -40,6 +41,15 @@ interface PaymentsRes {
   };
 }
 
+interface AccruedVendorBalance {
+  vendorCode: string;
+  vendorName: string;
+  completes: number;
+  earned: number;
+  vouchered: number;
+  unbilled: number;
+}
+
 const normKey = (v?: string | number | null) => String(v ?? "").toLowerCase().trim();
 
 export function Payments() {
@@ -49,16 +59,23 @@ export function Payments() {
 
   const q = useQuery(() => api.get<PaymentsRes>("/payments"), [], { poll: 30000 });
   const vendorsQuery = useQuery(async () => (await api.get<{ data: Vendor[] }>("/manage/vendors")).data || [], []);
+  const unifiedVendorsQuery = useQuery(
+    async () => (await api.get<{ data: { vendors: any[] } }>("/reports/unified").catch(() => ({ data: { vendors: [] } }))).data?.vendors || [],
+    [],
+    { poll: 30000 },
+  );
 
-  useRealtime(["smr_payments", "smr_vendors"], () => {
+  useRealtime(["smr_payments", "smr_vendors", "smr_leads", "smr_vendor_allotments"], () => {
     q.reload();
     vendorsQuery.reload();
+    unifiedVendorsQuery.reload();
   });
 
   const [filter, setFilter] = useState("all");
   const [vendorFilter, setVendorFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
+  const [prefill, setPrefill] = useState<{ vendor: string; amount: string; remarks: string } | null>(null);
 
   const registeredVendors = vendorsQuery.data || [];
 
@@ -123,10 +140,24 @@ export function Payments() {
     });
   };
 
+  const selectedVendorKeys = useMemo(() => {
+    if (isVendor || vendorFilter === "all") return null;
+    const selectedVendor = registeredVendors.find((v) => (v.vendor_code || v.vendor_id || String(v.id)) === vendorFilter);
+    const keys = new Set<string>();
+    if (selectedVendor) {
+      [selectedVendor.vendor_code, selectedVendor.vendor_id, selectedVendor.vendor_name, selectedVendor.name, selectedVendor.id]
+        .map(normKey)
+        .filter(Boolean)
+        .forEach((k) => keys.add(k));
+    } else {
+      keys.add(normKey(vendorFilter));
+    }
+    return keys;
+  }, [isVendor, vendorFilter, registeredVendors]);
+
   // Scope payments strictly to valid/registered vendors (and to current vendor when logged in as Vendor)
   const vendorScopedList = useMemo(() => {
     const rawList = q.data?.data || [];
-    // Wait until vendors directory finishes initial load so stale/unregistered rows never flash
     if (vendorsQuery.loading && !vendorsQuery.data) return [];
 
     let scoped = rawList;
@@ -140,46 +171,81 @@ export function Payments() {
         }),
       );
     } else {
-      // No registered vendors on platform -> no orphan/default vendor payments shown
       scoped = [];
     }
 
-    if (!isVendor && vendorFilter !== "all") {
-      const selectedVendor = registeredVendors.find((v) => (v.vendor_code || v.vendor_id || String(v.id)) === vendorFilter);
-      const selectedKeys = new Set<string>();
-      if (selectedVendor) {
-        [selectedVendor.vendor_code, selectedVendor.vendor_id, selectedVendor.vendor_name, selectedVendor.name, selectedVendor.id]
-          .map(normKey)
-          .filter(Boolean)
-          .forEach((k) => selectedKeys.add(k));
-      } else {
-        selectedKeys.add(normKey(vendorFilter));
-      }
-      scoped = scoped.filter((p) => paymentMatchesVendor(p, selectedKeys));
+    if (selectedVendorKeys) {
+      scoped = scoped.filter((p) => paymentMatchesVendor(p, selectedVendorKeys));
     }
 
     return scoped;
-  }, [q.data, vendorsQuery.loading, vendorsQuery.data, isVendor, vendorIdentifiers, registeredVendors, registeredVendorMap, vendorFilter]);
+  }, [q.data, vendorsQuery.loading, vendorsQuery.data, isVendor, vendorIdentifiers, registeredVendors, registeredVendorMap, selectedVendorKeys]);
 
-  // Recompute KPI totals and chart counts strictly from the scoped payments
+  // Compute live earned/accrued balances from real-time completed leads & allotments
+  const accruedBalances = useMemo<AccruedVendorBalance[]>(() => {
+    const uni = unifiedVendorsQuery.data || [];
+    if (uni.length === 0) return [];
+    const amt = (p: Payment) => num(p.amount ?? p.payout_amount);
+    const activeVouchers = (q.data?.data || []).filter((p) => normKey(p.status) !== "rejected");
+
+    return uni
+      .map((v: any) => {
+        const code = String(v.vendor_code || v.vendor_id || v.id || "").trim();
+        const name = String(v.vendor_name || v.name || code).trim();
+        const earned = Number(num(v.total_payout).toFixed(2));
+        const completes = num(v.total_completes);
+        const keys = new Set<string>([normKey(code), normKey(name), normKey(v.id)].filter(Boolean));
+
+        if (isVendor) {
+          const matchesMe = Array.from(keys).some((k) => vendorIdentifiers.has(k));
+          if (!matchesMe) return null;
+        }
+        if (selectedVendorKeys) {
+          const matchesFilter = Array.from(keys).some((k) => selectedVendorKeys.has(k));
+          if (!matchesFilter) return null;
+        }
+
+        const vouchered = activeVouchers
+          .filter((p) => paymentMatchesVendor(p, keys))
+          .reduce((s, p) => s + amt(p), 0);
+        const unbilled = Math.max(0, Number((earned - vouchered).toFixed(2)));
+        if (unbilled <= 0) return null;
+
+        return {
+          vendorCode: code,
+          vendorName: name,
+          completes,
+          earned,
+          vouchered: Number(vouchered.toFixed(2)),
+          unbilled,
+        };
+      })
+      .filter((x): x is AccruedVendorBalance => x !== null && x.unbilled > 0);
+  }, [unifiedVendorsQuery.data, q.data, isVendor, vendorIdentifiers, selectedVendorKeys]);
+
+  // Recompute KPI totals and chart counts strictly from scoped vouchers + live accrued completes
   const summary = useMemo(() => {
     const amt = (p: Payment) => num(p.amount ?? p.payout_amount);
     const paidRows = vendorScopedList.filter((p) => normKey(p.status) === "paid");
     const pendingRows = vendorScopedList.filter((p) => normKey(p.status) === "pending");
     const rejectedRows = vendorScopedList.filter((p) => normKey(p.status) === "rejected");
     const totalPaid = paidRows.reduce((s, p) => s + amt(p), 0);
-    const totalPending = pendingRows.reduce((s, p) => s + amt(p), 0);
+    const totalPendingVouchers = pendingRows.reduce((s, p) => s + amt(p), 0);
+    const totalUnbilled = accruedBalances.reduce((s, b) => s + b.unbilled, 0);
+    const totalPending = Number((totalPendingVouchers + totalUnbilled).toFixed(2));
     const totalRejected = rejectedRows.reduce((s, p) => s + amt(p), 0);
     return {
-      totalPayout: totalPaid + totalPending,
-      totalPaid,
+      totalPayout: Number((totalPaid + totalPending).toFixed(2)),
+      totalPaid: Number(totalPaid.toFixed(2)),
       totalPending,
-      totalRejected,
+      totalPendingVouchers: Number(totalPendingVouchers.toFixed(2)),
+      totalUnbilled: Number(totalUnbilled.toFixed(2)),
+      totalRejected: Number(totalRejected.toFixed(2)),
       countPaid: paidRows.length,
-      countPending: pendingRows.length,
+      countPending: pendingRows.length + accruedBalances.length,
       countRejected: rejectedRows.length,
     };
-  }, [vendorScopedList]);
+  }, [vendorScopedList, accruedBalances]);
 
   const rows = useMemo(() => {
     const t = search.toLowerCase();
@@ -273,7 +339,13 @@ export function Payments() {
               </Button>
             )}
             {can(PERMS.PAYMENTS_RECORD) && (
-              <Button icon={<Plus size={16} />} onClick={() => setCreating(true)}>
+              <Button
+                icon={<Plus size={16} />}
+                onClick={() => {
+                  setPrefill(null);
+                  setCreating(true);
+                }}
+              >
                 New voucher
               </Button>
             )}
@@ -284,16 +356,17 @@ export function Payments() {
       <div className="mb-5 grid gap-4 lg:grid-cols-3">
         <div className="stagger grid grid-cols-2 gap-3 lg:col-span-2 lg:gap-4">
           {[
-            ["Total payout", summary.totalPayout, "text-ink"],
-            ["Paid", summary.totalPaid, "text-green"],
-            ["Pending", summary.totalPending, "text-orange"],
-            ["Rejected", summary.totalRejected, "text-red"],
-          ].map(([l, v, tone]) => (
+            ["Total payout", summary.totalPayout, "text-ink", summary.totalUnbilled > 0 ? `Includes ${money(summary.totalUnbilled)} live accrued` : undefined],
+            ["Paid", summary.totalPaid, "text-green", undefined],
+            ["Pending / Due", summary.totalPending, "text-orange", summary.totalUnbilled > 0 ? `${money(summary.totalUnbilled)} unbilled from completes` : undefined],
+            ["Rejected", summary.totalRejected, "text-red", undefined],
+          ].map(([l, v, tone, hint]) => (
             <Card key={l as string} hover className="p-4 sm:p-5">
               <p className="text-[13px] font-medium text-ink-3">{l}</p>
               <p className={`mt-0.5 text-[26px] font-bold tracking-tight tabular-nums sm:text-[30px] ${tone}`}>
                 <CountUp value={v as number} prefix="$" decimals={2} />
               </p>
+              {hint && <p className="mt-1 text-[11.5px] text-ink-3">{hint}</p>}
             </Card>
           ))}
         </div>
@@ -312,12 +385,59 @@ export function Payments() {
           <Legend
             items={[
               { label: "Paid", value: summary.countPaid, color: "var(--green)" },
-              { label: "Pending", value: summary.countPending, color: "var(--orange)" },
+              { label: "Pending / Due", value: summary.countPending, color: "var(--orange)" },
               { label: "Rejected", value: summary.countRejected, color: "var(--red)" },
             ]}
           />
         </Card>
       </div>
+
+      {/* Live Accrued Payouts computed directly from real-time completes */}
+      {accruedBalances.length > 0 && (
+        <Card className="mb-5 overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3 sm:px-5">
+            <div>
+              <h3 className="text-[14.5px] font-semibold text-ink">Unbilled Accrued Payouts (Live Completes)</h3>
+              <p className="text-[12px] text-ink-3">Real-time earnings calculated from completed surveys not yet recorded into a voucher.</p>
+            </div>
+            <Badge tone="orange">{money(summary.totalUnbilled)} due</Badge>
+          </div>
+          <div className="divide-y divide-line">
+            {accruedBalances.map((b) => (
+              <div key={b.vendorCode} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
+                <div className="min-w-0">
+                  <p className="text-[14px] font-semibold text-ink">
+                    {b.vendorName} <span className="font-mono text-[12px] font-normal text-ink-3">({b.vendorCode})</span>
+                  </p>
+                  <p className="text-[12px] text-ink-3 tabular">
+                    {b.completes} complete{b.completes === 1 ? "" : "s"} · Total earned {money(b.earned)} · Vouchered {money(b.vouchered)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[15px] font-bold text-orange tabular">{money(b.unbilled)}</span>
+                  {!isVendor && can(PERMS.PAYMENTS_RECORD) && (
+                    <Button
+                      size="sm"
+                      variant="tinted"
+                      icon={<Receipt size={14} />}
+                      onClick={() => {
+                        setPrefill({
+                          vendor: b.vendorCode,
+                          amount: b.unbilled.toFixed(2),
+                          remarks: `Accrued payout for ${b.completes} live complete(s)`,
+                        });
+                        setCreating(true);
+                      }}
+                    >
+                      Create voucher
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <DataTable
         columns={cols}
@@ -365,19 +485,54 @@ export function Payments() {
             message={
               isVendor
                 ? "No payout vouchers have been recorded for your vendor account yet."
+                : accruedBalances.length > 0
+                ? "Use \"Create voucher\" above to turn unbilled live earnings into a settleable payout voucher."
                 : "Create a voucher to record a payout for one of your registered vendors."
             }
-            action={can(PERMS.PAYMENTS_RECORD) ? <Button onClick={() => setCreating(true)}>New voucher</Button> : undefined}
+            action={
+              can(PERMS.PAYMENTS_RECORD) ? (
+                <Button
+                  onClick={() => {
+                    setPrefill(null);
+                    setCreating(true);
+                  }}
+                >
+                  New voucher
+                </Button>
+              ) : undefined
+            }
           />
         }
       />
 
-      <VoucherForm open={creating} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); q.reload(); }} />
+      <VoucherForm
+        open={creating}
+        prefill={prefill}
+        onClose={() => {
+          setCreating(false);
+          setPrefill(null);
+        }}
+        onSaved={() => {
+          setCreating(false);
+          setPrefill(null);
+          q.reload();
+        }}
+      />
     </div>
   );
 }
 
-function VoucherForm({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
+function VoucherForm({
+  open,
+  prefill,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  prefill?: { vendor: string; amount: string; remarks: string } | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const { toast } = useFeedback();
   const opts = useQuery(
     async () => {
@@ -388,6 +543,17 @@ function VoucherForm({ open, onClose, onSaved }: { open: boolean; onClose: () =>
   );
   const [f, setF] = useState({ vendor: "", project: "", amount: "", status: "Pending", remarks: "" });
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      if (prefill) {
+        setF({ vendor: prefill.vendor, project: "", amount: prefill.amount, status: "Pending", remarks: prefill.remarks });
+      } else {
+        setF({ vendor: "", project: "", amount: "", status: "Pending", remarks: "" });
+      }
+    }
+  }, [open, prefill]);
+
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF((p) => ({ ...p, [k]: e.target.value }));
 
   const save = async () => {
