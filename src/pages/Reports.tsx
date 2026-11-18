@@ -73,8 +73,9 @@ export function Reports() {
     [from, to],
   );
 
-  useRealtime(["smr_leads", "smr_projects", "smr_vendors"], () => {
+  useRealtime(["smr_leads", "smr_projects", "smr_vendors", "smr_vendor_allotments"], () => {
     q.reload();
+    allotsQuery.reload();
   });
 
   const d = q.data;
@@ -143,13 +144,13 @@ export function Reports() {
     myAllots.forEach((a: any) => allotMap.set(String(a.project_id), a));
 
     const myPids = new Set([...scopedLeads.map((l) => String(l.project_id)), ...myAllots.map((a: any) => String(a.project_id))]);
-    return all
+    const matchedFromProjects = all
       .filter((p) => myPids.has(String(p.project_id)))
       .map((p) => {
         const pLeads = scopedLeads.filter((l) => String(l.project_id) === String(p.project_id));
         const allot = allotMap.get(String(p.project_id));
-        const clicks = pLeads.length;
-        const completes = pLeads.filter((l) => isCompleteSt(l.status)).length;
+        const completes = pLeads.filter((l) => isCompleteSt(l.status)).length || (!from && !to ? num(allot?.complete_count) : 0);
+        const clicks = Math.max(pLeads.length, completes);
         const terminates = pLeads.filter((l) => isTerminateSt(l.status)).length;
         const overquota = pLeads.filter((l) => isOverquotaSt(l.status)).length;
         const conv = clicks > 0 ? Number(((completes / clicks) * 100).toFixed(1)) : 0;
@@ -168,7 +169,37 @@ export function Reports() {
           status: allot?.status || p.status,
         };
       });
-  }, [d?.projects, isVendor, allotsQuery.data, vendorIdentifiers, scopedLeads]);
+
+    const existingPids = new Set(matchedFromProjects.map((p) => String(p.project_id)));
+    const extraFromAllots = myAllots
+      .filter((a: any) => !existingPids.has(String(a.project_id)))
+      .map((a: any) => {
+        const pid = String(a.project_id);
+        const pLeads = scopedLeads.filter((l) => String(l.project_id) === pid);
+        const completes = pLeads.filter((l) => isCompleteSt(l.status)).length || (!from && !to ? num(a.complete_count) : 0);
+        const clicks = Math.max(pLeads.length, completes);
+        const terminates = pLeads.filter((l) => isTerminateSt(l.status)).length;
+        const overquota = pLeads.filter((l) => isOverquotaSt(l.status)).length;
+        const conv = clicks > 0 ? Number(((completes / clicks) * 100).toFixed(1)) : 0;
+        const vendorCpi = num(a.vendor_cpi);
+        const vendorPayout = Number((completes * vendorCpi).toFixed(2));
+        return {
+          project_id: pid,
+          project_name: `Study #${pid}`,
+          client_name: "VMH GROUP",
+          cpi: vendorCpi,
+          total_clicks: clicks,
+          total_completes: completes,
+          total_terminates: terminates,
+          total_overquota: overquota,
+          conversion_rate: conv,
+          total_revenue: vendorPayout,
+          status: a.status || "Live",
+        };
+      });
+
+    return [...matchedFromProjects, ...extraFromAllots];
+  }, [d?.projects, isVendor, allotsQuery.data, vendorIdentifiers, scopedLeads, from, to]);
 
   const scopedClients = useMemo(() => (isVendor ? [] : d?.clients || []), [d?.clients, isVendor]);
 

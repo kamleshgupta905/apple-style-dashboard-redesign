@@ -59,25 +59,27 @@ export function VendorIntegrationModal({
 
   const copyVendorOnboardingSpec = () => {
     const text =
-      `*VMH GROUP · Partner Integration Spec for ${vName} (${vCode})*\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `1. ENTRY LINK WE PROVIDE TO YOU (Send respondent traffic here):\n` +
-      `• Universal Router Link (All assigned studies): ${routerUrl}\n` +
-      `• Per-Study Link Format: ${campaignTemplate}\n` +
-      `  (Replace [RESPONDENT_ID] with your unique panelist ID)\n\n` +
-      `2. RETURN REDIRECT LINKS YOU NEED TO SHARE WITH US (3 Required + 1 Security):\n` +
+      `*VMH GROUP · Supply Partner Integration Spec (${vName} · ${vCode})*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `1. Supply API Documentation (VMH GROUP Branded)\n` +
+      `• Partner Access Key (Header: access-key): ${accessKey}\n` +
+      `• Live Survey Inventory JSON Feed: ${feedUrl}\n` +
+      `• Universal Survey Router Link (1 Link for All Assigned Studies): ${routerUrl}\n` +
+      `• Per-Study Entry Link Format: ${campaignTemplate}\n` +
+      `• Full Partner API & Integration Docs: ${apiDocsUrl}\n\n` +
+      `2. Redirect URL Hashing & Security Guide\n` +
+      `• Optional Tamper-Proof Hash Parameter: &hash=[HASH] (SHA-256 / HMAC-SHA256 using Partner Access Key)\n` +
+      `• Automatic Quality & Fraud Gate: Duplicate UID/IP blocking, Bot detection & Speeder protection run automatically before redirect.\n\n` +
+      `3. S2S (Server-to-Server) & Return Redirect Guide\n` +
+      `Please share your 3 (+1 optional) Return Callback URLs with [UID] macro:\n` +
       `• Complete (Status 10): https://yourdomain.com/complete?uid=[UID]\n` +
       `• Terminate / Screenout (Status 20): https://yourdomain.com/terminate?uid=[UID]\n` +
       `• Overquota / Quota Full (Status 30): https://yourdomain.com/overquota?uid=[UID]\n` +
-      `• Security / Fraud (Status 40 - Optional): https://yourdomain.com/security?uid=[UID]\n\n` +
-      `3. OPTIONAL SUPPLY API INTEGRATION (If pulling surveys via API):\n` +
-      `• Access Key (Header: access-key): ${accessKey}\n` +
-      `• Live JSON Inventory Feed: ${feedUrl}\n` +
-      `• API Docs: ${apiDocsUrl}\n`;
+      `• Security / Fraud (Status 40 · Optional): https://yourdomain.com/security?uid=[UID]\n`;
 
     navigator.clipboard.writeText(text);
     setCopiedSpec(true);
-    toast("Vendor onboarding links & instructions copied!");
+    toast("VMH GROUP 3-Part Partner Integration Spec copied!");
     setTimeout(() => setCopiedSpec(false), 2500);
   };
 
@@ -277,23 +279,23 @@ export function VendorIntegrationModal({
           </div>
         )}
 
-        {/* Tab 3: Supply API & Access Key */}
+        {/* Tab 3: Supply API & 3-Part Integration Spec */}
         {tab === "api" && (
           <div className="space-y-4">
             <div className="rounded-2xl border border-line bg-fill/50 p-4 text-xs text-ink-3 leading-relaxed">
-              For standard link traffic, vendors do <strong>not</strong> need an API key—their Vendor ID (<code>{vCode}</code>) in the entry link is enough. Only share these credentials if <strong>{vName}</strong> wants to pull live assigned studies automatically via API.
+              Share this <strong>VMH GROUP</strong> 3-part integration kit with <strong>{vName}</strong>. Only studies allotted to <code>{vCode}</code> and VMH GROUP branding appear in their feed—client names and internal margins are hidden automatically.
             </div>
 
             <div className="rounded-2xl border border-accent/25 bg-accent-soft/20 p-4 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <KeyRound size={15} className="text-accent" />
-                  <h4 className="text-sm font-semibold text-ink">Partner Access Key</h4>
+                  <h4 className="text-sm font-semibold text-ink">1. Supply API Documentation &amp; Access Key</h4>
                 </div>
                 <Badge tone="blue">Header: access-key</Badge>
               </div>
               <p className="text-xs text-ink-3">
-                Vendor passes this key in request header <code className="font-mono">access-key: {accessKey}</code> or query param <code className="font-mono">?vendor_id={accessKey}</code>.
+                Partner Access Key (<code className="font-mono">access-key: {accessKey}</code> or <code className="font-mono">?vid={accessKey}</code>):
               </p>
               <div className="flex items-center gap-2">
                 <input
@@ -309,9 +311,9 @@ export function VendorIntegrationModal({
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Code2 size={15} className="text-ink-2" />
-                  <h4 className="text-sm font-semibold text-ink">Live Inventory JSON Feed URL</h4>
+                  <h4 className="text-sm font-semibold text-ink">Live Inventory JSON Feed URL (Vendor-Scoped)</h4>
                 </div>
-                <Badge tone="green">Live Feed</Badge>
+                <Badge tone="green">Only Allotted Surveys</Badge>
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -332,9 +334,24 @@ export function VendorIntegrationModal({
               </div>
             </div>
 
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-line bg-surface p-4 space-y-1.5">
+                <h4 className="text-xs font-semibold text-ink">2. Redirect URL Hashing Guide</h4>
+                <p className="text-[11.5px] text-ink-3 leading-relaxed">
+                  Optional <code className="font-mono text-accent">[HASH]</code> signature (<code className="font-mono">SHA-256 / HMAC-SHA256</code>) + automatic Duplicate, Bot &amp; Speeder Fraud Gate on every entry &amp; return redirect.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-line bg-surface p-4 space-y-1.5">
+                <h4 className="text-xs font-semibold text-ink">3. S2S Integration Guide</h4>
+                <p className="text-[11.5px] text-ink-3 leading-relaxed">
+                  Real-time status postbacks &amp; redirects for <code className="font-mono">10</code> (Complete), <code className="font-mono">20</code> (Terminate), <code className="font-mono">30</code> (Overquota), <code className="font-mono">40</code> (Security) with <code className="font-mono">[UID]</code>.
+                </p>
+              </div>
+            </div>
+
             <div className="rounded-2xl border border-line bg-surface p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h4 className="text-sm font-semibold text-ink">REST API Endpoint &amp; Docs</h4>
+                <h4 className="text-sm font-semibold text-ink">VMH GROUP 3-Guide Partner Portal Docs</h4>
                 <p className="text-xs text-ink-3 font-mono mt-0.5">GET /api/supplier/getAllSurveys?vendor_id={vCode}</p>
               </div>
               <div className="flex items-center gap-2">
@@ -345,7 +362,7 @@ export function VendorIntegrationModal({
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-line bg-fill hover:bg-fill-2 text-ink text-xs font-medium transition"
                 >
-                  API Docs <ExternalLink size={12} />
+                  Open Docs <ExternalLink size={12} />
                 </a>
               </div>
             </div>

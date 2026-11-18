@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { api } from "./api";
 import { num } from "./utils";
 
 export interface NextStudyCandidate {
@@ -87,11 +88,18 @@ export async function getStudyClientConfig(pid: string): Promise<{
   if (!pid) return defaults;
 
   try {
-    const { data: proj } = await supabase
+    let { data: proj } = await supabase
       .from("smr_projects")
       .select("project_id, loi, client_id, client_name")
       .eq("project_id", pid)
       .maybeSingle();
+
+    if (!proj) {
+      try {
+        const prjRes = await api.get<{ data: any[] }>("/manage/projects");
+        proj = (prjRes.data || []).find((p: any) => String(p.project_id || "").toLowerCase() === pid.toLowerCase()) || null;
+      } catch {}
+    }
 
     if (!proj) return defaults;
 
@@ -533,12 +541,28 @@ export async function recordStudyClickAndCheckAutoPause(
   markStudyAttempted(uid, pid);
 
   try {
-    // 1. Fetch current study state from smr_projects
-    const { data: proj, error } = await supabase
+    // 1. Fetch current study state from smr_projects, fallback to merged Gateway projects
+    let { data: proj, error } = await supabase
       .from("smr_projects")
       .select("id, project_id, project_name, status, total_clicks, total_completes, auto_pause_clicks, live_url")
       .eq("project_id", pid)
       .maybeSingle();
+
+    if (!proj) {
+      try {
+        const prjRes = await api.get<{ data: any[] }>("/manage/projects");
+        const gwMatch = (prjRes.data || []).find((p: any) => String(p.project_id || "").toLowerCase() === pid.toLowerCase());
+        if (gwMatch) {
+          return {
+            autoPaused: false,
+            isLive: !gwMatch.status || ["live", "active"].includes(String(gwMatch.status).toLowerCase()),
+            clicks: num(gwMatch.total_clicks, 0) + 1,
+            autoPauseLimit: num(gwMatch.auto_pause_clicks, 50),
+            liveUrl: gwMatch.live_url || gwMatch.liveUrl || undefined,
+          };
+        }
+      } catch {}
+    }
 
     if (error || !proj) {
       return { autoPaused: false, isLive: true, clicks: 1, autoPauseLimit: 50 };
@@ -635,7 +659,7 @@ export async function recordStudyComplete(pid: string, vid: string, uid: string)
     // 1. Increment total_completes in smr_projects
     const { data: proj } = await supabase
       .from("smr_projects")
-      .select("id, total_completes")
+      .select("id, project_name, total_completes")
       .eq("project_id", pid)
       .maybeSingle();
 
@@ -650,12 +674,12 @@ export async function recordStudyComplete(pid: string, vid: string, uid: string)
         .eq("project_id", pid);
     }
 
-    // 2. Increment complete_count in smr_vendor_allotments if vid is present
+    // 2. Increment complete_count in smr_vendor_allotments if vid is present (case-insensitive)
     if (vid) {
       const { data: allot } = await supabase
         .from("smr_vendor_allotments")
         .select("id, complete_count")
-        .eq("vendor_id", vid)
+        .ilike("vendor_id", vid)
         .eq("project_id", pid)
         .maybeSingle();
 
@@ -671,13 +695,40 @@ export async function recordStudyComplete(pid: string, vid: string, uid: string)
       }
     }
 
-    // 3. Update lead status in smr_leads
+    // 3. Update existing lead or insert if callback landed directly without prior prescreener lead
     try {
-      await supabase
+      const { data: existingLead } = await supabase
         .from("smr_leads")
-        .update({ status: "Complete", updated_at: new Date().toISOString() })
+        .select("id")
         .eq("uid", uid)
-        .eq("project_id", pid);
+        .eq("project_id", pid)
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const now = new Date().toISOString();
+      if (existingLead) {
+        await supabase
+          .from("smr_leads")
+          .update({ status: "Complete", updated_at: now })
+          .eq("id", existingLead.id);
+      } else {
+        await supabase.from("smr_leads").insert([
+          {
+            project_id: pid,
+            project_name: proj?.project_name || pid,
+            vendor_code: vid || "Direct",
+            vendor_name: vid || "Direct",
+            uid,
+            status: "Complete",
+            device: /mobile|android|iphone|ipad/i.test(navigator.userAgent || "") ? "Mobile" : "Desktop",
+            ip_address: "Live Session",
+            country: "—",
+            created_at: now,
+            updated_at: now,
+          },
+        ]);
+      }
     } catch {}
   } catch (err) {
     console.warn("recordStudyComplete error:", err);
@@ -699,16 +750,43 @@ export async function recordStudyDisqualify(
   const statusName = status === "20" ? "Terminate" : status === "30" ? "Overquota" : "Security";
 
   try {
-    // Update smr_leads
-    await supabase
+    const now = new Date().toISOString();
+    const { data: existingLead } = await supabase
       .from("smr_leads")
-      .update({
-        status: statusName,
-        reason: reason || null,
-        updated_at: new Date().toISOString(),
-      })
+      .select("id")
       .eq("uid", uid)
-      .eq("project_id", pid);
+      .eq("project_id", pid)
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingLead) {
+      await supabase
+        .from("smr_leads")
+        .update({
+          status: statusName,
+          reason: reason || null,
+          updated_at: now,
+        })
+        .eq("id", existingLead.id);
+    } else {
+      await supabase.from("smr_leads").insert([
+        {
+          project_id: pid,
+          project_name: pid,
+          vendor_code: vid || "Direct",
+          vendor_name: vid || "Direct",
+          uid,
+          status: statusName,
+          reason: reason || null,
+          device: /mobile|android|iphone|ipad/i.test(navigator.userAgent || "") ? "Mobile" : "Desktop",
+          ip_address: "Live Session",
+          country: "—",
+          created_at: now,
+          updated_at: now,
+        },
+      ]);
+    }
   } catch {}
 
   // Also log security flags if status 40
@@ -747,85 +825,85 @@ export async function findNextAvailableStudy(
       attempted.push(String(currentPid));
     }
 
-    // 1. If vid is provided, check vendor's active allotments first
-    if (vid) {
-      const { data: allotments } = await supabase
-        .from("smr_vendor_allotments")
-        .select("project_id, quota_limit, complete_count, vendor_cpi, status")
-        .ilike("vendor_id", vid);
+    const [allotsRes, projectsRes] = await Promise.all([
+      api.get<{ data: any[] }>("/vendor/allotments").catch(() => ({ data: [] })),
+      api.get<{ data: any[] }>("/manage/projects").catch(() => ({ data: [] })),
+    ]);
 
-      const activeAllots = (allotments || []).filter(
+    const allAllotments = allotsRes.data || [];
+    const allProjects = projectsRes.data || [];
+    const projMap = new Map<string, any>();
+    allProjects.forEach((p: any) => {
+      if (p.project_id) projMap.set(String(p.project_id).toLowerCase().trim(), p);
+    });
+
+    // 1. If vid is provided, check vendor's active allotments first (across Supabase + Gateway)
+    if (vid) {
+      const vidLower = vid.toLowerCase().trim();
+      const allotments = allAllotments.filter((a: any) => {
+        const avid = String(a.vendor_id || "").toLowerCase().trim();
+        const avname = String(a.vendor_name || "").toLowerCase().trim();
+        return avid === vidLower || avname === vidLower;
+      });
+
+      const activeAllots = allotments.filter(
         (a: any) => !a.status || ["active", "live"].includes(String(a.status).toLowerCase()),
       );
 
       if (activeAllots.length > 0) {
         // Filter out completed quotas and attempted projects
-        const availableAllots = activeAllots.filter((a) => {
+        const availableAllots = activeAllots.filter((a: any) => {
           if (attempted.includes(String(a.project_id))) return false;
           const limit = num(a.quota_limit, 0);
           const comp = num(a.complete_count, 0);
           return limit <= 0 || comp < limit;
         });
 
-        const candidatePids = availableAllots.map((a) => String(a.project_id));
+        const candidates: NextStudyCandidate[] = [];
 
-        if (candidatePids.length > 0) {
-          // Check matching projects in smr_projects
-          const { data: projects } = await supabase
-            .from("smr_projects")
-            .select("project_id, project_name, status, live_url, cpi, total_clicks, total_completes, auto_pause_clicks")
-            .in("project_id", candidatePids);
-
-          const projMap = new Map((projects || []).map((p: any) => [String(p.project_id), p]));
-          const candidates: NextStudyCandidate[] = [];
-
-          for (const a of availableAllots) {
-            const pidStr = String(a.project_id);
-            const p = projMap.get(pidStr);
-            if (p) {
-              const st = String(p.status || "").toLowerCase();
-              if (!["live", "active"].includes(st)) continue;
-              const th = num(p.auto_pause_clicks, 50);
-              const clicks = num(p.total_clicks, 0);
-              const comp = num(p.total_completes, 0);
-              if (th > 0 && clicks >= th && comp === 0) {
-                supabase.from("smr_projects").update({ status: "Pause" }).eq("project_id", p.project_id).then();
-                continue;
-              }
-              candidates.push({
-                project_id: pidStr,
-                project_name: String(p.project_name || pidStr),
-                live_url: p.live_url || null,
-                cpi: num(p.cpi, num(a.vendor_cpi, 0)),
-              });
-            } else if (/^\d{8,12}$/.test(pidStr.trim())) {
-              // Uncloned Zamplia / Marketplace numeric study directly allotted to vendor
-              candidates.push({
-                project_id: pidStr,
-                project_name: `Study #${pidStr}`,
-                live_url: null,
-                cpi: num(a.vendor_cpi, 0),
-              });
+        for (const a of availableAllots) {
+          const pidStr = String(a.project_id);
+          const p = projMap.get(pidStr.toLowerCase().trim());
+          if (p) {
+            const st = String(p.status || "Live").toLowerCase();
+            if (!["live", "active", ""].includes(st)) continue;
+            const th = num(p.auto_pause_clicks, 50);
+            const clicks = num(p.total_clicks, 0);
+            const comp = num(p.total_completes, 0);
+            if (th > 0 && clicks >= th && comp === 0) {
+              supabase.from("smr_projects").update({ status: "Pause" }).eq("project_id", p.project_id).then();
+              continue;
             }
+            candidates.push({
+              project_id: pidStr,
+              project_name: String(p.project_name || pidStr),
+              live_url: p.live_url || p.liveUrl || null,
+              cpi: num(p.cpi, num(a.vendor_cpi, 0)),
+            });
+          } else {
+            // Directly allotted Marketplace / Gateway study
+            candidates.push({
+              project_id: pidStr,
+              project_name: `Study #${pidStr}`,
+              live_url: null,
+              cpi: num(a.vendor_cpi, 0),
+            });
           }
+        }
 
-          if (candidates.length > 0) {
-            candidates.sort((a, b) => num(b.cpi, 0) - num(a.cpi, 0));
-            return candidates[0];
-          }
+        if (candidates.length > 0) {
+          candidates.sort((a, b) => num(b.cpi, 0) - num(a.cpi, 0));
+          return candidates[0];
         }
       }
     }
 
-    // 2. Global Fallback: Check all live studies in smr_projects that have not been attempted
-    const { data: allLive } = await supabase
-      .from("smr_projects")
-      .select("project_id, project_name, status, live_url, cpi, total_clicks, total_completes, auto_pause_clicks")
-      .in("status", ["Live", "Active", "live", "active"]);
-
-    const fallbackCandidates = (allLive || []).filter((p) => {
-      const pidStr = String(p.project_id);
-      if (attempted.includes(pidStr)) return false;
+    // 2. Global Fallback: Check all live studies across Supabase + Gateway that have not been attempted
+    const fallbackCandidates = allProjects.filter((p: any) => {
+      const pidStr = String(p.project_id || "");
+      if (!pidStr || attempted.includes(pidStr)) return false;
+      const st = String(p.status || "").toLowerCase();
+      if (!["live", "active"].includes(st)) return false;
       const th = num(p.auto_pause_clicks, 50);
       const clicks = num(p.total_clicks, 0);
       const comp = num(p.total_completes, 0);
@@ -837,12 +915,12 @@ export async function findNextAvailableStudy(
     });
 
     if (fallbackCandidates.length > 0) {
-      fallbackCandidates.sort((a, b) => num(b.cpi, 0) - num(a.cpi, 0));
+      fallbackCandidates.sort((a: any, b: any) => num(b.cpi, 0) - num(a.cpi, 0));
       const best = fallbackCandidates[0];
       return {
         project_id: String(best.project_id),
         project_name: String(best.project_name || best.project_id),
-        live_url: best.live_url || null,
+        live_url: best.live_url || best.liveUrl || null,
         cpi: num(best.cpi, 0),
       };
     }

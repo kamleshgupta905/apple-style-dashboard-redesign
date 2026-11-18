@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Download, Pause, Play } from "lucide-react";
-import { api, type Lead } from "../lib/api";
+import { api, isCompleteSt, isOverquotaSt, isSecuritySt, isTerminateSt, type Lead } from "../lib/api";
 import { useQuery } from "../lib/useQuery";
 import { exportCSV, formatDate, num, timeAgo } from "../lib/utils";
 import { useRealtime } from "../lib/useRealtime";
@@ -160,8 +160,10 @@ export function Leads() {
       ];
     }
     const clicks = filteredLeads.length;
-    const completes = filteredLeads.filter((l) => l.status === "Complete" || String(l.status) === "10").length;
-    const terminates = filteredLeads.filter((l) => l.status === "Terminate" || l.status === "Quota Full" || String(l.status) === "20" || String(l.status) === "30" || String(l.status) === "40").length;
+    const completes = filteredLeads.filter((l) => isCompleteSt(l.status)).length;
+    const terminates = filteredLeads.filter(
+      (l) => isTerminateSt(l.status) || isOverquotaSt(l.status) || isSecuritySt(l.status),
+    ).length;
     const conv = clicks > 0 ? Number(((completes / clicks) * 100).toFixed(1)) : 0;
     return [
       { label: "My Inbound Clicks", value: clicks },

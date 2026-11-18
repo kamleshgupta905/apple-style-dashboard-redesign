@@ -85,12 +85,14 @@ export class ApiError extends Error {
 type Params = Record<string, string | number | boolean | undefined | null>;
 
 async function request<T = any>(method: string, path: string, opts: { params?: Params; body?: unknown } = {}): Promise<T> {
-  const url = new URL(BASE + path);
-  if (opts.params) {
-    Object.entries(opts.params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, String(v));
-    });
-  }
+  const isSameHost = typeof window !== "undefined" && window.location.hostname === "api.vmhgroupsmr.com";
+  const hasOrigin = typeof window !== "undefined" && /^https?:/.test(window.location.origin);
+  const baseCandidates = isSameHost
+    ? [`${window.location.origin}/api`]
+    : hasOrigin
+    ? [`${window.location.origin}/gw-api`, BASE]
+    : [BASE];
+
   const token = auth.token();
   const headers: Record<string, string> = {};
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
@@ -99,28 +101,50 @@ async function request<T = any>(method: string, path: string, opts: { params?: P
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  let res: Response;
-  try {
-    res = await fetch(url.toString(), {
-      method,
-      headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-    });
-  } catch {
-    throw new ApiError("Network error — gateway unreachable. Check your connection and retry.");
+  let lastError: Error | null = null;
+
+  for (const baseUrl of baseCandidates) {
+    const url = new URL(baseUrl + path);
+    if (opts.params) {
+      Object.entries(opts.params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, String(v));
+      });
+    }
+
+    let res: Response;
+    try {
+      res = await fetch(url.toString(), {
+        method,
+        headers,
+        body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      });
+    } catch {
+      lastError = new ApiError("Network error — gateway unreachable. Check your connection and retry.");
+      continue;
+    }
+
+    const text = await res.text();
+    if (!text || text.trim().startsWith("<")) {
+      lastError = new ApiError(`Unexpected HTML response from gateway (HTTP ${res.status}).`, res.status);
+      continue;
+    }
+
+    let json: any = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      lastError = new ApiError(`Unexpected response from gateway (HTTP ${res.status}).`, res.status);
+      continue;
+    }
+
+    if (!res.ok || json?.success === false) {
+      lastError = new ApiError(json?.message || json?.error || `Request failed (HTTP ${res.status})`, res.status);
+      continue;
+    }
+    return json as T;
   }
 
-  const text = await res.text();
-  let json: any = null;
-  try {
-    json = text ? JSON.parse(text) : {};
-  } catch {
-    throw new ApiError(`Unexpected response from gateway (HTTP ${res.status}).`, res.status);
-  }
-  if (!res.ok || json?.success === false) {
-    throw new ApiError(json?.message || json?.error || `Request failed (HTTP ${res.status})`, res.status);
-  }
-  return json as T;
+  throw lastError || new ApiError("Gateway unreachable.");
 }
 
 export async function login(username: string, password: string) {
@@ -216,9 +240,97 @@ export async function refreshCurrentUser(): Promise<AuthUser | null> {
  * High-performance SQL API router backed by Supabase PostgreSQL.
  * Routes core dashboard data directly to PostgreSQL tables.
  */
+async function fetchMergedProjects(params?: Params): Promise<{ rows: any[]; supaOk: boolean }> {
+  const [supaRes, gwRes] = await Promise.all([
+    supabase.from("smr_projects").select("*").order("id", { ascending: false }),
+    request<{ data?: any[] }>("GET", "/manage/projects", { params }).catch(() => null),
+  ]);
+  const supaRows = !supaRes.error && Array.isArray(supaRes.data) ? supaRes.data : [];
+  const gwRows = Array.isArray(gwRes?.data) ? gwRes!.data : [];
+
+  const mergedMap = new Map<string, any>();
+  gwRows.forEach((p: any) => {
+    const key = String(p.project_id || p.id || "").trim();
+    if (key) mergedMap.set(key.toLowerCase(), p);
+  });
+  supaRows.forEach((p: any) => {
+    const key = String(p.project_id || p.id || "").trim();
+    if (key) mergedMap.set(key.toLowerCase(), p);
+  });
+
+  return { rows: Array.from(mergedMap.values()), supaOk: !supaRes.error };
+}
+
+async function fetchMergedAllotments(): Promise<{ rows: any[]; supaOk: boolean }> {
+  const [supaRes, gwRes] = await Promise.all([
+    supabase.from("smr_vendor_allotments").select("*").order("id", { ascending: false }),
+    request<{ data?: any[] }>("GET", "/vendor/allotments").catch(() => null),
+  ]);
+  const supaRows = !supaRes.error && Array.isArray(supaRes.data) ? supaRes.data : [];
+  const gwRows = Array.isArray(gwRes?.data) ? gwRes!.data : [];
+
+  const mergedMap = new Map<string, any>();
+  gwRows.forEach((a: any, idx: number) => {
+    const vid = String(a.vendor_id || "").toLowerCase().trim();
+    const pid = String(a.project_id || "").toLowerCase().trim();
+    const key = vid && pid ? `${vid}::${pid}` : `gw-${a.id ?? idx}`;
+    mergedMap.set(key, a);
+  });
+  supaRows.forEach((a: any, idx: number) => {
+    const vid = String(a.vendor_id || "").toLowerCase().trim();
+    const pid = String(a.project_id || "").toLowerCase().trim();
+    const key = vid && pid ? `${vid}::${pid}` : `supa-${a.id ?? idx}`;
+    mergedMap.set(key, a);
+  });
+
+  return { rows: Array.from(mergedMap.values()), supaOk: !supaRes.error };
+}
+
+function normalizeLeadRow(l: any) {
+  return {
+    ...l,
+    vendor_code: l.vendor_code || l.vendor || l.vendor_id || "Direct",
+    vendor_name: l.vendor_name || l.vendor_code || l.vendor || "Direct",
+    ip_address: l.ip_address || l.ip || "—",
+    country: l.country || "—",
+    reason: l.reason || "",
+  };
+}
+
+async function fetchMergedLeads(limit = 500): Promise<{ rows: any[]; supaOk: boolean }> {
+  const [supaRes, gwRes] = await Promise.all([
+    supabase.from("smr_leads").select("*").order("id", { ascending: false }).limit(limit),
+    request<{ data?: any[] }>("GET", "/leads", { params: { limit } }).catch(() => null),
+  ]);
+  const supaRows = !supaRes.error && Array.isArray(supaRes.data) ? supaRes.data.map(normalizeLeadRow) : [];
+  const gwRows = Array.isArray(gwRes?.data) ? gwRes!.data.map(normalizeLeadRow) : [];
+
+  const mergedMap = new Map<string, any>();
+  gwRows.forEach((l: any, idx: number) => {
+    const uid = String(l.uid || "").toLowerCase().trim();
+    const pid = String(l.project_id || "").toLowerCase().trim();
+    const vc = String(l.vendor_code || "").toLowerCase().trim();
+    const key = uid ? `${uid}::${pid}::${vc}` : `gw-${l.id ?? idx}`;
+    mergedMap.set(key, l);
+  });
+  supaRows.forEach((l: any, idx: number) => {
+    const uid = String(l.uid || "").toLowerCase().trim();
+    const pid = String(l.project_id || "").toLowerCase().trim();
+    const vc = String(l.vendor_code || "").toLowerCase().trim();
+    const key = uid ? `${uid}::${pid}::${vc}` : `supa-${l.id ?? idx}`;
+    mergedMap.set(key, l);
+  });
+
+  const rows = Array.from(mergedMap.values())
+    .sort((a, b) => Date.parse(b.created_at || "") - Date.parse(a.created_at || ""))
+    .slice(0, limit);
+
+  return { rows, supaOk: !supaRes.error };
+}
+
 export const api = {
   get: async <T = any>(path: string, params?: Params): Promise<T> => {
-    // 1. Entities stored in Supabase SQL (instant read, always reflects user edits)
+    // 1. Entities stored in Supabase SQL + Live Gateway merge (instant read, complete data)
     if (path === "/clients" || path === "/manage/clients") {
       try {
         const { data, error } = await supabase.from("smr_clients").select("*").order("id");
@@ -229,10 +341,12 @@ export const api = {
     }
     if (path === "/manage/projects" || path === "/projects") {
       try {
-        const { data, error } = await supabase.from("smr_projects").select("*").order("id", { ascending: false });
-        if (!error && data) return { data } as unknown as T;
+        const { rows, supaOk } = await fetchMergedProjects(params);
+        if (rows.length > 0 || supaOk) {
+          return { data: rows } as unknown as T;
+        }
       } catch (e) {
-        console.warn("Supabase projects read error:", e);
+        console.warn("Projects read error:", e);
       }
     }
     if (path === "/manage/users") {
@@ -253,18 +367,22 @@ export const api = {
     }
     if (path === "/vendor/allotments") {
       try {
-        const { data, error } = await supabase.from("smr_vendor_allotments").select("*").order("id", { ascending: false });
-        if (!error && data) return { data } as unknown as T;
+        const { rows, supaOk } = await fetchMergedAllotments();
+        if (rows.length > 0 || supaOk) {
+          return { data: rows } as unknown as T;
+        }
       } catch (e) {
-        console.warn("Supabase vendor allotments read error:", e);
+        console.warn("Vendor allotments read error:", e);
       }
     }
 
-    // 2. Try Live api.vmhgroupsmr.com Gateway for external marketplace feed endpoints
+    // 2. Try Live Gateway (proxied via /gw-api in dev) for external marketplace feed endpoints
     if (path.startsWith("/zamplia")) {
       try {
         const live = await request<T>("GET", path, { params });
-        if (live && (live as any).success !== false && ((live as any).data !== undefined || (live as any).totalClick !== undefined)) {
+        const hasArrayData = Array.isArray((live as any)?.data) && (live as any).data.length > 0;
+        const isDetailOrSync = path !== "/zamplia";
+        if (live && (live as any).success !== false && (hasArrayData || (isDetailOrSync && (live as any).data !== undefined))) {
           return live;
         }
       } catch {
@@ -313,23 +431,11 @@ export const api = {
         if (!error && data) return { data } as unknown as T;
       }
 
-      // 6. Traffic Leads
+      // 6. Traffic Leads (Supabase + Gateway merged)
       if (path === "/leads" || path === "/traffic/leads") {
         const limit = Number(params?.limit) || 500;
-        const { data, error } = await supabase
-          .from("smr_leads")
-          .select("*")
-          .order("id", { ascending: false })
-          .limit(limit);
-        if (!error && data) {
-          const normalized = data.map((l: any) => ({
-            ...l,
-            vendor_code: l.vendor_code || l.vendor || l.vendor_id || "Direct",
-            vendor_name: l.vendor_name || l.vendor_code || l.vendor || "Direct",
-            ip_address: l.ip_address || l.ip || "—",
-            country: l.country || "—",
-            reason: l.reason || "",
-          }));
+        const { rows: normalized, supaOk } = await fetchMergedLeads(limit);
+        if (normalized.length > 0 || supaOk) {
           const total = normalized.length;
           const complete = normalized.filter((l) => isCompleteSt(l.status)).length;
           const terminate = normalized.filter((l) => isTerminateSt(l.status)).length;
@@ -534,12 +640,12 @@ export const api = {
       // 10. Dashboard Analytics & Unified Reports (100% Real Live Data)
       if (path === "/dashboard/analytics") {
         const [leadsRes, prjRes, vndRes] = await Promise.all([
-          supabase.from("smr_leads").select("id, status, project_name, project_id, device").limit(2000),
-          supabase.from("smr_projects").select("id, project_id, project_name, status"),
+          fetchMergedLeads(2000),
+          fetchMergedProjects(),
           supabase.from("smr_vendors").select("id, status"),
         ]);
-        const leads = leadsRes.data || [];
-        const prjs = prjRes.data || [];
+        const leads = leadsRes.rows || [];
+        const prjs = prjRes.rows || [];
         const vnds = vndRes.data || [];
 
         const totalClicks = leads.length;
@@ -577,21 +683,21 @@ export const api = {
 
       if (path === "/reports/unified") {
         const [prjRes, vndRes, cliRes, leadsRes, allotRes] = await Promise.all([
-          supabase.from("smr_projects").select("*"),
+          fetchMergedProjects(),
           supabase.from("smr_vendors").select("*").order("id"),
           supabase.from("smr_clients").select("*").order("id"),
-          supabase.from("smr_leads").select("*").order("id", { ascending: false }).limit(5000),
-          supabase.from("smr_vendor_allotments").select("*"),
+          fetchMergedLeads(5000),
+          fetchMergedAllotments(),
         ]);
 
-        const projectsRaw = prjRes.data || [];
+        const projectsRaw = prjRes.rows || [];
         const vendorsRaw = vndRes.data || [];
         const clientsRaw = cliRes.data || [];
-        const allotsRaw = allotRes.data || [];
+        const allotsRaw = allotRes.rows || [];
 
         const fromMs = params?.fromDate ? new Date(`${params.fromDate}T00:00:00`).getTime() : null;
         const toMs = params?.toDate ? new Date(`${params.toDate}T23:59:59.999`).getTime() : null;
-        const leads = (leadsRes.data || [])
+        const leads = (leadsRes.rows || [])
           .filter((l: any) => {
             if (!fromMs && !toMs) return true;
             const t = new Date(l.created_at || 0).getTime();
@@ -616,7 +722,10 @@ export const api = {
 
         const allotCpiMap = new Map<string, number>();
         allotsRaw.forEach((a: any) => {
-          allotCpiMap.set(`${a.vendor_id}::${a.project_id}`, Number(a.vendor_cpi) || 0);
+          allotCpiMap.set(
+            `${String(a.vendor_id || "").toLowerCase().trim()}::${String(a.project_id || "").toLowerCase().trim()}`,
+            Number(a.vendor_cpi) || 0,
+          );
         });
 
         const projects = projectsRaw.map((p: any) => {
@@ -657,17 +766,21 @@ export const api = {
 
         const vendors = vendorsRaw.map((v: any) => {
           const vCode = String(v.vendor_code || v.vendor_id || v.id);
-          const vCodeLower = vCode.toLowerCase();
-          const vNameLower = String(v.vendor_name || v.name || "").toLowerCase();
-          const vAllots = allotsRaw.filter((a: any) => String(a.vendor_id || "").toLowerCase() === vCodeLower);
+          const vCodeLower = vCode.toLowerCase().trim();
+          const vNameLower = String(v.vendor_name || v.name || "").toLowerCase().trim();
+          const vAllots = allotsRaw.filter((a: any) => {
+            const avid = String(a.vendor_id || "").toLowerCase().trim();
+            const avname = String(a.vendor_name || "").toLowerCase().trim();
+            return avid === vCodeLower || (vNameLower && avname === vNameLower);
+          });
           const vLeads = leads.filter((l: any) => {
-            const lvc = String(l.vendor_code || l.vendor || "").toLowerCase();
-            const lvn = String(l.vendor_name || "").toLowerCase();
+            const lvc = String(l.vendor_code || l.vendor || "").toLowerCase().trim();
+            const lvn = String(l.vendor_name || "").toLowerCase().trim();
             return lvc === vCodeLower || (vNameLower && lvn === vNameLower);
           });
-          const clicks = vLeads.length;
           const completeLeads = vLeads.filter((l: any) => isCompleteSt(l.status));
           const completes = completeLeads.length || (!fromMs && !toMs ? vAllots.reduce((s: number, a: any) => s + (Number(a.complete_count) || 0), 0) : 0);
+          const clicks = Math.max(vLeads.length, completes);
           const terminates = vLeads.filter((l: any) => isTerminateSt(l.status)).length;
           const securityTerminates = vLeads.filter((l: any) => isSecuritySt(l.status)).length;
           const conv = clicks > 0 ? Number(((completes / clicks) * 100).toFixed(1)) : 0;
@@ -675,7 +788,7 @@ export const api = {
           let payout = 0;
           if (completeLeads.length > 0) {
             payout = completeLeads.reduce((s: number, l: any) => {
-              const allotCpi = allotCpiMap.get(`${vCode}::${l.project_id}`);
+              const allotCpi = allotCpiMap.get(`${vCodeLower}::${String(l.project_id || "").toLowerCase().trim()}`);
               if (allotCpi && allotCpi > 0) return s + allotCpi;
               const projCpi = projectCpiMap.get(String(l.project_id)) || 0;
               const share = (Number(v.cpi_percentage ?? v.rev_share) || 70) / 100;
@@ -781,6 +894,9 @@ export const api = {
           is_cloned: isDuplicate || !!p.is_cloned,
           updated_at: new Date().toISOString(),
         };
+
+        // Sync saved/duplicated study to Hostinger Live Gateway in background
+        request("POST", path, { body: p }).catch(() => {});
 
         if (p.id && !isDuplicate) {
           const { data, error } = await supabase.from("smr_projects").update(payload).eq("id", p.id).select().single();

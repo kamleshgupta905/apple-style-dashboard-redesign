@@ -16,4 +16,24 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  server: {
+    proxy: {
+      "/gw-api": {
+        target: "https://api.vmhgroupsmr.com",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (p) => p.replace(/^\/gw-api/, "/api"),
+      },
+    },
+  },
+  preview: {
+    proxy: {
+      "/gw-api": {
+        target: "https://api.vmhgroupsmr.com",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (p) => p.replace(/^\/gw-api/, "/api"),
+      },
+    },
+  },
 });

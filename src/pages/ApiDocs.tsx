@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Code2,
   ShieldCheck,
@@ -7,164 +7,236 @@ import {
   Send,
   Loader2,
   Database,
-  ArrowUpRight,
+  Lock,
+  Webhook,
+  Copy,
+  Check,
+  ExternalLink,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { usePermissions } from "../lib/permissions";
+import { num } from "../lib/utils";
 
 interface EndpointDef {
   method: "GET" | "POST";
   path: string;
   summary: string;
   description: string;
-  params?: { name: string; type: string; required: boolean; desc: string; defaultVal?: string }[];
-  sampleResponse: any;
+  params?: { name: string; type: string; required: boolean; desc: string }[];
+  sampleResponse: (vid: string, origin: string) => any;
 }
 
 const ENDPOINTS: EndpointDef[] = [
   {
     method: "GET",
     path: "/api/supplier/getAllSurveys",
-    summary: "Get all assigned surveys for vendor",
-    description: "Retrieves all market research studies currently allocated to your vendor account with real-time CPI, LOI, IR, quota, and dynamic entry links.",
+    summary: "Get all surveys allotted to your partner account",
+    description:
+      "Retrieves ONLY the live studies currently assigned to your partner account with real-time payout CPI, LOI, IR, remaining quota, and ready-to-route VMH GROUP entry links.",
     params: [
-      { name: "vendor_id", type: "string", required: false, desc: "Your unique vendor code (e.g. VND-AFC01). Required if access-key header is omitted." }
+      {
+        name: "vendor_id",
+        type: "string",
+        required: true,
+        desc: "Your unique VMH GROUP Partner Access Key / Vendor ID (or pass via Header: access-key).",
+      },
     ],
-    sampleResponse: {
+    sampleResponse: (vid, origin) => ({
       success: true,
-      apiVersion: 1,
-      message: "Active surveys retrieved successfully",
+      brand: "VMH GROUP",
+      apiVersion: "1.0",
+      message: "Allotted active surveys retrieved successfully",
       result: {
         success: true,
-        vendor_id: "VND-AFC01",
-        total: 2,
+        vendor_id: vid,
+        total: 1,
+        universal_router_url: `${origin}/#/router?vid=${encodeURIComponent(vid)}&uid=[RESPONDENT_ID]`,
         data: [
           {
             survey_id: "2141504327",
-            survey_name: "Consumer Tech Survey",
-            cpi: 1.20,
-            loi: "13",
-            ir: "74",
-            total_quota: 656,
-            remaining_quota: 656,
+            survey_name: "Consumer Insights Study",
+            brand: "VMH GROUP",
+            cpi: 1.25,
+            currency: "USD",
+            loi: "12",
+            ir: "70",
+            total_quota: 250,
+            remaining_quota: 242,
             country: "US",
-            language: "en-US",
-            live_url: "https://api.vmhgroupsmr.com/vendor/auth/VND-AFC01/project/2141504327?uid=[RESPONDENT_ID]"
-          }
-        ]
-      }
-    }
+            status: "Live",
+            entry_link: `${origin}/#/prescreener?pid=2141504327&vid=${encodeURIComponent(vid)}&uid=[RESPONDENT_ID]`,
+          },
+        ],
+      },
+    }),
   },
   {
     method: "GET",
     path: "/api/supplier/getSurveyDetails",
-    summary: "Get detailed study info & qualifications",
-    description: "Retrieves detailed information including demographic qualifications, targeting criteria, and entry rules for a specific survey.",
+    summary: "Get study specs & entry rules for an allotted survey",
+    description:
+      "Retrieves detailed targeting specifications, remaining quota, and entry URL for a specific survey assigned to your account.",
     params: [
-      { name: "survey_id", type: "string", required: true, desc: "The ID of the survey (e.g. 2141504327 or VMHPI000142026)" }
+      {
+        name: "survey_id",
+        type: "string",
+        required: true,
+        desc: "The Survey ID assigned to your partner account.",
+      },
+      {
+        name: "vendor_id",
+        type: "string",
+        required: true,
+        desc: "Your VMH GROUP Partner ID.",
+      },
     ],
-    sampleResponse: {
+    sampleResponse: (vid, origin) => ({
       success: true,
-      apiVersion: 1,
+      brand: "VMH GROUP",
+      apiVersion: "1.0",
       message: "Survey details retrieved successfully",
       result: {
         success: true,
         data: {
           survey_id: "2141504327",
-          name: "Consumer Tech Survey",
-          cpi: 1.20,
-          loi: "13",
-          ir: "74",
+          survey_name: "Consumer Insights Study",
+          brand: "VMH GROUP",
+          cpi: 1.25,
+          loi: "12",
+          ir: "70",
           status: "Live",
-          quota_limit: 656,
+          quota_limit: 250,
+          remaining_quota: 242,
           country: "US",
-          language: "en-US",
-          entry_link: "https://api.vmhgroupsmr.com/vendor/auth/VND-AFC01/project/2141504327?uid=[RESPONDENT_ID]",
-          qualifications: [
-            { name: "AGE", operator: "between", value: "18-99" },
-            { name: "COUNTRY", operator: "equals", value: "US" }
-          ]
-        }
-      }
-    }
-  }
+          entry_link: `${origin}/#/prescreener?pid=2141504327&vid=${encodeURIComponent(vid)}&uid=[RESPONDENT_ID]`,
+        },
+      },
+    }),
+  },
 ];
 
 export function ApiDocs() {
+  const { user } = usePermissions();
+  const isVendor =
+    user?.role_id === 3 ||
+    user?.role_name === "Vendor" ||
+    user?.role_name?.toLowerCase().includes("vendor");
+
+  const activeVendorCode = useMemo(
+    () => user?.vendor_code || user?.supplier_id || (isVendor ? user?.username : "") || "VND001",
+    [user, isVendor],
+  );
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
+
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     "/api/supplier/getAllSurveys": true,
   });
   const [testResults, setTestResults] = useState<Record<string, any>>({});
   const [testing, setTesting] = useState<Record<string, boolean>>({});
+  const [copiedSpec, setCopiedSpec] = useState(false);
 
   const toggle = (path: string) => {
     setExpanded((prev) => ({ ...prev, [path]: !prev[path] }));
   };
 
+  const copyPartnerGuide = () => {
+    const guide =
+      `VMH GROUP · Partner API Integration Specification (${activeVendorCode})\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `1. Supply API Documentation\n` +
+      `• Partner Access Key (Header: access-key): ${activeVendorCode}\n` +
+      `• Live Survey Inventory Feed: ${origin}/#/vendor-feed?vid=${encodeURIComponent(activeVendorCode)}\n` +
+      `• Universal Survey Router Link: ${origin}/#/router?vid=${encodeURIComponent(activeVendorCode)}&uid=[RESPONDENT_ID]\n\n` +
+      `2. Redirect URL Hashing & Security Guide\n` +
+      `• Optional Parameter: &hash=[HASH] (SHA-256 / HMAC-SHA256 signature)\n` +
+      `• Automated Fraud Gate: Duplicate UID/IP blocking, Bot detection & Speeder protection run before entry & on complete.\n\n` +
+      `3. S2S (Server-to-Server) & Return Redirect Guide\n` +
+      `• Status 10 = Complete\n` +
+      `• Status 20 = Terminate / Screenout\n` +
+      `• Status 30 = Quota Full (Overquota)\n` +
+      `• Status 40 = Security / Fraud Gate\n` +
+      `• Required Placeholder: [UID]\n`;
+    navigator.clipboard?.writeText?.(guide);
+    setCopiedSpec(true);
+    setTimeout(() => setCopiedSpec(false), 2000);
+  };
+
   const runTest = async (ep: EndpointDef) => {
     setTesting((prev) => ({ ...prev, [ep.path]: true }));
     try {
-      let url = `https://api.vmhgroupsmr.com${ep.path}`;
-      if (ep.params && ep.params.length > 0) {
-        if (ep.path.includes("getSurveyDetails") || ep.path.includes("getSurveyStats")) {
-          url += "?survey_id=VMHPI000142026";
-        } else if (ep.path.includes("getQualifications")) {
-          url += "?lang_id=1";
-        }
+      // Strictly query vendor-scoped allotments so vendors only ever see their own allotted studies and VMH GROUP branding
+      const { data: allotments } = await supabase
+        .from("smr_vendor_allotments")
+        .select("*")
+        .ilike("vendor_id", activeVendorCode);
+
+      const activeAllots = (allotments || []).filter(
+        (a: any) => !a.status || ["active", "live"].includes(String(a.status).toLowerCase()),
+      );
+
+      const pids = activeAllots.map((a: any) => String(a.project_id));
+      const { data: projs } = await supabase
+        .from("smr_projects")
+        .select("project_id, project_name, loi, ir, country, status")
+        .in("project_id", pids.length > 0 ? pids : ["__none__"]);
+
+      const projMap = new Map((projs || []).map((p: any) => [String(p.project_id), p]));
+
+      const scopedSurveys = activeAllots
+        .filter((a: any) => {
+          const p = projMap.get(String(a.project_id));
+          if (p) return ["live", "active"].includes(String(p.status || "").toLowerCase());
+          return /^\d{8,12}$/.test(String(a.project_id || "").trim());
+        })
+        .map((a: any) => {
+          const pid = String(a.project_id);
+          const p = projMap.get(pid);
+          const quotaLimit = num(a.quota_limit, 100);
+          const comp = num(a.complete_count, 0);
+          return {
+            survey_id: pid,
+            survey_name: p?.project_name || `Study #${pid}`,
+            brand: "VMH GROUP",
+            cpi: Number(num(a.vendor_cpi).toFixed(2)),
+            currency: "USD",
+            loi: String(num(p?.loi, 10)),
+            ir: String(num(p?.ir, 70)),
+            total_quota: quotaLimit,
+            remaining_quota: Math.max(0, quotaLimit - comp),
+            country: p?.country || "US",
+            status: "Live",
+            entry_link: `${origin}/#/prescreener?pid=${encodeURIComponent(pid)}&vid=${encodeURIComponent(activeVendorCode)}&uid=[RESPONDENT_ID]`,
+          };
+        });
+
+      if (ep.path.includes("getAllSurveys")) {
+        setTestResults((prev) => ({
+          ...prev,
+          [ep.path]: {
+            success: true,
+            brand: "VMH GROUP",
+            apiVersion: "1.0",
+            vendor_id: activeVendorCode,
+            total: scopedSurveys.length,
+            universal_router_url: `${origin}/#/router?vid=${encodeURIComponent(activeVendorCode)}&uid=[RESPONDENT_ID]`,
+            data: scopedSurveys,
+          },
+        }));
+      } else {
+        setTestResults((prev) => ({
+          ...prev,
+          [ep.path]: {
+            success: true,
+            brand: "VMH GROUP",
+            apiVersion: "1.0",
+            vendor_id: activeVendorCode,
+            data: scopedSurveys[0] || { message: "No active surveys currently allotted to this partner ID." },
+          },
+        }));
       }
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setTestResults((prev) => ({ ...prev, [ep.path]: data }));
-    } catch {
-      // Fallback to live Supabase query so interactive API test works cleanly in preview
-      try {
-        if (ep.path.includes("getAllSurveys")) {
-          const { data: projs } = await supabase.from("smr_projects").select("*").eq("status", "Live").limit(10);
-          setTestResults((prev) => ({
-            ...prev,
-            [ep.path]: {
-              success: true,
-              apiVersion: 1,
-              source: "supabase-live",
-              total: (projs || []).length,
-              data: (projs || []).map((p: any) => ({
-                survey_id: p.project_id,
-                survey_name: p.project_name,
-                cpi: Number(p.cpi || 0),
-                loi: String(p.loi || 10),
-                ir: String(p.ir || 70),
-                total_quota: Number(p.target_completes || 0),
-                country: p.country || "US",
-                status: p.status,
-              })),
-            },
-          }));
-        } else {
-          const { data: proj } = await supabase.from("smr_projects").select("*").limit(1).maybeSingle();
-          setTestResults((prev) => ({
-            ...prev,
-            [ep.path]: {
-              success: true,
-              apiVersion: 1,
-              source: "supabase-live",
-              data: proj
-                ? {
-                    survey_id: proj.project_id,
-                    name: proj.project_name,
-                    cpi: Number(proj.cpi || 0),
-                    loi: String(proj.loi || 10),
-                    ir: String(proj.ir || 70),
-                    status: proj.status,
-                    quota_limit: Number(proj.target_completes || 0),
-                    country: proj.country || "US",
-                  }
-                : ep.sampleResponse.result.data,
-            },
-          }));
-        }
-      } catch (err: any) {
-        setTestResults((prev) => ({ ...prev, [ep.path]: { error: err?.message || "Query failed" } }));
-      }
+    } catch (err: any) {
+      setTestResults((prev) => ({ ...prev, [ep.path]: { error: err?.message || "Query failed" } }));
     } finally {
       setTesting((prev) => ({ ...prev, [ep.path]: false }));
     }
@@ -173,78 +245,90 @@ export function ApiDocs() {
   return (
     <div className="min-h-screen bg-[#f6f7f9] dark:bg-[#0b0c0e] text-[#111317] dark:text-[#eef0f3] py-8 px-4 sm:px-8">
       <div className="max-w-5xl mx-auto space-y-8">
-        
         {/* Top Header Card */}
         <div className="rounded-2xl border border-black/[0.08] dark:border-white/[0.09] bg-white dark:bg-[#14161a] p-6 sm:p-8 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-black/[0.07] dark:border-white/[0.08] pb-6">
             <div>
               <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 mb-2">
-                OpenAPI 3.0 Specification
+                VMH GROUP · Partner Integration Specification v1.0
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-                Vendors API Documentation
+                Partner API &amp; Integration Guides
               </h1>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 max-w-2xl">
-                Official REST API specifications for Supply Partners to integrate directly with VMH Group's API Tool Platform. Fetch allotted surveys, query study parameters, and process S2S callbacks automatically.
+                Official 3-part integration kit for VMH GROUP supply partners. Fetch only the live surveys allocated to your partner ID, verify redirect security hashes, and process real-time S2S callbacks.
               </p>
             </div>
-            <div className="flex items-center gap-2.5">
-              <a
-                href="/api-docs/"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition"
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={copyPartnerGuide}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition cursor-pointer"
               >
-                Swagger UI
-                <ArrowUpRight size={14} />
-              </a>
+                {copiedSpec ? <Check size={14} /> : <Copy size={14} />}
+                {copiedSpec ? "Spec Copied!" : "Copy 3-Part Spec"}
+              </button>
               <a
-                href="/api-docs/openapi.json"
-                target="_blank"
-                rel="noreferrer"
+                href={`#/vendor-feed?vid=${encodeURIComponent(activeVendorCode)}`}
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] hover:bg-slate-100 dark:hover:bg-white/[0.1] text-xs font-medium transition"
               >
                 <Code2 size={13} />
-                Raw JSON
+                Live JSON Feed
+                <ExternalLink size={12} />
               </a>
             </div>
           </div>
 
-          {/* Quick Specifications Cards */}
+          {/* 3-Guide Structure matching Partner Onboarding Spec */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6">
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/5">
-              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                Authentication
+            {/* Guide 1: Supply API Documentation */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/5 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                <Database size={14} />
+                <span>1. Supply API Documentation</span>
               </div>
               <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-                Pass your Partner Access Key in the request header:
+                Authenticate via header or query parameter to pull only your allotted live studies:
               </p>
-              <div className="mt-2 font-mono text-[11px] p-2 rounded-lg bg-white dark:bg-black/30 border border-slate-200 dark:border-white/5 text-indigo-600 dark:text-indigo-400">
-                access-key: YOUR_KEY
+              <div className="font-mono text-[11px] p-2.5 rounded-lg bg-white dark:bg-black/30 border border-slate-200 dark:border-white/5 text-indigo-600 dark:text-indigo-400 break-all">
+                access-key: {activeVendorCode}
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                Router: <code className="font-mono">/#/router?vid={activeVendorCode}&amp;uid=[UID]</code>
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/5">
-              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                S2S Status Postbacks
+            {/* Guide 2: Redirect URL Hashing Guide */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/5 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                <Lock size={14} />
+                <span>2. Redirect URL Hashing Guide</span>
+              </div>
+              <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                Supports optional <code className="font-mono">SHA-256</code> / <code className="font-mono">HMAC-SHA256</code> verification via <code className="font-mono">&amp;hash=[HASH]</code>.
+              </p>
+              <div className="font-mono text-[10.5px] p-2.5 rounded-lg bg-white dark:bg-black/30 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-300 break-all">
+                SHA256(uid + ":" + status + ":" + accessKey)
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                Duplicate IP/UID, Bot &amp; Speeder checks enforced automatically.
+              </div>
+            </div>
+
+            {/* Guide 3: S2S Integration Guide */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/5 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                <Webhook size={14} />
+                <span>3. S2S Integration Guide</span>
               </div>
               <div className="space-y-1 text-xs">
-                <div><span className="font-bold text-emerald-600">10</span> : Complete</div>
+                <div><span className="font-bold text-emerald-600">10</span> : Complete (Payout Credited)</div>
                 <div><span className="font-bold text-amber-600">20</span> : Terminate / Screenout</div>
                 <div><span className="font-bold text-sky-600">30</span> : Quota Full (Overquota)</div>
-                <div><span className="font-bold text-rose-600">40</span> : Security / Fraud Gate</div>
+                <div><span className="font-bold text-rose-600">40</span> : Security / Fraud Block</div>
               </div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/5">
-              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                Dynamic Entry URL
-              </div>
-              <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-                Replace <code>[RESPONDENT_ID]</code> with your user's UID when sending traffic:
-              </p>
-              <div className="mt-2 font-mono text-[10px] p-2 rounded-lg bg-white dark:bg-black/30 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 break-all">
-                .../project/[ID]?uid=<b>USER_ID</b>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                Callback macro: <code className="font-mono">?uid=[UID]</code>
               </div>
             </div>
           </div>
@@ -255,7 +339,7 @@ export function ApiDocs() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Database size={18} className="text-indigo-600" />
-              REST API Endpoints (Survey Sherpa Standard)
+              VMH GROUP Supply API Endpoints ({activeVendorCode})
             </h2>
             <span className="text-xs text-slate-500 tabular-nums">{ENDPOINTS.length} endpoints</span>
           </div>
@@ -265,13 +349,13 @@ export function ApiDocs() {
               const isOpen = !!expanded[ep.path];
               const testData = testResults[ep.path];
               const isTesting = testing[ep.path];
+              const sample = ep.sampleResponse(activeVendorCode, origin);
 
               return (
                 <div
                   key={ep.path}
                   className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] overflow-hidden shadow-sm transition"
                 >
-                  {/* Endpoint Header Bar */}
                   <div
                     onClick={() => toggle(ep.path)}
                     className="p-4 sm:p-5 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50/50 dark:hover:bg-white/[0.02]"
@@ -297,14 +381,12 @@ export function ApiDocs() {
                     </div>
                   </div>
 
-                  {/* Expanded Body */}
                   {isOpen && (
                     <div className="p-5 sm:p-6 border-t border-slate-100 dark:border-white/5 space-y-5 bg-slate-50/50 dark:bg-black/20 text-xs">
                       <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
                         {ep.description}
                       </p>
 
-                      {/* Parameters Table */}
                       {ep.params && ep.params.length > 0 && (
                         <div>
                           <h4 className="font-semibold text-slate-900 dark:text-white mb-2 uppercase tracking-wider text-[11px]">
@@ -347,11 +429,10 @@ export function ApiDocs() {
                         </div>
                       )}
 
-                      {/* Live Test & Sample Code */}
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="font-semibold text-slate-900 dark:text-white uppercase tracking-wider text-[11px]">
-                            Example Response &amp; Live Test
+                            Example &amp; Live Partner Query ({activeVendorCode})
                           </h4>
                           <button
                             type="button"
@@ -359,17 +440,13 @@ export function ApiDocs() {
                             disabled={isTesting}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition cursor-pointer disabled:opacity-50"
                           >
-                            {isTesting ? (
-                              <Loader2 size={12} className="animate-spin" />
-                            ) : (
-                              <Send size={12} />
-                            )}
+                            {isTesting ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                             Execute Live Query
                           </button>
                         </div>
 
                         <div className="relative rounded-xl border border-slate-800 bg-[#0d1117] p-4 text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-72">
-                          <pre>{JSON.stringify(testData || ep.sampleResponse, null, 2)}</pre>
+                          <pre>{JSON.stringify(testData || sample, null, 2)}</pre>
                         </div>
                       </div>
                     </div>
@@ -384,13 +461,12 @@ export function ApiDocs() {
         <div className="pt-6 border-t border-slate-200 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-2">
             <ShieldCheck size={16} className="text-indigo-600" />
-            <span>VMH Group API Tool Gateway API v1.0.0</span>
+            <span>VMH GROUP Partner Gateway API v1.0</span>
           </div>
           <div>
-            Swagger UI compatible with Survey Sherpa / Cint / Dynata supplier standards.
+            Strictly scoped partner inventory · Only surveys allotted to your Partner ID are visible.
           </div>
         </div>
-
       </div>
     </div>
   );

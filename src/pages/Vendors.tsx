@@ -86,8 +86,8 @@ export function Vendors() {
   const [assignVendor, setAssignVendor] = useState<VRow | null>(null);
   const [integrationVendor, setIntegrationVendor] = useState<VRow | null>(null);
 
-  // Live Supabase Realtime for Vendors & Allotments
-  useRealtime(["smr_vendors", "smr_vendor_allotments"], () => q.reload());
+  // Live Supabase Realtime for Vendors, Allotments, Leads & Projects
+  useRealtime(["smr_vendors", "smr_vendor_allotments", "smr_leads", "smr_projects"], () => q.reload());
 
   const q = useQuery(async () => {
     const [mv, uni, al, cl] = await Promise.all([
@@ -146,10 +146,20 @@ export function Vendors() {
       }
     });
 
+    const findKeyCI = (val: string) => {
+      const low = val.toLowerCase().trim();
+      for (const k of map.keys()) {
+        if (k.toLowerCase().trim() === low) return k;
+      }
+      return null;
+    };
+
     (uni.data?.vendors || []).forEach((v) => {
-      if (v.vendor_id && !DUMMY_CODES.has(v.vendor_id)) {
-        const cur = map.get(v.vendor_id) || blank(v.vendor_id, v.vendor_name || v.vendor_id);
-        map.set(v.vendor_id, {
+      const rawId = String(v.vendor_id || v.vendor_code || "").trim();
+      if (rawId && !DUMMY_CODES.has(rawId)) {
+        const matchedKey = findKeyCI(rawId) || rawId;
+        const cur = map.get(matchedKey) || blank(matchedKey, v.vendor_name || matchedKey);
+        map.set(matchedKey, {
           ...cur,
           studies: num(v.assigned_projects),
           clicks: num(v.total_clicks),
@@ -163,12 +173,17 @@ export function Vendors() {
     });
 
     realAllotments.forEach((a) => {
-      if (!map.has(a.vendor_id)) {
-        map.set(a.vendor_id, blank(a.vendor_id, a.vendor_name || a.vendor_id));
+      const rawVid = String(a.vendor_id || "").trim();
+      if (!rawVid) return;
+      const matchedKey = findKeyCI(rawVid) || rawVid;
+      if (!map.has(matchedKey)) {
+        map.set(matchedKey, blank(matchedKey, a.vendor_name || matchedKey));
       }
-      const item = map.get(a.vendor_id);
+      const item = map.get(matchedKey);
       if (item && item.studies === 0) {
-        item.studies = realAllotments.filter((x) => x.vendor_id === a.vendor_id).length;
+        item.studies = realAllotments.filter(
+          (x) => String(x.vendor_id || "").toLowerCase().trim() === matchedKey.toLowerCase().trim(),
+        ).length;
       }
     });
 
@@ -517,7 +532,8 @@ function AssignStudyToVendorModal({
     return res.data || [];
   }, []);
 
-  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+  const [studySearch, setStudySearch] = useState("");
   const [sharePct, setSharePct] = useState("70");
   const [quota, setQuota] = useState("100");
   const [busy, setBusy] = useState(false);
@@ -526,44 +542,89 @@ function AssignStudyToVendorModal({
     if (vendor) {
       setSharePct(String(vendor.share || 70));
       setQuota("100");
-      setSelectedProjectId("");
+      setSelectedProjectIds([]);
+      setStudySearch("");
     }
   }, [vendor]);
 
   if (!vendor) return null;
 
   const studies = studiesQuery.data || [];
-  const selectedStudy = studies.find(
-    (p) => String(p.project_id) === selectedProjectId || String(p.id) === selectedProjectId
-  );
-  const clientCpi = selectedStudy ? num(selectedStudy.cpi) : 0;
-  const vendorCpi = Number(((clientCpi * num(sharePct, 70)) / 100).toFixed(2));
-  const margin = Number((clientCpi - vendorCpi).toFixed(2));
+  const filteredStudies = studies.filter((p) => {
+    const q = studySearch.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      String(p.project_id || "").toLowerCase().includes(q) ||
+      String(p.project_name || "").toLowerCase().includes(q)
+    );
+  });
+
+  const selectedStudies = studies.filter((p) => selectedProjectIds.includes(String(p.project_id)));
+  const pctNum = Math.max(1, Math.min(100, num(sharePct, 70)));
+  const avgClientCpi =
+    selectedStudies.length > 0
+      ? selectedStudies.reduce((s, p) => s + num(p.cpi), 0) / selectedStudies.length
+      : 0;
+  const avgVendorCpi = Number(((avgClientCpi * pctNum) / 100).toFixed(2));
+  const avgMargin = Number((avgClientCpi - avgVendorCpi).toFixed(2));
+
+  const toggleStudy = (pid: string) => {
+    setSelectedProjectIds((prev) =>
+      prev.includes(pid) ? prev.filter((id) => id !== pid) : [...prev, pid],
+    );
+  };
+
+  const selectAllFiltered = () => {
+    const ids = filteredStudies.map((p) => String(p.project_id));
+    setSelectedProjectIds((prev) => Array.from(new Set([...prev, ...ids])));
+  };
+
+  const clearStudies = () => setSelectedProjectIds([]);
 
   const save = async () => {
-    if (!selectedProjectId) return toast("Select a study to assign.", "error");
+    if (selectedStudies.length === 0) return toast("Select at least one study to assign.", "error");
     if (num(quota) <= 0) return toast("Quota must be greater than zero.", "error");
-    const pId = selectedStudy?.project_id || selectedProjectId;
 
     setBusy(true);
     try {
-      const res = await api.post<any>("/vendor/allot", {
-        project_id: pId,
-        vendor_id: vendor.code,
-        vendor_name: vendor.name,
-        vendor_cpi: vendorCpi,
-        quota_limit: num(quota),
-        status: "Active",
-      });
-      const link =
-        res?.entry_link ||
-        `https://api.vmhgroupsmr.com/vendor/auth/${encodeURIComponent(vendor.code)}/project/${encodeURIComponent(pId)}?uid=[RESPONDENT_ID]`;
-      navigator.clipboard?.writeText?.(link);
-      toast(`Assigned ${vendor.name} to study #${pId}! Link copied to clipboard.`);
+      const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
+      const links: string[] = [];
+      const CHUNK = 10;
+
+      for (let i = 0; i < selectedStudies.length; i += CHUNK) {
+        const chunk = selectedStudies.slice(i, i + CHUNK);
+        const results = await Promise.all(
+          chunk.map(async (study) => {
+            const pId = String(study.project_id);
+            const vCpi = Number(((num(study.cpi) * pctNum) / 100).toFixed(2));
+            const res = await api.post<any>("/vendor/allot", {
+              project_id: pId,
+              vendor_id: vendor.code,
+              vendor_name: vendor.name,
+              vendor_cpi: vCpi,
+              quota_limit: num(quota),
+              status: "Active",
+            });
+            return (
+              res?.entry_link ||
+              `${origin}/#/prescreener?pid=${encodeURIComponent(pId)}&vid=${encodeURIComponent(vendor.code)}&uid=[RESPONDENT_ID]`
+            );
+          }),
+        );
+        links.push(...results);
+      }
+
+      if (links.length === 1) {
+        navigator.clipboard?.writeText?.(links[0]);
+        toast(`Assigned ${vendor.name} to 1 study! Entry link copied.`);
+      } else {
+        navigator.clipboard?.writeText?.(links.join("\n"));
+        toast(`Assigned ${vendor.name} to ${selectedStudies.length} studies! All links copied.`);
+      }
       onSaved();
       onClose();
     } catch (e: any) {
-      toast(e.message, "error");
+      toast(e.message || "Assignment failed", "error");
     } finally {
       setBusy(false);
     }
@@ -573,30 +634,93 @@ function AssignStudyToVendorModal({
     <Modal
       open={!!vendor}
       onClose={onClose}
-      title="Assign study to supply partner"
-      subtitle={`Partner: ${vendor.name} (${vendor.code})`}
+      size="lg"
+      title="Assign studies to supply partner"
+      subtitle={`Partner: ${vendor.name} (${vendor.code}) · Select 1 or unlimited studies`}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button loading={busy} onClick={save} disabled={!selectedProjectId}>
-            Assign & Generate link
+          <Button loading={busy} onClick={save} disabled={selectedStudies.length === 0}>
+            Assign {selectedStudies.length > 0 ? `${selectedStudies.length} ` : ""}stud{selectedStudies.length === 1 ? "y" : "ies"}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
-        <Field label="Choose study to allocate">
-          <Select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)}>
-            <option value="">Select an active study</option>
-            {studies.map((p) => (
-              <option key={p.id || p.project_id} value={p.project_id}>
-                #{p.project_id} · {p.project_name} ({money(p.cpi)} CPI)
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[13px] font-semibold text-ink">Choose studies to allocate</span>
+              <Badge tone={selectedStudies.length > 0 ? "blue" : "gray"}>
+                {selectedStudies.length} selected
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={selectAllFiltered}
+                className="text-[12px] font-medium text-accent hover:underline cursor-pointer"
+              >
+                Select all ({filteredStudies.length})
+              </button>
+              <span className="text-ink-3 text-[12px]">•</span>
+              <button
+                type="button"
+                onClick={clearStudies}
+                className="text-[12px] font-medium text-ink-3 hover:text-ink cursor-pointer"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <div className="relative mb-2">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
+            <input
+              type="text"
+              value={studySearch}
+              onChange={(e) => setStudySearch(e.target.value)}
+              placeholder="Search study by ID or name..."
+              className="w-full rounded-xl border border-line bg-fill py-2 pl-8 pr-3 text-[13px] text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          </div>
+
+          <div className="max-h-56 overflow-y-auto rounded-2xl border border-line bg-fill/20 p-1 divide-y divide-line/40">
+            {filteredStudies.length === 0 ? (
+              <p className="py-6 text-center text-[12px] text-ink-3">No studies match "{studySearch}".</p>
+            ) : (
+              filteredStudies.map((p) => {
+                const pid = String(p.project_id);
+                const checked = selectedProjectIds.includes(pid);
+                return (
+                  <label
+                    key={p.id || pid}
+                    onClick={() => toggleStudy(pid)}
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl px-3 py-2 cursor-pointer transition select-none",
+                      checked ? "bg-accent-soft/40 text-accent font-medium" : "hover:bg-fill text-ink",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {}}
+                      className="h-4 w-4 rounded accent-accent cursor-pointer"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px]">{p.project_name}</p>
+                      <p className="font-mono text-[11px] text-ink-3">#{pid}</p>
+                    </div>
+                    <Badge tone="gray">{money(p.cpi)} CPI</Badge>
+                    <StatusBadge status={p.status || "Live"} />
+                  </label>
+                );
+              })
+            )}
+          </div>
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Partner share (%)">
@@ -608,7 +732,7 @@ function AssignStudyToVendorModal({
               onChange={(e) => setSharePct(e.target.value)}
             />
           </Field>
-          <Field label="Quota limit (completes)">
+          <Field label="Quota limit per study">
             <Input
               type="number"
               min="1"
@@ -618,19 +742,19 @@ function AssignStudyToVendorModal({
           </Field>
         </div>
 
-        {selectedStudy && (
+        {selectedStudies.length > 0 && (
           <div className="rounded-2xl bg-fill p-4 space-y-1.5 text-xs">
             <div className="flex justify-between text-ink-3">
-              <span>Client CPI</span>
-              <span className="font-semibold text-ink">{money(clientCpi)}</span>
+              <span>{selectedStudies.length === 1 ? "Client CPI" : `Avg Client CPI (${selectedStudies.length} studies)`}</span>
+              <span className="font-semibold text-ink">{money(avgClientCpi)}</span>
             </div>
             <div className="flex justify-between text-ink-3">
-              <span>Vendor CPI ({sharePct}%)</span>
-              <span className="font-semibold text-accent">{money(vendorCpi)}</span>
+              <span>Vendor CPI ({pctNum}%)</span>
+              <span className="font-semibold text-accent">{money(avgVendorCpi)}</span>
             </div>
             <div className="flex justify-between text-ink-3 pt-1 border-t border-line">
               <span>Platform Margin</span>
-              <span className="font-semibold text-green">{money(margin)}</span>
+              <span className="font-semibold text-green">{money(avgMargin)}</span>
             </div>
           </div>
         )}

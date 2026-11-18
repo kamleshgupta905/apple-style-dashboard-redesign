@@ -39,9 +39,13 @@ function VendorAssignedSurveys() {
   const vendorsQuery = useQuery(async () => (await api.get<{ data: any[] }>("/vendors")).data || [], []);
   const allotmentsQuery = useQuery(async () => (await api.get<{ data: any[] }>("/vendor/allotments")).data || [], []);
   const projectsQuery = useQuery(async () => (await api.get<{ data: Project[] }>("/manage/projects")).data || [], []);
+  const marketMetaQuery = useQuery(
+    async () => (await api.get<{ data: any[] }>("/zamplia").catch(() => ({ data: [] }))).data || [],
+    [],
+  );
 
-  // Live Supabase Realtime for Vendor allotments & projects
-  useRealtime(["smr_projects", "smr_vendor_allotments"], () => {
+  // Live Supabase Realtime for Vendor allotments, projects & leads
+  useRealtime(["smr_projects", "smr_vendor_allotments", "smr_leads"], () => {
     allotmentsQuery.reload();
     projectsQuery.reload();
   });
@@ -101,22 +105,24 @@ function VendorAssignedSurveys() {
     });
   }, [allotmentsQuery.data, vendorIdentifiers]);
 
-  // Combine allotment info with project details
+  // Combine allotment info with project / marketplace metadata (strictly vendor-scoped, VMH GROUP branded)
   const rows = useMemo(() => {
     const projs = projectsQuery.data || [];
+    const mkt = marketMetaQuery.data || [];
     const t = search.trim().toLowerCase();
 
     return myAllotments
       .map((allot: any) => {
-        const p = projs.find((x) => String(x.project_id) === String(allot.project_id));
         const pId = String(allot.project_id);
-        const name = p?.project_name || `Study #${pId}`;
-        const st = allot.status || p?.status || "Live";
+        const p = projs.find((x) => String(x.project_id) === pId);
+        const m = mkt.find((x: any) => String(x.survey_id ?? x.SurveyId ?? x.project_id ?? x.id) === pId);
+        const name = p?.project_name || m?.survey_name || m?.name || m?.Name || `Study #${pId}`;
+        const st = allot.status || p?.status || m?.status || "Live";
         const cpi = num(allot.vendor_cpi);
         const target = num(allot.quota_limit);
         const completes = num(allot.complete_count);
-        const loi = p?.loi || 15;
-        const ir = p?.ir || 75;
+        const loi = num(p?.loi ?? m?.loi ?? m?.LOI, 15);
+        const ir = num(p?.ir ?? m?.ir ?? m?.IR, 75);
         const origin = typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com";
         const link =
           allot.entry_link ||
@@ -139,7 +145,7 @@ function VendorAssignedSurveys() {
         if (t && !s.id.toLowerCase().includes(t) && !s.name.toLowerCase().includes(t)) return false;
         return true;
       });
-  }, [myAllotments, projectsQuery.data, search, status, activeVendorCode]);
+  }, [myAllotments, projectsQuery.data, marketMetaQuery.data, search, status, activeVendorCode]);
 
   const cols: Column<any>[] = [
     {
@@ -260,7 +266,7 @@ function VendorAssignedSurveys() {
         rows={rows}
         rowKey={(s) => s.id}
         loading={allotmentsQuery.loading || projectsQuery.loading}
-        pageSize={12}
+        pageSize={100}
         toolbar={
           <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
             <SearchInput
@@ -346,8 +352,8 @@ function AdminSurveys() {
   }, []);
   const mine = useQuery(async () => (await api.get<{ data: Project[] }>("/manage/projects")).data || [], []);
 
-  // Live Supabase Realtime for Projects & Allotments
-  useRealtime(["smr_projects", "smr_vendor_allotments"], () => {
+  // Live Supabase Realtime for Projects, Allotments & Leads
+  useRealtime(["smr_projects", "smr_vendor_allotments", "smr_leads"], () => {
     mine.reload();
   });
 
@@ -541,7 +547,7 @@ function Marketplace({
       (s) =>
         (client === "all" || s.client === client) &&
         (status === "all" || s.status === status) &&
-        (!t || s.id.includes(t) || s.name.toLowerCase().includes(t)),
+        (!t || s.id.toLowerCase().includes(t) || s.name.toLowerCase().includes(t)),
     );
     const sorters: Record<string, (a: NSurvey, b: NSurvey) => number> = {
       newest: (a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""),
@@ -672,7 +678,7 @@ function Marketplace({
         rows={rows}
         rowKey={(s) => s.id}
         loading={q.loading}
-        pageSize={12}
+        pageSize={100}
         selectable={can(PERMS.SURVEYS_ASSIGN)}
         selected={selected}
         onSelectedChange={setSelected}
@@ -703,8 +709,24 @@ function Marketplace({
                 <option value="target">Largest target</option>
               </Select>
             </div>
-            <div className="flex items-center gap-3 lg:ml-auto">
+            <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
               <p className="text-[13px] text-ink-3">{rows.length.toLocaleString()} surveys</p>
+              {can(PERMS.SURVEYS_ASSIGN) && rows.length > 0 && (
+                <Button
+                  size="sm"
+                  variant={rows.length > 0 && rows.every((r) => selected.has(r.id)) ? "tinted" : "secondary"}
+                  onClick={() => {
+                    const allSelected = rows.every((r) => selected.has(r.id));
+                    if (allSelected) {
+                      setSelected(new Set());
+                    } else {
+                      setSelected(new Set(rows.map((r) => r.id)));
+                    }
+                  }}
+                >
+                  {rows.every((r) => selected.has(r.id)) ? `Deselect all (${rows.length})` : `Select all (${rows.length})`}
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="secondary"
@@ -727,8 +749,13 @@ function Marketplace({
       {/* Floating bulk bar */}
       {can(PERMS.SURVEYS_ASSIGN) && selected.size > 0 && (
         <div className="anim-sheet-up fixed inset-x-0 bottom-20 z-40 flex justify-center px-4 lg:bottom-6 lg:pl-[264px]">
-          <div className="glass flex items-center gap-3 rounded-full border border-line py-2 pl-5 pr-2 shadow-[var(--shadow-lg)]">
+          <div className="glass flex items-center gap-2.5 rounded-full border border-line py-2 pl-5 pr-2 shadow-[var(--shadow-lg)]">
             <span className="text-[14px] font-semibold tabular">{selected.size} selected</span>
+            {selected.size < rows.length && (
+              <Button size="sm" variant="secondary" className="!rounded-full" onClick={() => setSelected(new Set(rows.map((r) => r.id)))}>
+                Select all {rows.length}
+              </Button>
+            )}
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
               Clear
             </Button>
@@ -738,7 +765,7 @@ function Marketplace({
               icon={<Share2 size={14} />}
               onClick={() => setAssign(selectedSurveys)}
             >
-              Bulk assign
+              Bulk assign ({selected.size})
             </Button>
           </div>
         </div>
@@ -917,6 +944,7 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
   const isVendor = user?.role_id === 3 || user?.role_name === "Vendor" || user?.role_name?.toLowerCase().includes("vendor");
   const { toast, confirm } = useFeedback();
   const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Set<string | number>>(new Set());
   const [assign, setAssign] = useState<NSurvey[]>([]);
   const [cloneOf, setCloneOf] = useState<Project | null>(null);
   const [editStudy, setEditStudy] = useState<Project | null>(null);
@@ -1109,8 +1137,31 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
         rows={rows}
         rowKey={(p) => p.id}
         loading={q.loading}
+        pageSize={100}
+        selectable={can(PERMS.SURVEYS_ASSIGN)}
+        selected={selected}
+        onSelectedChange={setSelected}
         onRowClick={(p) => setDetailStudy(p)}
-        toolbar={<SearchInput value={search} onChange={setSearch} placeholder="Search your studies" className="sm:max-w-sm" />}
+        toolbar={
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <SearchInput value={search} onChange={setSearch} placeholder="Search your studies" className="sm:max-w-sm" />
+            {can(PERMS.SURVEYS_ASSIGN) && rows.length > 0 && (
+              <div className="flex items-center gap-2">
+                <p className="text-[13px] text-ink-3">{rows.length.toLocaleString()} studies</p>
+                <Button
+                  size="sm"
+                  variant={rows.every((r) => selected.has(r.id)) ? "tinted" : "secondary"}
+                  onClick={() => {
+                    const allSelected = rows.every((r) => selected.has(r.id));
+                    setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)));
+                  }}
+                >
+                  {rows.every((r) => selected.has(r.id)) ? `Deselect all (${rows.length})` : `Select all (${rows.length})`}
+                </Button>
+              </div>
+            )}
+          </div>
+        }
         empty={
           <EmptyState
             title="No studies yet"
@@ -1120,11 +1171,37 @@ function MyStudies({ q, onNew }: { q: ReturnType<typeof useQuery<Project[]>>; on
         }
       />
 
+      {/* Floating bulk assign bar for My Studies */}
+      {can(PERMS.SURVEYS_ASSIGN) && selected.size > 0 && (
+        <div className="anim-sheet-up fixed inset-x-0 bottom-20 z-40 flex justify-center px-4 lg:bottom-6 lg:pl-[264px]">
+          <div className="glass flex items-center gap-2.5 rounded-full border border-line py-2 pl-5 pr-2 shadow-[var(--shadow-lg)]">
+            <span className="text-[14px] font-semibold tabular">{selected.size} selected</span>
+            {selected.size < rows.length && (
+              <Button size="sm" variant="secondary" className="!rounded-full" onClick={() => setSelected(new Set(rows.map((r) => r.id)))}>
+                Select all {rows.length}
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+              Clear
+            </Button>
+            <Button
+              size="sm"
+              className="!rounded-full"
+              icon={<Share2 size={14} />}
+              onClick={() => setAssign((q.data || []).filter((p) => selected.has(p.id)).map(asSurvey))}
+            >
+              Bulk assign ({selected.size})
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Assign Modal */}
       <AssignModal
         surveys={assign}
         onClose={() => setAssign([])}
         onDone={() => {
+          setSelected(new Set());
           allots.reload();
           q.reload();
         }}

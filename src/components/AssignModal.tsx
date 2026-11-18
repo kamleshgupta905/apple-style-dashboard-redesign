@@ -126,7 +126,7 @@ export function AssignModal({
 
     setBusy(true);
     try {
-      const out: GeneratedLink[] = [];
+      const tasks: Array<() => Promise<GeneratedLink>> = [];
       for (const s of surveys) {
         for (const vCode of finalVendors) {
           const vObj = vendors?.find((x) => x.code === vCode);
@@ -134,24 +134,33 @@ export function AssignModal({
           const share = vObj?.sharePct || numPct;
           const vendorCpi = Number(((s.cpi * share) / 100).toFixed(2));
 
-          const res = await api.post<any>("/vendor/allot", {
-            project_id: s.id,
-            vendor_id: vCode,
-            vendor_name: vName,
-            vendor_cpi: vendorCpi,
-            quota_limit: numQuota,
-            status: "Active",
-          });
-
-          const link = res?.entry_link || res?.data?.entry_link || entryLink(vCode, s.id);
-          out.push({
-            surveyId: s.id,
-            surveyName: s.name,
-            vendorCode: vCode,
-            vendorName: vName,
-            link,
+          tasks.push(async () => {
+            const res = await api.post<any>("/vendor/allot", {
+              project_id: s.id,
+              vendor_id: vCode,
+              vendor_name: vName,
+              vendor_cpi: vendorCpi,
+              quota_limit: numQuota,
+              status: "Active",
+            });
+            const link = res?.entry_link || res?.data?.entry_link || entryLink(vCode, s.id);
+            return {
+              surveyId: s.id,
+              surveyName: s.name,
+              vendorCode: vCode,
+              vendorName: vName,
+              link,
+            };
           });
         }
+      }
+
+      const out: GeneratedLink[] = [];
+      const CHUNK_SIZE = 10;
+      for (let i = 0; i < tasks.length; i += CHUNK_SIZE) {
+        const chunk = tasks.slice(i, i + CHUNK_SIZE);
+        const results = await Promise.all(chunk.map((fn) => fn()));
+        out.push(...results);
       }
 
       setLinks(out);

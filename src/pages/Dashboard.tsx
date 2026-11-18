@@ -32,9 +32,11 @@ export function Dashboard({ userName }: { userName: string }) {
   const vendorsQuery = useQuery(async () => (await api.get<{ data: any[] }>("/vendors")).data || [], []);
   const allotmentsQuery = useQuery(async () => (await api.get<{ data: any[] }>("/vendor/allotments")).data || [], []);
 
-  // Real-time synchronization when allotments or studies update
-  useRealtime(["smr_vendor_allotments", "smr_projects", "smr_leads"], () => {
+  // Real-time synchronization when allotments, studies, leads, or vendors update
+  useRealtime(["smr_vendor_allotments", "smr_projects", "smr_leads", "smr_vendors"], () => {
     allotmentsQuery.reload();
+    vendorsQuery.reload();
+    q.reload();
   });
 
   const uName = (user?.username || "").toLowerCase().trim();
@@ -89,7 +91,7 @@ export function Dashboard({ userName }: { userName: string }) {
       const [a, u, l] = await Promise.all([
         api.get<Analytics>("/dashboard/analytics"),
         api.get<{ data: Unified }>("/reports/unified"),
-        api.get<{ data: Lead[] }>("/leads", { limit: 25 }),
+        api.get<{ data: Lead[] }>("/leads", { limit: 250 }),
       ]);
       return { a, u: u.data, leads: l.data || [] };
     },
@@ -124,10 +126,23 @@ export function Dashboard({ userName }: { userName: string }) {
   const stats = useMemo(() => {
     if (!d) return null;
     if (isVendor) {
-      const clicks = vendorLeads.length;
-      const completes = vendorLeads.filter((l) => ["complete", "completed", "10"].includes(String(l.status).toLowerCase())).length;
-      const payout = myAllots.reduce((acc, a) => acc + (num(a.complete_count) * num(a.vendor_cpi)), 0);
+      const uniVendor = (d.u?.vendors || []).find((v: any) => {
+        const vc = (v.vendor_code || v.vendor_id || "").toLowerCase().trim();
+        const vn = (v.vendor_name || v.name || "").toLowerCase().trim();
+        const vid = String(v.id || "").toLowerCase().trim();
+        return vendorIdentifiers.has(vc) || vendorIdentifiers.has(vn) || vendorIdentifiers.has(vid);
+      });
+
+      const leadCompletes = vendorLeads.filter((l) =>
+        ["complete", "completed", "10"].includes(String(l.status).toLowerCase()),
+      ).length;
+      const allotCompletes = myAllots.reduce((acc, a) => acc + num(a.complete_count), 0);
+      const completes = uniVendor ? num(uniVendor.total_completes) : Math.max(leadCompletes, allotCompletes);
+      const clicks = uniVendor ? num(uniVendor.total_clicks) : Math.max(vendorLeads.length, completes);
+      const allotPayout = myAllots.reduce((acc, a) => acc + num(a.complete_count) * num(a.vendor_cpi), 0);
+      const payout = uniVendor ? num(uniVendor.total_payout) : allotPayout;
       const rate = clicks > 0 ? Number(((completes / clicks) * 100).toFixed(1)) : 0;
+
       return {
         revenue: 0,
         payout,
