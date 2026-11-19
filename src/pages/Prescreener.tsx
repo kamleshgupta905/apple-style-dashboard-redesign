@@ -10,6 +10,7 @@ import {
   DEFAULT_SECURITY_POLICY,
   type SecurityPolicyConfig,
 } from "../lib/waterfall";
+import { isAccessKey32, resolveVendorByAccessKey } from "../lib/partnerKey";
 
 const DEVICE_OPTIONS = [
   { id: "desktop", label: "Laptop / Desktop Computer", icon: Laptop },
@@ -45,7 +46,13 @@ export function Prescreener() {
     []
   );
 
-  const vid = params.get("vid") || "VND-AFC01";
+  const rawVidOrKey =
+    params.get("vid") ||
+    params.get("key") ||
+    params.get("access_key") ||
+    params.get("vendor_code") ||
+    "VND-AFC01";
+  const [vid, setVid] = useState<string>(() => (isAccessKey32(rawVidOrKey) ? "" : rawVidOrKey));
   const pid = params.get("pid") || "VMHPI000142026";
   const rawUid = params.get("uid") || "";
   const uid = useMemo(
@@ -77,9 +84,26 @@ export function Prescreener() {
     markStudyAttempted(uid, pid);
 
     const initSession = async () => {
+      let canonicalVid = rawVidOrKey;
+      try {
+        const resolvedVendor = await resolveVendorByAccessKey(rawVidOrKey, {
+          strictKeyOnly: isAccessKey32(rawVidOrKey),
+        });
+        if (resolvedVendor) {
+          canonicalVid = resolvedVendor.vendor_code;
+        } else if (isAccessKey32(rawVidOrKey)) {
+          setBlockReason("Invalid or revoked partner Access Key.");
+          setStatus("blocked");
+          return;
+        }
+      } catch (e) {
+        console.warn("Partner key lookup fallback:", e);
+      }
+      setVid(canonicalVid);
+
       // 1. Live Security & Fraud Policy Gate (Duplicate, Bot, Browser Integrity, Allowed Hardware)
       try {
-        const sec = await evaluateLiveEntranceSecurity({ pid, vid, uid, isTest });
+        const sec = await evaluateLiveEntranceSecurity({ pid, vid: canonicalVid, uid, isTest });
         setActivePolicy(sec.policy);
         setClientSecurityOn(sec.clientSecurityEnabled);
 
@@ -90,7 +114,7 @@ export function Prescreener() {
         }
 
         // 2. Track click entrance and automatically evaluate auto-pause condition
-        const result = await recordStudyClickAndCheckAutoPause(pid, vid, uid);
+        const result = await recordStudyClickAndCheckAutoPause(pid, canonicalVid, uid);
         if (result.liveUrl && !targetParam) {
           setDbLiveUrl(result.liveUrl);
         }
@@ -98,17 +122,17 @@ export function Prescreener() {
         // If the study was auto-paused, is not live, or is missing a liveUrl (and pid is not a direct numeric exchange ID):
         if (result.autoPaused || !result.isLive || (!result.liveUrl && !targetParam && !/^\d{8,12}$/.test(pid.trim()))) {
           console.warn(`[Prescreener Waterfall] Study #${pid} is paused or lacks destination. Rerouting respondent to next available study.`);
-          const next = await findNextAvailableStudy(pid, vid, uid);
+          const next = await findNextAvailableStudy(pid, canonicalVid, uid);
           if (next) {
             const nextTarget = next.live_url ? `&target=${encodeURIComponent(next.live_url)}` : "";
-            window.location.hash = `#/prescreener?vid=${encodeURIComponent(vid)}&pid=${encodeURIComponent(next.project_id)}&uid=${encodeURIComponent(uid)}${nextTarget}&rerouted=1`;
+            window.location.hash = `#/prescreener?vid=${encodeURIComponent(canonicalVid)}&pid=${encodeURIComponent(next.project_id)}&uid=${encodeURIComponent(uid)}${nextTarget}&rerouted=1`;
             return;
           }
         }
 
         // 3. Respect Security Policy "Pre-screen" toggle: if disabled, bypass screening questions
         if (sec.policy.preScreenEnabled === false) {
-          void completeScreener(undefined, result.liveUrl);
+          void completeScreener(undefined, result.liveUrl, canonicalVid);
           return;
         }
       } catch (e) {
@@ -121,7 +145,7 @@ export function Prescreener() {
     const timer = setTimeout(initSession, 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uid, pid, vid, targetParam, isTest]);
+  }, [uid, pid, rawVidOrKey, targetParam, isTest]);
 
   const TOTAL_STEPS = 3;
   const percent = Math.round(((step + 1) / TOTAL_STEPS) * 100);
@@ -196,8 +220,9 @@ export function Prescreener() {
     }, 220);
   };
 
-  const completeScreener = async (_device?: string, overrideLiveUrl?: string) => {
+  const completeScreener = async (_device?: string, overrideLiveUrl?: string, overrideVid?: string) => {
     setStatus("connecting");
+    const activeVid = overrideVid || vid || rawVidOrKey || "VND-AFC01";
 
     // Resolve Final Target Survey URL
     const rawTarget = targetParam || overrideLiveUrl || dbLiveUrl;
@@ -221,10 +246,10 @@ export function Prescreener() {
       resolved = await signUrlIfNeeded(resolved, pid, uid);
     } else if (/^\d{8,12}$/.test(pid.trim())) {
       // Valid numeric Zamplia / PureSpectrum exchange study ID
-      resolved = `https://res.zamplia.com/?vid=2138&isMap=1&sid=${encodeURIComponent(pid)}&username=${encodeURIComponent(vid)}&cid=42&transaction_id=${encodeURIComponent(uid)}&rid=${encodeURIComponent(uid)}`;
+      resolved = `https://res.zamplia.com/?vid=2138&isMap=1&sid=${encodeURIComponent(pid)}&username=${encodeURIComponent(activeVid)}&cid=42&transaction_id=${encodeURIComponent(uid)}&rid=${encodeURIComponent(uid)}`;
     } else {
       // Study has no destination URL or is closed: gracefully show SMR Quota Full / Complete callback instead of Calibr8 404
-      resolved = `#/callback?status=30&pid=${encodeURIComponent(pid)}&uid=${encodeURIComponent(uid)}&vid=${encodeURIComponent(vid)}&reason=study_closed_or_quota_reached`;
+      resolved = `#/callback?status=30&pid=${encodeURIComponent(pid)}&uid=${encodeURIComponent(uid)}&vid=${encodeURIComponent(activeVid)}&reason=study_closed_or_quota_reached`;
     }
 
     setFinalUrl(resolved);

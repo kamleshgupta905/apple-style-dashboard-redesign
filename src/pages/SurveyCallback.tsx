@@ -22,6 +22,7 @@ import {
   signUrlIfNeeded,
   type NextStudyCandidate,
 } from "../lib/waterfall";
+import { isAccessKey32, resolveVendorByAccessKey } from "../lib/partnerKey";
 
 export function SurveyCallback() {
   const [copied, setCopied] = useState(false);
@@ -51,7 +52,7 @@ export function SurveyCallback() {
 
   const pid = params.get("pid") || params.get("project_id") || params.get("study_id") || "SMR-STUDY-LIVE";
   const uid = params.get("uid") || params.get("rid") || params.get("respondent_id") || "RESP-ONLINE";
-  const vid = params.get("vid") || params.get("vendor_code") || "";
+  const vid = params.get("vid") || params.get("vendor_code") || params.get("key") || "";
   const customReason = params.get("reason") || "";
   const returnUrl = params.get("return_url") || params.get("redirect") || "";
   const providedHash =
@@ -98,6 +99,13 @@ export function SurveyCallback() {
       // 1A. Recover Vendor & Project from smr_leads if not in URL (supports 100% static redirects)
       let resolvedVid = vid;
       let resolvedPid = pid;
+
+      if (resolvedVid && isAccessKey32(resolvedVid)) {
+        try {
+          const matchedVendor = await resolveVendorByAccessKey(resolvedVid, { strictKeyOnly: true });
+          if (matchedVendor) resolvedVid = matchedVendor.vendor_code;
+        } catch {}
+      }
 
       if (!resolvedVid && uid && uid !== "RESP-ONLINE") {
         try {

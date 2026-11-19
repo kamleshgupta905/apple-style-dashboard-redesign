@@ -70,6 +70,8 @@ function useRoute() {
       "feed",
       "vendor-feed",
       "api-docs",
+      "hashing-guide",
+      "s2s-guide",
     ];
     if (PUBLIC_SURVEY_ROUTES.includes(h)) return h;
     return NAV.some((n) => n.id === h) ? h : "dashboard";
@@ -225,10 +227,11 @@ export default function App() {
 
   // Public respondent flows (no login or dashboard chrome required)
   // Evaluated AFTER all React hooks have run unconditionally
-  if (route === "api-docs") {
+  if (route === "api-docs" || route === "hashing-guide" || route === "s2s-guide") {
+    const initialSection = route === "hashing-guide" ? "hashing" : route === "s2s-guide" ? "s2s" : "supply";
     return (
       <RootErrorBoundary>
-        <ApiDocs />
+        <ApiDocs initialSection={initialSection} />
       </RootErrorBoundary>
     );
   }

@@ -1,12 +1,13 @@
 import { useEffect, useState, useMemo } from "react";
 import { Loader2, AlertCircle, ArrowRight, ShieldCheck, CheckCircle2, Layers } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { num } from "../lib/utils";
 import { findNextAvailableStudy } from "../lib/waterfall";
+import { isAccessKey32, resolveVendorByAccessKey } from "../lib/partnerKey";
 
 export function VendorRouter() {
   const [status, setStatus] = useState<"loading" | "routing" | "no_studies" | "invalid_vendor">("loading");
   const [vendorName, setVendorName] = useState<string>("");
+  const [resolvedVid, setResolvedVid] = useState<string>("");
   const [matchedStudy, setMatchedStudy] = useState<{ id: string; name: string } | null>(null);
 
   // Extract query parameters from hash or search
@@ -16,7 +17,14 @@ export function VendorRouter() {
     : window.location.search.replace(/^\?/, "");
   const params = useMemo(() => new URLSearchParams(queryStr), [queryStr]);
 
-  const vid = params.get("vid") || params.get("vendor") || params.get("vendor_id") || params.get("v") || "";
+  const vidOrKey =
+    params.get("key") ||
+    params.get("access_key") ||
+    params.get("vid") ||
+    params.get("vendor") ||
+    params.get("vendor_id") ||
+    params.get("v") ||
+    "";
   const rawUid = params.get("uid") || params.get("rid") || params.get("respondent_id") || params.get("user_id") || params.get("subid") || params.get("id") || "";
   const uid = rawUid && !rawUid.includes("[") && !rawUid.includes("{")
     ? rawUid
@@ -31,24 +39,40 @@ export function VendorRouter() {
   }, []);
 
   useEffect(() => {
-    if (!vid) {
+    if (!vidOrKey) {
       setStatus("invalid_vendor");
       return;
     }
 
     const routeTraffic = async () => {
       try {
-        // 1. Verify Vendor Exists
-        const { data: vendorData } = await supabase
-          .from("smr_vendors")
-          .select("vendor_code, vendor_name, status")
-          .ilike("vendor_code", vid)
-          .maybeSingle();
+        // 1. Resolve Partner Access Key or Vendor Code
+        const resolved = await resolveVendorByAccessKey(vidOrKey, {
+          strictKeyOnly: isAccessKey32(vidOrKey),
+        });
+        if (!resolved && isAccessKey32(vidOrKey)) {
+          setStatus("invalid_vendor");
+          return;
+        }
 
-        setVendorName(vendorData?.vendor_name || vid);
+        let canonicalVid = resolved?.vendor_code || vidOrKey;
+        let canonicalName = resolved?.vendor_name || "";
+
+        if (!resolved) {
+          const { data: vendorData } = await supabase
+            .from("smr_vendors")
+            .select("vendor_code, vendor_name, status")
+            .ilike("vendor_code", vidOrKey)
+            .maybeSingle();
+          canonicalVid = vendorData?.vendor_code || vidOrKey;
+          canonicalName = vendorData?.vendor_name || canonicalVid;
+        }
+
+        setResolvedVid(canonicalVid);
+        setVendorName(canonicalName || canonicalVid);
 
         // 2. Find Best Available Live Study via Smart Waterfall (Auto-Pause checks included)
-        const candidate = await findNextAvailableStudy("", vid, uid);
+        const candidate = await findNextAvailableStudy("", canonicalVid, uid);
         if (!candidate) {
           setStatus("no_studies");
           return;
@@ -60,7 +84,7 @@ export function VendorRouter() {
         // Smooth transition to prescreener after brief delay
         setTimeout(() => {
           const targetQuery = candidate.live_url ? `&target=${encodeURIComponent(candidate.live_url)}` : "";
-          window.location.hash = `#/prescreener?vid=${encodeURIComponent(vid)}&pid=${encodeURIComponent(candidate.project_id)}&uid=${encodeURIComponent(uid)}${targetQuery}`;
+          window.location.hash = `#/prescreener?vid=${encodeURIComponent(canonicalVid)}&pid=${encodeURIComponent(candidate.project_id)}&uid=${encodeURIComponent(uid)}${targetQuery}`;
         }, 600);
 
       } catch (e) {
@@ -70,7 +94,7 @@ export function VendorRouter() {
     };
 
     routeTraffic();
-  }, [vid, uid]);
+  }, [vidOrKey, uid]);
 
   return (
     <div className="min-h-screen w-full bg-[#f6f7f9] text-[#111317] flex flex-col items-center justify-center p-4 sm:p-6">
@@ -124,7 +148,7 @@ export function VendorRouter() {
             </p>
 
             <div className="w-full bg-slate-50 rounded-xl border border-slate-200 p-3.5 text-left text-xs font-mono space-y-1">
-              <div className="text-slate-500 text-[11px]">Partner: <span className="text-slate-800 font-semibold">{vendorName || vid}</span></div>
+              <div className="text-slate-500 text-[11px]">Partner: <span className="text-slate-800 font-semibold">{vendorName || resolvedVid || vidOrKey}</span></div>
               <div className="text-slate-500 text-[11px]">Session ID: <span className="text-slate-800">{uid}</span></div>
             </div>
           </div>
@@ -145,7 +169,7 @@ export function VendorRouter() {
               No Active Surveys Assigned
             </h2>
             <p className="text-xs text-slate-600 max-w-md leading-relaxed mb-6">
-              Your partner account (<strong>{vendorName || vid}</strong>) is connected to the router. However, there are currently no live studies allocated to this partner code.
+              Your partner account (<strong>{vendorName || resolvedVid || vidOrKey}</strong>) is connected to the router. However, there are currently no live studies allocated to this partner key.
             </p>
 
             <div className="w-full bg-slate-50 rounded-xl border border-slate-200 p-4 text-left text-xs space-y-2 mb-6">
@@ -154,7 +178,7 @@ export function VendorRouter() {
                 How to activate studies:
               </div>
               <p className="text-slate-500 text-[12px] leading-relaxed">
-                Open your dashboard, go to <strong>Surveys</strong> or <strong>Vendors</strong>, and assign a live study to partner <strong>{vid}</strong>. It will immediately route here for your respondents.
+                Ask your VMH GROUP account manager to assign live studies to your partner account. Matched surveys will immediately route here for your respondents.
               </p>
             </div>
 
@@ -176,21 +200,21 @@ export function VendorRouter() {
             </div>
 
             <h2 className="text-xl font-bold text-slate-900 mb-2">
-              Missing Vendor Parameter
+              Invalid or Missing Partner Key
             </h2>
             <p className="text-xs text-slate-500 max-w-sm mb-6 leading-relaxed">
-              This router endpoint requires a valid partner code parameter (e.g. <code>?vid=YOUR_VENDOR_CODE</code>).
+              This router endpoint requires a valid 32-character Partner Access Key (e.g. <code>?key=YOUR_ACCESS_KEY</code>).
             </p>
 
             <div className="w-full bg-slate-50 rounded-xl border border-slate-200 p-3.5 text-left font-mono text-[11px] text-slate-600 break-all mb-6">
-              {typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com"}/#/router?vid=VND001&uid=[RESPONDENT_ID]
+              {typeof window !== "undefined" ? window.location.origin : "https://api.vmhgroupsmr.com"}/#/router?key=YOUR_32_CHAR_ACCESS_KEY&uid=[RESPONDENT_ID]
             </div>
 
             <a
-              href="#/vendors"
+              href="#/api-docs"
               className="w-full inline-flex items-center justify-center py-3 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors"
             >
-              Go to Vendors Management
+              Open Partner API Docs
             </a>
           </div>
         )}

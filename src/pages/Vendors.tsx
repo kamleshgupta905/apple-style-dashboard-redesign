@@ -930,6 +930,14 @@ function VendorForm({
         blocked_clients: v.blocked_clients,
         contacts: v.contacts,
       });
+      if (!state?.vendor) {
+        try {
+          const { generateAccessKey32, saveVendorApiKeyOverride } = await import("../lib/partnerKey");
+          await saveVendorApiKeyOverride(code, generateAccessKey32());
+        } catch (err) {
+          console.warn("Access key auto-provision skipped:", err);
+        }
+      }
       toast(state?.vendor ? "Vendor panel updated" : `Vendor panel added (${code})`);
       onSaved();
     } catch (e: any) {
